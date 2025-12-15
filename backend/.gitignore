@@ -13,3 +13,15 @@ milestones_progress.txt
 output_tcontextualization.txt
 key.json
 run.txt
+feedback.pdf
+taxonomy.models.txt
+taxonomy.output.txt
+scrapers.schemas.txt
+run.scrapers.txt
+run.taxonomy.txt
+scraper_output.log
+taxonomy_output.log
+tests.taxonomy.txt
+tests.scrapers.txt
+tests.run.txt
+dev

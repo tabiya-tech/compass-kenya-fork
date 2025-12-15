@@ -1,0 +1,1 @@
+"""BDD tests for Compass job scraping infrastructure"""

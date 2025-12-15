@@ -1,3 +1,4 @@
+# app/scrapers/platforms/__init__.py
 from .brightermonday import BrighterMondayScraper
 from .careerjet import CareerjetScraper
 from .fuzu import FuzuScraper
