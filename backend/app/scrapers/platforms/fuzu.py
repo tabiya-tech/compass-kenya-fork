@@ -1,3 +1,4 @@
+# app/scrapers/platforms/fuzu.py
 from typing import Dict, Optional
 from ..base import BaseScraper
 
