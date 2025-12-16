@@ -10,7 +10,7 @@
 
 This document provides a complete reference to all Milestone 1 deliverables, showing exactly where each requirement is implemented in the GitHub repository and how to use/test it.
 
-**Base GitHub URL:** `https://github.com/wilfredeveloper/compass/tree/stevealila/backend`
+**Base GitHub URL:** `https://github.com/tabiya-tech/compass-kenya-fork`
 
 ---
 
@@ -18,7 +18,7 @@ This document provides a complete reference to all Milestone 1 deliverables, sho
 
 ### ✅ Location
 ```
-https://github.com/wilfredeveloper/compass/tree/stevealila/backend/TECHNICAL_WORK_PLAN.md
+https://github.com/tabiya-tech/compass-kenya-fork/TECHNICAL_WORK_PLAN.md
 ```
 
 ### Content Delivered
@@ -41,7 +41,7 @@ https://github.com/wilfredeveloper/compass/tree/stevealila/backend/TECHNICAL_WOR
 
 ### ✅ Location
 ```
-https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/taxonomy/models.py
+https://github.com/tabiya-tech/compass-kenya-fork/app/taxonomy/models.py
 ```
 
 ### What's Implemented
@@ -90,7 +90,7 @@ Collections defined:
 ### How to Review
 ```bash
 # View the models file
-https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/taxonomy/models.py
+https://github.com/tabiya-tech/compass-kenya-fork/app/taxonomy/models.py
 
 # Search for these models in the file:
 # - OccupationModel (with all required fields)
@@ -104,14 +104,14 @@ https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/taxonomy/
 
 ### ✅ Location
 ```
-https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/taxonomy/importers/
+https://github.com/tabiya-tech/compass-kenya-fork/app/taxonomy/importers/
 ```
 
 ### Components
 
 #### **3.1 Configuration**
 ```
-https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/taxonomy/importers/config.py
+https://github.com/tabiya-tech/compass-kenya-fork/app/taxonomy/importers/config.py
 ```
 - Data file paths
 - MongoDB connection strings
@@ -121,7 +121,7 @@ https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/taxonomy/
 
 **ESCO Occupations:**
 ```
-https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/taxonomy/importers/esco_occupations_importer.py
+https://github.com/tabiya-tech/compass-kenya-fork/app/taxonomy/importers/esco_occupations_importer.py
 ```
 - Imports 3,062 ESCO occupations
 - Extracts ISCO group codes
@@ -130,14 +130,14 @@ https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/taxonomy/
 
 **ESCO Skills:**
 ```
-https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/taxonomy/importers/esco_skills_importer.py
+https://github.com/tabiya-tech/compass-kenya-fork/app/taxonomy/importers/esco_skills_importer.py
 ```
 - Imports 13,896 skills
 - Class: `ESCOSkillsImporter`
 
 **ESCO Relations:**
 ```
-https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/taxonomy/importers/esco_relations_importer.py
+https://github.com/tabiya-tech/compass-kenya-fork/app/taxonomy/importers/esco_relations_importer.py
 ```
 - Imports 130,822 occupation-skill relations
 - Links occupations to skills
@@ -145,7 +145,7 @@ https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/taxonomy/
 
 #### **3.3 KeSCO Importer with Contextualization**
 ```
-https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/taxonomy/importers/kesco_importer.py
+https://github.com/tabiya-tech/compass-kenya-fork/app/taxonomy/importers/kesco_importer.py
 ```
 - Imports 5,915 KeSCO occupations
 - Maps to ESCO using hierarchical semantic matching
@@ -154,7 +154,7 @@ https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/taxonomy/
 
 #### **3.4 Hierarchical Semantic Matcher** (Mapping)
 ```
-https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/taxonomy/importers/hierarchical_semantic_matcher.py
+https://github.com/tabiya-tech/compass-kenya-fork/app/taxonomy/importers/hierarchical_semantic_matcher.py
 ```
 - Three-stage matching algorithm
 - ISCO group filtering
@@ -163,7 +163,7 @@ https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/taxonomy/
 
 #### **3.5 Skill Inheritance**
 ```
-https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/taxonomy/importers/inherit_skills.py
+https://github.com/tabiya-tech/compass-kenya-fork/app/taxonomy/importers/inherit_skills.py
 ```
 - Copies skills from ESCO to matched KeSCO occupations
 - Tracks provenance with `inherited_from_esco_id`
@@ -171,7 +171,7 @@ https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/taxonomy/
 
 #### **3.6 Master Orchestrator**
 ```
-https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/taxonomy/importers/run_all_imports.py
+https://github.com/tabiya-tech/compass-kenya-fork/app/taxonomy/importers/run_all_imports.py
 ```
 - Runs all importers in correct order
 - Handles dependencies automatically
@@ -204,14 +204,14 @@ Total: 153,695 records in ~8 minutes
 
 ### ✅ Location
 ```
-https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/scrapers/
+https://github.com/tabiya-tech/compass-kenya-fork/app/scrapers/
 ```
 
 ### Components
 
 #### **4.1 Base Scraper Infrastructure**
 ```
-https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/scrapers/base.py
+https://github.com/tabiya-tech/compass-kenya-fork/app/scrapers/base.py
 ```
 - Abstract base class: `BaseScraper`
 - Selenium WebDriver initialization
@@ -224,31 +224,31 @@ https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/scrapers/
 
 **BrighterMonday:**
 ```
-https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/scrapers/platforms/brightermonday.py
+https://github.com/tabiya-tech/compass-kenya-fork/app/scrapers/platforms/brightermonday.py
 ```
 Class: `BrighterMondayScraper`
 
 **Careerjet:**
 ```
-https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/scrapers/platforms/careerjet.py
+https://github.com/tabiya-tech/compass-kenya-fork/app/scrapers/platforms/careerjet.py
 ```
 Class: `CareerjetScraper`
 
 **Fuzu:**
 ```
-https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/scrapers/platforms/fuzu.py
+https://github.com/tabiya-tech/compass-kenya-fork/app/scrapers/platforms/fuzu.py
 ```
 Class: `FuzuScraper`
 
 **JobWebKenya:**
 ```
-https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/scrapers/platforms/jobwebkenya.py
+https://github.com/tabiya-tech/compass-kenya-fork/app/scrapers/platforms/jobwebkenya.py
 ```
 Class: `JobWebKenyaScraper`
 
 **MyJobMag:**
 ```
-https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/scrapers/platforms/myjobmag.py
+https://github.com/tabiya-tech/compass-kenya-fork/app/scrapers/platforms/myjobmag.py
 ```
 Class: `MyJobMagScraper`
 
@@ -264,7 +264,7 @@ Class: `MyJobMagScraper`
 
 #### **4.3 Taxonomy Matcher** (Mapping/Normalization)
 ```
-https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/scrapers/taxonomy_matcher.py
+https://github.com/tabiya-tech/compass-kenya-fork/app/scrapers/taxonomy_matcher.py
 ```
 - Fuzzy matches job titles to occupations (70% threshold)
 - Extracts skills from descriptions (80% threshold)
@@ -272,7 +272,7 @@ https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/scrapers/
 
 #### **4.4 Storage Layer** (Normalization to Schema)
 ```
-https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/scrapers/storage.py
+https://github.com/tabiya-tech/compass-kenya-fork/app/scrapers/storage.py
 ```
 - Converts scraped data to `JobListingModel`
 - Normalizes field mappings:
@@ -285,7 +285,7 @@ https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/scrapers/
 
 #### **4.5 Master Orchestrator**
 ```
-https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/scrapers/run_all_scrapers.py
+https://github.com/tabiya-tech/compass-kenya-fork/app/scrapers/run_all_scrapers.py
 ```
 - Runs all 5 scrapers sequentially
 - Loads taxonomy for matching
@@ -295,7 +295,7 @@ https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/scrapers/
 
 #### **4.6 Configuration**
 ```
-https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/scrapers/config.py
+https://github.com/tabiya-tech/compass-kenya-fork/app/scrapers/config.py
 ```
 - Platform URLs and selectors
 - Selenium configuration
@@ -375,7 +375,7 @@ db.job_scraping_logs.find().sort({started_at: -1}).limit(5)
 
 #### **Taxonomy Tests** (28 tests)
 ```
-https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/taxonomy/importers/tests/
+https://github.com/tabiya-tech/compass-kenya-fork/app/taxonomy/importers/tests/
 ```
 
 **Test Files:**
@@ -385,7 +385,7 @@ https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/taxonomy/
 
 #### **Scraper Tests** (12 tests)
 ```
-https://github.com/wilfredeveloper/compass/tree/stevealila/backend/app/scrapers/tests/
+https://github.com/tabiya-tech/compass-kenya-fork/app/scrapers/tests/
 ```
 
 **Test Files:**
