@@ -10,6 +10,11 @@ from datetime import datetime, timezone
 from pydantic import BaseModel, Field, field_validator, field_serializer
 
 
+# ========== DEPRECATED: Old Nested Preference Classes ==========
+# These are kept for backward compatibility but are no longer used.
+# The new PreferenceVector uses a flat 7-dimensional structure.
+# TODO: Remove after confirming no dependencies exist.
+
 class FinancialPreferences(BaseModel):
     """
     User preferences related to financial compensation.
@@ -167,6 +172,9 @@ class TaskPreferences(BaseModel):
     Captures preferences for different task types based on cognitive,
     physical, and social dimensions.
     """
+    importance: float = Field(default=0.5, ge=0.0, le=1.0)
+    """Overall importance of task type preferences in job selection (0.0-1.0)"""
+
     routine_tasks_tolerance: float = Field(default=0.5, ge=0.0, le=1.0)
     """Tolerance for repetitive, routine tasks"""
 
@@ -214,43 +222,136 @@ class SocialImpactPreferences(BaseModel):
 
 class PreferenceVector(BaseModel):
     """
-    Complete preference vector representing user's job/career preferences.
+    User preference profile from Bayesian preference elicitation.
 
-    This is the main output of the preference elicitation process,
-    containing structured preferences across all dimensions.
+    Represents RELATIVE importances of job/career attributes (not absolute constraints).
+    Learned via Bayesian inference from vignette-based choice modeling.
+
+    All importance scores are on [0, 1] scale where:
+    - 0.0-0.3: Low importance
+    - 0.4-0.6: Moderate importance
+    - 0.7-1.0: High importance
+
+    These represent how much each dimension matters in job selection,
+    NOT absolute requirements (e.g., not "minimum salary = 50k").
     """
-    financial: FinancialPreferences = Field(default_factory=FinancialPreferences)
-    """Financial compensation preferences"""
 
-    work_environment: WorkEnvironmentPreferences = Field(default_factory=WorkEnvironmentPreferences)
-    """Work environment and conditions preferences"""
+    # === CORE PREFERENCE DIMENSIONS (synced from Bayesian posterior) ===
+    financial_importance: float = Field(default=0.5, ge=0.0, le=1.0)
+    """How much user values financial compensation (salary, benefits, bonuses)"""
 
-    job_security: JobSecurityPreferences = Field(default_factory=JobSecurityPreferences)
-    """Job security and stability preferences"""
+    work_environment_importance: float = Field(default=0.5, ge=0.0, le=1.0)
+    """How much user values work environment (remote, commute, physical conditions, autonomy)"""
 
-    career_advancement: CareerAdvancementPreferences = Field(default_factory=CareerAdvancementPreferences)
-    """Career growth and development preferences"""
+    career_advancement_importance: float = Field(default=0.5, ge=0.0, le=1.0)
+    """How much user values career growth (learning, skill development, promotion paths)"""
 
-    work_life_balance: WorkLifeBalancePreferences = Field(default_factory=WorkLifeBalancePreferences)
-    """Work-life balance preferences"""
+    work_life_balance_importance: float = Field(default=0.5, ge=0.0, le=1.0)
+    """How much user values work-life balance (hours, flexibility, family time)"""
 
-    task_preferences: TaskPreferences = Field(default_factory=TaskPreferences)
-    """Task type preferences"""
+    job_security_importance: float = Field(default=0.5, ge=0.0, le=1.0)
+    """How much user values job security (stability, contract type, risk tolerance)"""
 
-    social_impact: SocialImpactPreferences = Field(default_factory=SocialImpactPreferences)
-    """Social impact and purpose preferences"""
+    task_preference_importance: float = Field(default=0.5, ge=0.0, le=1.0)
+    """How much user values specific task types (routine, cognitive, manual, social, creative)"""
 
-    industry_preferences: list[str] = Field(default_factory=list)
-    """Optional: Preferred industries (e.g., ["technology", "education"])"""
+    social_impact_importance: float = Field(default=0.5, ge=0.0, le=1.0)
+    """How much user values social impact (helping others, community, purpose-driven work)"""
 
-    occupation_preferences: list[str] = Field(default_factory=list)
-    """Optional: Preferred occupation types"""
+    # === QUALITY METADATA ===
+    confidence_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    """
+    Overall confidence in preference estimates (0-1).
 
+    Hybrid calculation: 70% uncertainty-based + 30% vignette-count based
+    Higher = more reliable preferences
+    """
+
+    n_vignettes_completed: int = Field(default=0, ge=0)
+    """Number of vignettes completed during elicitation"""
+
+    per_dimension_uncertainty: dict[str, float] = Field(default_factory=dict)
+    """
+    Uncertainty (variance) for each dimension from Bayesian posterior.
+
+    Lower values = more certain about that dimension
+    Higher values = less certain, need more data
+
+    Example: {"financial_importance": 0.63, "social_impact_importance": 0.45}
+    """
+
+    # === BAYESIAN METADATA (for advanced use/debugging) ===
+    posterior_mean: list[float] = Field(default_factory=lambda: [0.0] * 7)
+    """Raw Bayesian posterior mean vector (7 dimensions, unconstrained scale)"""
+
+    posterior_covariance_diagonal: list[float] = Field(default_factory=lambda: [1.0] * 7)
+    """Diagonal of posterior covariance matrix (variances per dimension)"""
+
+    fim_determinant: Optional[float] = None
+    """Fisher Information Matrix determinant (measure of total information gain)"""
+
+    # === QUALITATIVE METADATA (LLM-extracted, unbiased patterns) ===
+    decision_patterns: dict[str, Any] = Field(default_factory=dict)
+    """
+    Patterns in how user makes decisions (extracted from reasoning).
+
+    Examples:
+    - "mentions_family_frequently": true (mentions family 3+ times)
+    - "uses_financial_language": true (uses salary/money/compensation often)
+    - "career_growth_focused": true (mentions growth/learning/advancement)
+    - "uses_absolute_language": true (uses "never", "always", "must have")
+    - "uses_hedging_language": true (uses "maybe", "depends", "could")
+    """
+
+    tradeoff_willingness: dict[str, bool] = Field(default_factory=dict)
+    """
+    Explicit tradeoffs user is willing/unwilling to make.
+
+    Examples:
+    - "will_sacrifice_salary_for_flexibility": true
+    - "will_not_compromise_work_life_balance": true
+    - "open_to_relocation_for_growth": false
+    - "prefers_stability_over_high_pay": true
+    """
+
+    values_signals: dict[str, bool] = Field(default_factory=dict)
+    """
+    Deep values expressed in user's reasoning (beyond job attributes).
+
+    Examples:
+    - "altruistic": true (mentions helping people, making difference)
+    - "purpose_driven": true (mentions impact, meaning, contribution)
+    - "family_provider": true (mentions supporting family, kids' future)
+    - "autonomy_seeking": true (mentions independence, freedom, control)
+    - "stability_seeking": true (mentions security, predictability, safety)
+    """
+
+    consistency_indicators: dict[str, float] = Field(default_factory=dict)
+    """
+    Consistency in user's responses (0-1 scale).
+
+    Examples:
+    - "response_consistency": 0.85 (how consistent across vignettes)
+    - "conviction_strength": 0.7 (uses decisive vs. uncertain language)
+    - "preference_stability": 0.9 (preferences don't contradict each other)
+    """
+
+    extracted_constraints: dict[str, Any] = Field(default_factory=dict)
+    """
+    Hard constraints mentioned explicitly (not inferred from vignette values).
+
+    Examples:
+    - "must_work_remotely": true (explicitly stated requirement)
+    - "cannot_work_weekends": true (hard constraint)
+    - "needs_job_in_nairobi": true (location constraint)
+
+    NOTE: These are only added if user EXPLICITLY states them in reasoning,
+    NOT inferred from vignette choices (avoids anchoring bias).
+    """
+
+    # === TIMESTAMPS ===
     last_updated: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     """Timestamp of last update to preference vector"""
-
-    confidence_score: float = Field(default=0.0, ge=0.0, le=1.0)
-    """Confidence score based on number of vignettes completed and consistency"""
 
     class Config:
         extra = "forbid"
@@ -444,3 +545,42 @@ class PersonalizedVignette(BaseModel):
 
     class Config:
         extra = "forbid"
+
+
+class PersonalizationLog(BaseModel):
+    """
+    Log entry tracking what changed during vignette personalization.
+
+    Used for debugging and analysis of offline vignette personalization.
+    """
+    vignette_id: str
+    """ID of the vignette that was personalized"""
+
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    """When personalization occurred"""
+
+    original: dict[str, str] = Field(default_factory=dict)
+    """Original text fields from offline vignette"""
+
+    personalized: dict[str, Any] = Field(default_factory=dict)
+    """Personalized text fields and LLM reasoning"""
+
+    attributes_preserved: bool = True
+    """Whether attribute values were preserved (validation check)"""
+
+    user_context: Optional[dict[str, Any]] = None
+    """User context used for personalization"""
+
+    personalization_successful: bool = True
+    """Whether personalization succeeded or fell back to original"""
+
+    error_message: Optional[str] = None
+    """Error message if personalization failed"""
+
+    class Config:
+        extra = "forbid"
+
+    @field_serializer('timestamp')
+    def serialize_timestamp(self, dt: datetime, _info):
+        """Serialize datetime to ISO format string."""
+        return dt.isoformat()

@@ -107,6 +107,46 @@ class PreferenceElicitationAgentState(BaseModel):
     notes: str = ""
     """Any additional notes or context about this session"""
 
+    # ========== NEW: Adaptive D-Efficiency Fields ==========
+    use_adaptive_selection: bool = False
+    """Feature flag: Enable adaptive D-efficiency optimization"""
+
+    # Bayesian posterior (only used if adaptive mode)
+    posterior_mean: Optional[list[float]] = None
+    """Posterior mean vector (μ) - 7 dimensions"""
+
+    posterior_covariance: Optional[list[list[float]]] = None
+    """Posterior covariance matrix (Σ) - 7x7"""
+
+    # Fisher Information Matrix (7×7)
+    fisher_information_matrix: Optional[list[list[float]]] = None
+    """Fisher Information Matrix tracking information gain"""
+
+    # Per-dimension uncertainty tracking
+    uncertainty_per_dimension: Optional[dict[str, float]] = None
+    """Variance for each preference dimension"""
+
+    # Information gain tracking
+    information_gain_per_vignette: Optional[list[float]] = None
+    """Information gain from each vignette shown"""
+
+    # Stopping criterion state
+    fim_determinant: Optional[float] = None
+    """Determinant of Fisher Information Matrix"""
+
+    stopped_early: bool = False
+    """Whether elicitation stopped early due to low uncertainty"""
+
+    stopping_reason: Optional[str] = None
+    """Reason for stopping (if stopped early)"""
+
+    # Adaptive vignette flow tracking
+    adaptive_phase_complete: bool = False
+    """Whether the adaptive selection phase has completed"""
+
+    adaptive_vignettes_shown_count: int = 0
+    """Number of adaptive vignettes shown (between static beginning and end)"""
+
     class Config:
         extra = "forbid"
 
@@ -151,7 +191,19 @@ class PreferenceElicitationAgentState(BaseModel):
             last_experience_question_asked=doc.get("last_experience_question_asked"),
             user_has_indicated_completion=doc.get("user_has_indicated_completion", False),
             minimum_vignettes_completed=doc.get("minimum_vignettes_completed", 5),
-            notes=doc.get("notes", "")
+            notes=doc.get("notes", ""),
+            # Adaptive D-efficiency fields
+            use_adaptive_selection=doc.get("use_adaptive_selection", False),
+            posterior_mean=doc.get("posterior_mean"),
+            posterior_covariance=doc.get("posterior_covariance"),
+            fisher_information_matrix=doc.get("fisher_information_matrix"),
+            uncertainty_per_dimension=doc.get("uncertainty_per_dimension"),
+            information_gain_per_vignette=doc.get("information_gain_per_vignette"),
+            fim_determinant=doc.get("fim_determinant"),
+            stopped_early=doc.get("stopped_early", False),
+            stopping_reason=doc.get("stopping_reason"),
+            adaptive_phase_complete=doc.get("adaptive_phase_complete", False),
+            adaptive_vignettes_shown_count=doc.get("adaptive_vignettes_shown_count", 0)
         )
 
     def can_complete(self) -> bool:
@@ -197,9 +249,18 @@ class PreferenceElicitationAgentState(BaseModel):
         Args:
             response: VignetteResponse to add
         """
+        print(f"\n🔴 ADD_VIGNETTE_RESPONSE CALLED!")
+        print(f"   Adding: {response.vignette_id}")
+        print(f"   Before: completed_vignettes = {self.completed_vignettes}")
+
         self.vignette_responses.append(response)
         if response.vignette_id not in self.completed_vignettes:
             self.completed_vignettes.append(response.vignette_id)
+            print(f"   ✅ ADDED to list")
+        else:
+            print(f"   ⚠️  ALREADY IN LIST, skipped")
+
+        print(f"   After: completed_vignettes = {self.completed_vignettes}\n")
         self.current_vignette_id = None
 
     def increment_turn_count(self) -> None:
