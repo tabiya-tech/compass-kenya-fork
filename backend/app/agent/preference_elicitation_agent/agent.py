@@ -8,6 +8,8 @@ preference vector for job/career recommendations.
 
 import time
 import logging
+import json
+from pathlib import Path
 from typing import Optional
 from datetime import datetime, timezone
 import asyncio
@@ -28,7 +30,8 @@ from app.agent.preference_elicitation_agent.types import (
     Vignette,
     VignetteResponse,
     PreferenceVector,
-    UserContext
+    UserContext,
+    PersonalizationLog
 )
 from app.agent.preference_elicitation_agent.vignette_engine import VignetteEngine
 from app.agent.preference_elicitation_agent.preference_extractor import (
@@ -37,11 +40,29 @@ from app.agent.preference_elicitation_agent.preference_extractor import (
     ExperiencePreferenceExtractor,
     ExperiencePreferenceExtractionResult
 )
+from app.agent.preference_elicitation_agent.metadata_extractor import MetadataExtractor
 from app.agent.preference_elicitation_agent.user_context_extractor import UserContextExtractor
 from app.agent.prompt_template.agent_prompt_template import (
     STD_AGENT_CHARACTER,
     STD_LANGUAGE_STYLE
 )
+
+# Adaptive D-efficiency imports
+try:
+    import numpy as np
+    from app.agent.preference_elicitation_agent.bayesian.posterior_manager import (
+        PosteriorManager,
+        PosteriorDistribution
+    )
+    from app.agent.preference_elicitation_agent.information_theory.stopping_criterion import StoppingCriterion
+    from app.agent.preference_elicitation_agent.config.adaptive_config import AdaptiveConfig
+    ADAPTIVE_AVAILABLE = True
+except ImportError:
+    ADAPTIVE_AVAILABLE = False
+    PosteriorManager = None
+    PosteriorDistribution = None
+    StoppingCriterion = None
+    AdaptiveConfig = None
 from app.agent.simple_llm_agent.prompt_response_template import get_json_response_instructions
 from app.conversation_memory.conversation_formatter import ConversationHistoryFormatter
 from app.conversation_memory.conversation_memory_manager import ConversationContext
@@ -125,7 +146,9 @@ class PreferenceElicitationAgent(Agent):
         self,
         vignettes_config_path: Optional[str] = None,
         db6_client: Optional['DB6Client'] = None,
-        use_personalized_vignettes: bool = True
+        use_personalized_vignettes: bool = True,
+        use_offline_with_personalization: bool = False,
+        offline_output_dir: Optional[str] = None
     ):
         """
         Initialize the Preference Elicitation Agent.
@@ -136,6 +159,8 @@ class PreferenceElicitationAgent(Agent):
                        If None, agent works without DB6 (uses snapshot only).
                        If provided, agent can fetch fresh experiences and save preferences.
             use_personalized_vignettes: Whether to use personalized vignette generation (default: True)
+            use_offline_with_personalization: Whether to use hybrid mode (offline D-optimal + LLM personalization)
+            offline_output_dir: Directory containing offline-optimized vignettes (required if use_offline_with_personalization=True)
         """
         super().__init__(
             agent_type=AgentType.PREFERENCE_ELICITATION_AGENT,
@@ -145,6 +170,12 @@ class PreferenceElicitationAgent(Agent):
         self._state: Optional[PreferenceElicitationAgentState] = None
         self._db6_client = db6_client  # Optional Epic 1 dependency
         self._user_context: Optional[UserContext] = None
+
+        # Personalization logging
+        self._use_offline_with_personalization = use_offline_with_personalization
+        self._personalization_logs: list[PersonalizationLog] = []
+        self._session_logs_dir = Path(__file__).parent.parent.parent.parent / "session_logs"
+        self._session_logs_dir.mkdir(parents=True, exist_ok=True)
 
         # Initialize LLMs
         llm_config = LLMConfig(
@@ -165,10 +196,13 @@ class PreferenceElicitationAgent(Agent):
         self._shared_llm = GeminiGenerativeLLM(config=llm_config)
 
         # Initialize vignette engine with personalization support
+        # Note: use_offline_with_personalization overrides use_personalized_vignettes
         self._vignette_engine = VignetteEngine(
-            llm=self._shared_llm if use_personalized_vignettes else None,
+            llm=self._shared_llm if (use_personalized_vignettes or use_offline_with_personalization) else None,
             vignettes_config_path=vignettes_config_path,
-            use_personalization=use_personalized_vignettes
+            use_personalization=use_personalized_vignettes and not use_offline_with_personalization,
+            use_offline_with_personalization=use_offline_with_personalization,
+            offline_output_dir=offline_output_dir
         )
 
         # User context extractor
@@ -177,6 +211,12 @@ class PreferenceElicitationAgent(Agent):
         # Preference extractors (create their own LLMs with system instructions)
         self._preference_extractor = PreferenceExtractor()
         self._experience_preference_extractor = ExperiencePreferenceExtractor()
+        self._metadata_extractor = MetadataExtractor()
+
+        # Adaptive D-efficiency components (lazy init)
+        self._adaptive_config: Optional[AdaptiveConfig] = None
+        self._posterior_manager: Optional[PosteriorManager] = None
+        self._stopping_criterion: Optional[StoppingCriterion] = None
 
     def set_state(self, state: PreferenceElicitationAgentState) -> None:
         """
@@ -186,6 +226,62 @@ class PreferenceElicitationAgent(Agent):
             state: PreferenceElicitationAgentState to use
         """
         self._state = state
+
+        # Sync Bayesian posterior to PreferenceVector when loading state
+        # (important for resuming sessions)
+        self._sync_bayesian_posterior_to_preference_vector()
+
+    def _log_personalization(self, personalization_log: PersonalizationLog) -> None:
+        """
+        Callback for logging vignette personalization.
+
+        Args:
+            personalization_log: PersonalizationLog entry from VignettePersonalizer
+        """
+        self._personalization_logs.append(personalization_log)
+
+        # Save to file immediately for debugging
+        if self._state is not None:
+            log_file = self._session_logs_dir / f"personalization_log_{self._state.session_id}.jsonl"
+            with open(log_file, 'a', encoding='utf-8') as f:
+                # Write as JSONL (one JSON object per line)
+                json.dump(personalization_log.model_dump(), f, default=str, ensure_ascii=False)
+                f.write('\n')
+
+    def _init_adaptive_components(self) -> None:
+        """
+        Initialize adaptive D-efficiency components (lazy initialization).
+
+        Called when use_adaptive_selection is enabled in state.
+        """
+        if not ADAPTIVE_AVAILABLE:
+            self.logger.warning("Adaptive D-efficiency not available (import failed)")
+            return
+
+        if self._adaptive_config is None:
+            self._adaptive_config = AdaptiveConfig.from_env()
+
+        if self._posterior_manager is None:
+            # Initialize with prior from config
+            prior_mean = self._adaptive_config.prior_mean
+            prior_variance = self._adaptive_config.prior_variance
+
+            # Create prior mean and covariance as numpy arrays
+            prior_mean_array = np.array(prior_mean)
+            prior_cov_array = np.diag([prior_variance] * 7)  # Diagonal covariance matrix
+
+            self._posterior_manager = PosteriorManager(
+                prior_mean=prior_mean_array,
+                prior_cov=prior_cov_array
+            )
+
+        if self._stopping_criterion is None:
+            self._stopping_criterion = StoppingCriterion(
+                min_vignettes=self._adaptive_config.min_vignettes,
+                max_vignettes=self._adaptive_config.max_vignettes,
+                det_threshold=self._adaptive_config.fim_det_threshold,
+                max_variance_threshold=self._adaptive_config.max_variance_threshold
+            )
 
     async def _prewarm_next_vignette(self) -> None:
         """
@@ -200,8 +296,13 @@ class PreferenceElicitationAgent(Agent):
         if self._state is None or self._user_context is None:
             return
 
-        # Only pre-warm for personalized vignettes
+        # Only pre-warm for personalized vignettes (not hybrid or adaptive mode)
         if not self._vignette_engine._use_personalization:
+            return
+
+        # Don't pre-warm for hybrid mode (offline + personalization)
+        # Hybrid mode uses deterministic D-optimal selection
+        if self._use_offline_with_personalization:
             return
 
         try:
@@ -620,12 +721,18 @@ class PreferenceElicitationAgent(Agent):
         all_llm_stats: list[LLMStats] = []
 
         # If there's a current vignette, extract preferences from response
+        print(f"\n🔵 VIGNETTES PHASE - Checking for previous vignette")
+        print(f"   current_vignette_id: {self._state.current_vignette_id}")
+
         if self._state.current_vignette_id:
+            print(f"   ✅ current_vignette_id is set, fetching vignette...")
             vignette = self._vignette_engine.get_vignette_by_id(
                 self._state.current_vignette_id
             )
+            print(f"   Fetched vignette: {vignette.vignette_id if vignette else 'None'}")
 
             if vignette:
+                print(f"   🎯 EXTRACTING PREFERENCES for {vignette.vignette_id}")
                 # Build conversation history context for extraction
                 conversation_history = self._build_conversation_history_for_extraction(context)
 
@@ -649,12 +756,32 @@ class PreferenceElicitationAgent(Agent):
 
                 # Update state
                 self._state.add_vignette_response(vignette_response)
-
-                # Update preference vector
-                self._state.preference_vector = self._preference_extractor.update_preference_vector(
-                    self._state.preference_vector,
-                    extraction_result
+                self.logger.info(
+                    f"✅ MARKED VIGNETTE AS COMPLETED: {vignette_response.vignette_id}\n"
+                    f"   Total completed: {len(self._state.completed_vignettes)}\n"
+                    f"   List: {self._state.completed_vignettes}"
                 )
+
+                # DISABLED: LLM-based preference vector update (replaced by Bayesian)
+                # NOTE: This is commented out because:
+                # 1. New simplified PreferenceVector has flat structure (no nested fields)
+                # 2. LLM extraction has constraint bias (values anchored to vignette ranges)
+                # 3. Bayesian posterior handles all preference learning more reliably
+                # To re-enable: Need to update PreferenceExtractor to work with flat fields
+                # self._state.preference_vector = self._preference_extractor.update_preference_vector(
+                #     self._state.preference_vector,
+                #     extraction_result
+                # )
+
+                # Adaptive D-efficiency: Update Bayesian posterior
+                # This is needed for BOTH adaptive mode and hybrid mode (offline + personalization)
+                # Bayesian update is the PRIMARY method for learning preferences
+                if self._state.use_adaptive_selection or self._use_offline_with_personalization:
+                    await self._update_bayesian_posterior(vignette, extraction_result.chosen_option_id, user_input)
+
+                # Update qualitative metadata (every 3 vignettes)
+                # Extracts unbiased patterns from cumulative responses
+                await self._update_qualitative_metadata()
 
                 # Mark category as covered if confidence is high
                 if extraction_result.confidence > 0.6:
@@ -693,26 +820,61 @@ class PreferenceElicitationAgent(Agent):
                     return response, all_llm_stats
 
         # Pre-warm next vignette while user is thinking (background task)
-        asyncio.create_task(self._prewarm_next_vignette())
+        # Skip for adaptive/hybrid modes (selection is deterministic based on posterior)
+        if not self._state.use_adaptive_selection and not self._use_offline_with_personalization:
+            asyncio.create_task(self._prewarm_next_vignette())
 
-        # Check if we can complete
-        if self._state.can_complete() and len(self._state.completed_vignettes) >= 6:
-            self._state.conversation_phase = "WRAPUP"
-            return await self._handle_wrapup_phase(user_input, context)
+        # Check if we can complete (adaptive/hybrid modes use different stopping criterion)
+        if self._state.use_adaptive_selection or self._use_offline_with_personalization:
+            # Adaptive/hybrid stopping criterion
+            # ONLY check during adaptive phase, not after we've started static_end
+            if not self._state.adaptive_phase_complete:
+                should_continue, stopping_reason = await self._check_adaptive_stopping_criterion()
+
+                if not should_continue:
+                    self.logger.info(f"Adaptive stopping criterion met: {stopping_reason}")
+                    self._state.stopped_early = True
+                    self._state.stopping_reason = stopping_reason
+                    self._state.adaptive_phase_complete = True
+                    self.logger.info("Setting adaptive_phase_complete=True, will show 2 static_end vignettes")
+                    # Continue to select next vignette (will be from static_end)
+
+            # After static_end vignettes complete, move to WRAPUP
+            # Check: have we shown both static_end vignettes?
+            elif self._state.adaptive_phase_complete:
+                static_end_count = sum(1 for v_id in self._state.completed_vignettes if v_id.startswith("static_end"))
+                if static_end_count >= 2:
+                    self.logger.info(f"Static_end vignettes complete ({static_end_count} shown), moving to WRAPUP")
+                    self._state.conversation_phase = "WRAPUP"
+                    return await self._handle_wrapup_phase(user_input, context)
+        else:
+            # Traditional stopping criterion
+            if self._state.can_complete() and len(self._state.completed_vignettes) >= 6:
+                self._state.conversation_phase = "WRAPUP"
+                return await self._handle_wrapup_phase(user_input, context)
 
         # Log current state before selecting next vignette
         self.logger.info(
-            f"\nVignette Selection State:\n"
-            f"  - Completed vignettes: {len(self._state.completed_vignettes)}\n"
+            f"\n🔍 AGENT Vignette Selection State:\n"
+            f"  - Completed vignettes COUNT: {len(self._state.completed_vignettes)}\n"
+            f"  - Completed vignettes IDs: {self._state.completed_vignettes}\n"
+            f"  - Current vignette ID: {self._state.current_vignette_id}\n"
             f"  - Categories covered: {self._state.categories_covered}\n"
             f"  - Categories to explore: {self._state.categories_to_explore}\n"
-            f"  - Current preference vector confidence: {self._state.preference_vector.confidence_score:.2f}"
+            f"  - Current preference vector confidence: {self._state.preference_vector.confidence_score:.2f}\n"
+            f"  - Adaptive mode: {self._state.use_adaptive_selection}\n"
+            f"  - Hybrid mode: {self._use_offline_with_personalization}"
         )
-        
-        # Select next vignette (with user context for personalization)
+
+        # Select next vignette
+        # The engine internally routes based on mode (adaptive, hybrid, personalization, or static)
+        # Pass personalization callback if using hybrid mode
+        personalization_callback = self._log_personalization if self._use_offline_with_personalization else None
+
         next_vignette = await self._vignette_engine.select_next_vignette(
             self._state,
-            user_context=self._user_context
+            user_context=self._user_context,
+            personalization_log_callback=personalization_callback
         )
 
         if next_vignette is None:
@@ -721,6 +883,7 @@ class PreferenceElicitationAgent(Agent):
             return await self._handle_wrapup_phase(user_input, context)
 
         # Update state with new vignette
+        print(f"\n🟢 SETTING current_vignette_id = {next_vignette.vignette_id}\n")
         self._state.current_vignette_id = next_vignette.vignette_id
 
         # Log selected vignette details
@@ -771,7 +934,7 @@ class PreferenceElicitationAgent(Agent):
 
         # Very short response (likely needs clarification)
         word_count = len(vignette_response.user_reasoning.split())
-        if word_count < 15:
+        if word_count < 5:
             self.logger.info(
                 f"Follow-up needed for vignette {vignette_response.vignette_id} "
                 f"(word count: {word_count})"
@@ -1187,43 +1350,33 @@ Generate a summary that captures what's UNIQUE about this user's preferences.
         Returns:
             Formatted string representation
         """
+        # Use simplified 7-dimensional structure
         return f"""
-Financial:
-- Importance: {pv.financial.importance:.2f}
-- Benefits importance: {pv.financial.benefits_importance:.2f}
-- Bonus/commission tolerance: {pv.financial.bonus_commission_tolerance:.2f}
+Core Preference Dimensions (0.0 = Low, 1.0 = High):
 
-Work Environment:
-- Remote preference: {pv.work_environment.remote_work_preference}
-- Flexibility importance: {pv.work_environment.work_hours_flexibility_importance:.2f}
-- Autonomy importance: {pv.work_environment.autonomy_importance:.2f}
-- Supervision preference: {pv.work_environment.supervision_preference}
+1. Financial Compensation: {pv.financial_importance:.2f}
+   - Salary, benefits, and total compensation
 
-Job Security:
-- Importance: {pv.job_security.importance:.2f}
-- Stability required: {pv.job_security.income_stability_required}
-- Risk tolerance: {pv.job_security.risk_tolerance}
-- Contract preference: {pv.job_security.contract_type_preference}
+2. Work Environment: {pv.work_environment_importance:.2f}
+   - Remote work, commute, autonomy, work pace
 
-Career Advancement:
-- Importance: {pv.career_advancement.importance:.2f}
-- Learning value: {pv.career_advancement.learning_opportunities_value}
-- Skill development: {pv.career_advancement.skill_development_importance:.2f}
+3. Career Advancement: {pv.career_advancement_importance:.2f}
+   - Learning opportunities, skill development, promotions
 
-Work-Life Balance:
-- Importance: {pv.work_life_balance.importance:.2f}
-- Max hours/week: {pv.work_life_balance.max_acceptable_hours_per_week or 'Not set'}
-- Weekend work: {pv.work_life_balance.weekend_work_tolerance}
-- Evening work: {pv.work_life_balance.evening_work_tolerance}
+4. Work-Life Balance: {pv.work_life_balance_importance:.2f}
+   - Flexible hours, family time, personal commitments
 
-Task Preferences:
-- Social tasks: {pv.task_preferences.social_tasks_preference:.2f}
-- Cognitive tasks: {pv.task_preferences.cognitive_tasks_preference:.2f}
-- Routine tolerance: {pv.task_preferences.routine_tasks_tolerance:.2f}
-- Creative tasks: {pv.task_preferences.creative_tasks_preference:.2f}
-- Manual tasks: {pv.task_preferences.manual_tasks_preference:.2f}
+5. Job Security: {pv.job_security_importance:.2f}
+   - Stable employment, contract type, income reliability
+
+6. Task Preferences: {pv.task_preference_importance:.2f}
+   - Type of work (social, cognitive, manual, routine)
+
+7. Social Impact: {pv.social_impact_importance:.2f}
+   - Purpose, values alignment, helping others
 
 Overall Confidence: {pv.confidence_score:.2f}
+Vignettes Completed: {pv.n_vignettes_completed}
 """
 
     def _generate_basic_preference_summary(self) -> str:
@@ -1236,15 +1389,21 @@ Overall Confidence: {pv.confidence_score:.2f}
         pv = self._state.preference_vector
         summary_parts = []
 
-        # Only include strongest signals as fallback
-        if pv.financial.importance > 0.7:
+        # Only include strongest signals as fallback (using simplified structure)
+        if pv.financial_importance > 0.7:
             summary_parts.append("• Financial compensation is important to you")
 
-        if pv.job_security.importance > 0.7:
+        if pv.job_security_importance > 0.7:
             summary_parts.append("• Job security and stability matter to you")
 
-        if pv.career_advancement.importance > 0.7:
+        if pv.career_advancement_importance > 0.7:
             summary_parts.append("• Career growth is important to you")
+
+        if pv.work_life_balance_importance > 0.7:
+            summary_parts.append("• Work-life balance is important to you")
+
+        if pv.social_impact_importance > 0.7:
+            summary_parts.append("• Making a positive social impact matters to you")
 
         if not summary_parts:
             summary_parts.append("• I've learned about your job preferences")
@@ -1278,6 +1437,289 @@ Overall Confidence: {pv.confidence_score:.2f}
             - Transition smoothly between vignettes
 
             {get_json_response_instructions()}"""
+
+    async def _update_bayesian_posterior(
+        self,
+        vignette: Vignette,
+        chosen_option_id: str,
+        user_response: str
+    ) -> None:
+        """
+        Update Bayesian posterior distribution based on vignette response.
+
+        Used by both adaptive mode and hybrid mode (offline + personalization).
+
+        Args:
+            vignette: The vignette that was presented
+            chosen_option_id: ID of the option chosen by the user
+            user_response: User's explanation
+        """
+        # Check if Bayesian updates are needed (adaptive mode OR hybrid mode)
+        if not ADAPTIVE_AVAILABLE:
+            return
+
+        if not self._state.use_adaptive_selection and not self._use_offline_with_personalization:
+            return
+
+        try:
+            # Initialize components if not already done
+            self._init_adaptive_components()
+
+            # Extract likelihood function
+            likelihood_fn = await self._preference_extractor.extract_likelihood(
+                vignette=vignette,
+                user_response=user_response,
+                chosen_option=chosen_option_id
+            )
+
+            # Sync state posterior to manager (if state has updated values)
+            if self._state.posterior_mean and self._state.posterior_covariance:
+                self._posterior_manager.posterior = PosteriorDistribution(
+                    mean=self._state.posterior_mean,
+                    covariance=self._state.posterior_covariance
+                )
+
+            # Update posterior (uses manager's internal posterior)
+            updated_posterior = self._posterior_manager.update(
+                likelihood_fn=likelihood_fn,
+                observation={"vignette": vignette, "chosen_option": chosen_option_id, "user_response": user_response}
+            )
+
+            # Update state
+            self._state.posterior_mean = updated_posterior.mean
+            self._state.posterior_covariance = updated_posterior.covariance
+
+            # Compute updated FIM
+            from app.agent.preference_elicitation_agent.information_theory.fisher_information import FisherInformationCalculator
+            from app.agent.preference_elicitation_agent.bayesian.likelihood_calculator import LikelihoodCalculator
+
+            likelihood_calc = LikelihoodCalculator()
+            fisher_calculator = FisherInformationCalculator(likelihood_calc)
+
+            current_fim = np.array(self._state.fisher_information_matrix) if self._state.fisher_information_matrix else np.eye(7) / self._adaptive_config.prior_variance
+
+            # Compute FIM contribution from this vignette
+            vignette_fim = fisher_calculator.compute_fim(vignette, np.array(updated_posterior.mean))
+            updated_fim = current_fim + vignette_fim
+
+            # Update state
+            self._state.fisher_information_matrix = updated_fim.tolist()
+            self._state.fim_determinant = float(np.linalg.det(updated_fim))
+
+            # Update uncertainty per dimension
+            uncertainty_dict = {}
+            for i, dim in enumerate(updated_posterior.dimensions):
+                uncertainty_dict[dim] = updated_posterior.get_variance(dim)
+            self._state.uncertainty_per_dimension = uncertainty_dict
+
+            self.logger.info(
+                f"Updated Bayesian posterior: FIM det = {self._state.fim_determinant:.2e}, "
+                f"max variance = {max(uncertainty_dict.values()):.3f}"
+            )
+
+            # Sync Bayesian posterior to PreferenceVector
+            self._sync_bayesian_posterior_to_preference_vector()
+
+        except Exception as e:
+            self.logger.error(f"Failed to update Bayesian posterior: {e}", exc_info=True)
+
+    def _sync_bayesian_posterior_to_preference_vector(self) -> None:
+        """
+        Sync Bayesian posterior to simplified PreferenceVector.
+
+        Maps the 7-dimensional Bayesian posterior (learned from vignettes using
+        Laplace approximation) to the streamlined PreferenceVector structure.
+
+        Uses sigmoid transformation to map unconstrained posterior_mean values
+        to [0.0, 1.0] importance scores, and hybrid confidence calculation.
+        """
+        # Only sync if using adaptive/hybrid mode
+        if not (self._state.use_adaptive_selection or self._use_offline_with_personalization):
+            return
+
+        # Only sync if posterior exists
+        if not self._state.posterior_mean or not self._state.posterior_covariance:
+            return
+
+        try:
+            posterior_mean = np.array(self._state.posterior_mean)
+            posterior_cov = np.array(self._state.posterior_covariance)
+
+            # Sigmoid transformation: maps (-∞, +∞) → [0, 1]
+            def sigmoid(x: float) -> float:
+                return float(1.0 / (1.0 + np.exp(-x)))
+
+            # Map posterior_mean to importance scores
+            # Dimension mapping (from PosteriorDistribution.dimensions):
+            # 0: financial_importance
+            # 1: work_environment_importance
+            # 2: career_growth_importance → career_advancement_importance
+            # 3: work_life_balance_importance
+            # 4: job_security_importance
+            # 5: task_preference_importance
+            # 6: values_culture_importance → social_impact_importance
+
+            self._state.preference_vector.financial_importance = sigmoid(posterior_mean[0])
+            self._state.preference_vector.work_environment_importance = sigmoid(posterior_mean[1])
+            self._state.preference_vector.career_advancement_importance = sigmoid(posterior_mean[2])
+            self._state.preference_vector.work_life_balance_importance = sigmoid(posterior_mean[3])
+            self._state.preference_vector.job_security_importance = sigmoid(posterior_mean[4])
+            self._state.preference_vector.task_preference_importance = sigmoid(posterior_mean[5])
+            self._state.preference_vector.social_impact_importance = sigmoid(posterior_mean[6])
+
+            # Update metadata
+            n_vignettes = len(self._state.completed_vignettes)
+            self._state.preference_vector.n_vignettes_completed = n_vignettes
+
+            # Store raw Bayesian metadata
+            self._state.preference_vector.posterior_mean = posterior_mean.tolist()
+            self._state.preference_vector.posterior_covariance_diagonal = np.diag(posterior_cov).tolist()
+            self._state.preference_vector.fim_determinant = self._state.fim_determinant
+
+            # Per-dimension uncertainty
+            variances = np.diag(posterior_cov)
+            self._state.preference_vector.per_dimension_uncertainty = {
+                "financial_importance": float(variances[0]),
+                "work_environment_importance": float(variances[1]),
+                "career_advancement_importance": float(variances[2]),
+                "work_life_balance_importance": float(variances[3]),
+                "job_security_importance": float(variances[4]),
+                "task_preference_importance": float(variances[5]),
+                "social_impact_importance": float(variances[6])
+            }
+
+            # Calculate hybrid confidence score
+            # Component 1: Variance-based (statistical uncertainty)
+            avg_variance = float(np.mean(variances))
+            confidence_variance = 1.0 / (1.0 + avg_variance)
+
+            # Component 2: Vignette-count based (heuristic)
+            confidence_count = 1.0 - np.exp(-n_vignettes / 10.0)
+
+            # Weighted combination (70% variance, 30% count)
+            alpha = 0.7
+            confidence = alpha * confidence_variance + (1.0 - alpha) * confidence_count
+            self._state.preference_vector.confidence_score = float(np.clip(confidence, 0.0, 1.0))
+
+            self.logger.debug(
+                f"Synced Bayesian posterior to PreferenceVector:\n"
+                f"  Financial: {self._state.preference_vector.financial_importance:.3f} (var: {variances[0]:.3f})\n"
+                f"  Work Env: {self._state.preference_vector.work_environment_importance:.3f} (var: {variances[1]:.3f})\n"
+                f"  Career: {self._state.preference_vector.career_advancement_importance:.3f} (var: {variances[2]:.3f})\n"
+                f"  Work-Life: {self._state.preference_vector.work_life_balance_importance:.3f} (var: {variances[3]:.3f})\n"
+                f"  Security: {self._state.preference_vector.job_security_importance:.3f} (var: {variances[4]:.3f})\n"
+                f"  Tasks: {self._state.preference_vector.task_preference_importance:.3f} (var: {variances[5]:.3f})\n"
+                f"  Social: {self._state.preference_vector.social_impact_importance:.3f} (var: {variances[6]:.3f})\n"
+                f"  Confidence: {self._state.preference_vector.confidence_score:.3f} "
+                f"(variance_component={confidence_variance:.3f}, count_component={confidence_count:.3f}, n={n_vignettes})"
+            )
+
+        except Exception as e:
+            self.logger.error(f"Failed to sync Bayesian posterior to PreferenceVector: {e}", exc_info=True)
+
+    async def _update_qualitative_metadata(self) -> None:
+        """
+        Update qualitative metadata from cumulative user responses.
+
+        Called periodically (every 3 vignettes) to extract patterns from
+        accumulated responses. More responses = better pattern detection.
+        """
+        # Only update if we have enough responses (minimum 3)
+        if len(self._state.vignette_responses) < 3:
+            return
+
+        # Only update every 3 vignettes to reduce LLM calls
+        if len(self._state.vignette_responses) % 3 != 0:
+            return
+
+        try:
+            # Collect all user responses
+            all_responses = [
+                vr.user_reasoning
+                for vr in self._state.vignette_responses
+                if vr.user_reasoning
+            ]
+
+            if not all_responses:
+                return
+
+            self.logger.info(
+                f"Extracting qualitative metadata from {len(all_responses)} responses..."
+            )
+
+            # Extract metadata
+            metadata = await self._metadata_extractor.extract_metadata(all_responses)
+
+            # Update preference vector metadata fields
+            if metadata.decision_patterns:
+                self._state.preference_vector.decision_patterns.update(metadata.decision_patterns)
+
+            if metadata.tradeoff_willingness:
+                self._state.preference_vector.tradeoff_willingness.update(metadata.tradeoff_willingness)
+
+            if metadata.values_signals:
+                self._state.preference_vector.values_signals.update(metadata.values_signals)
+
+            if metadata.consistency_indicators:
+                self._state.preference_vector.consistency_indicators.update(metadata.consistency_indicators)
+
+            if metadata.extracted_constraints:
+                self._state.preference_vector.extracted_constraints.update(metadata.extracted_constraints)
+
+            self.logger.info(
+                f"Updated qualitative metadata:\n"
+                f"  Decision patterns: {list(metadata.decision_patterns.keys())}\n"
+                f"  Tradeoffs: {list(metadata.tradeoff_willingness.keys())}\n"
+                f"  Values: {list(metadata.values_signals.keys())}\n"
+                f"  Constraints: {list(metadata.extracted_constraints.keys())}"
+            )
+
+        except Exception as e:
+            self.logger.error(f"Failed to update qualitative metadata: {e}", exc_info=True)
+
+    async def _check_adaptive_stopping_criterion(self) -> tuple[bool, str]:
+        """
+        Check if adaptive stopping criterion is met.
+
+        Returns:
+            Tuple of (should_continue, reason)
+        """
+        # Check if adaptive stopping is enabled (adaptive mode OR hybrid mode)
+        if not ADAPTIVE_AVAILABLE:
+            return True, "Adaptive libraries not available"
+
+        if not self._state.use_adaptive_selection and not self._use_offline_with_personalization:
+            return True, "Adaptive mode not enabled"
+
+        try:
+            self._init_adaptive_components()
+
+            # Get current posterior and FIM
+            if not self._state.posterior_mean or not self._state.fisher_information_matrix:
+                return True, "Posterior not yet initialized"
+
+            posterior = PosteriorDistribution(
+                mean=self._state.posterior_mean,
+                covariance=self._state.posterior_covariance
+            )
+
+            fim = np.array(self._state.fisher_information_matrix)
+
+            n_vignettes_shown = len(self._state.completed_vignettes)
+
+            # Check stopping criterion
+            should_continue, reason = self._stopping_criterion.should_continue(
+                posterior=posterior,
+                fim=fim,
+                n_vignettes_shown=n_vignettes_shown
+            )
+
+            return should_continue, reason
+
+        except Exception as e:
+            self.logger.error(f"Failed to check adaptive stopping criterion: {e}", exc_info=True)
+            # Fallback to traditional stopping
+            return True, f"Error in adaptive stopping: {e}"
 
     def _create_error_response(self, start_time: float) -> AgentOutput:
         """

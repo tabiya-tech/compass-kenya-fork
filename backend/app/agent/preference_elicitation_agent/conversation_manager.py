@@ -215,57 +215,54 @@ Use bullet points (•) for clarity.
 
     def _format_preference_vector_for_summary(self, pv: PreferenceVector) -> str:
         """Format preference vector in a readable way for LLM."""
+        # Use simplified 7-dimensional structure
         return f"""
-Financial:
-- Importance: {pv.financial.importance:.2f}
-- Benefits importance: {pv.financial.benefits_importance:.2f}
-- Bonus/commission tolerance: {pv.financial.bonus_commission_tolerance:.2f}
+Core Preference Dimensions (0.0 = Low, 1.0 = High):
 
-Work Environment:
-- Remote preference: {pv.work_environment.remote_work_preference}
-- Flexibility importance: {pv.work_environment.work_hours_flexibility_importance:.2f}
-- Autonomy importance: {pv.work_environment.autonomy_importance:.2f}
-- Supervision preference: {pv.work_environment.supervision_preference}
+1. Financial Compensation: {pv.financial_importance:.2f}
+   - Salary, benefits, and total compensation
 
-Job Security:
-- Importance: {pv.job_security.importance:.2f}
-- Stability required: {pv.job_security.income_stability_required}
-- Risk tolerance: {pv.job_security.risk_tolerance}
-- Contract preference: {pv.job_security.contract_type_preference}
+2. Work Environment: {pv.work_environment_importance:.2f}
+   - Remote work, commute, autonomy, work pace
 
-Career Advancement:
-- Importance: {pv.career_advancement.importance:.2f}
-- Learning value: {pv.career_advancement.learning_opportunities_value}
-- Skill development: {pv.career_advancement.skill_development_importance:.2f}
+3. Career Advancement: {pv.career_advancement_importance:.2f}
+   - Learning opportunities, skill development, promotions
 
-Work-Life Balance:
-- Importance: {pv.work_life_balance.importance:.2f}
-- Max hours/week: {pv.work_life_balance.max_acceptable_hours_per_week or 'Not set'}
-- Weekend work: {pv.work_life_balance.weekend_work_tolerance}
-- Evening work: {pv.work_life_balance.evening_work_tolerance}
+4. Work-Life Balance: {pv.work_life_balance_importance:.2f}
+   - Flexible hours, family time, personal commitments
 
-Task Preferences:
-- Social tasks: {pv.task_preferences.social_tasks_preference:.2f}
-- Cognitive tasks: {pv.task_preferences.cognitive_tasks_preference:.2f}
-- Routine tolerance: {pv.task_preferences.routine_tasks_tolerance:.2f}
-- Creative tasks: {pv.task_preferences.creative_tasks_preference:.2f}
-- Manual tasks: {pv.task_preferences.manual_tasks_preference:.2f}
+5. Job Security: {pv.job_security_importance:.2f}
+   - Stable employment, contract type, income reliability
+
+6. Task Preferences: {pv.task_preference_importance:.2f}
+   - Type of work (social, cognitive, manual, routine)
+
+7. Social Impact: {pv.social_impact_importance:.2f}
+   - Purpose, values alignment, helping others
 
 Overall Confidence: {pv.confidence_score:.2f}
+Vignettes Completed: {pv.n_vignettes_completed}
 """
 
     def _generate_basic_preference_summary(self, pv: PreferenceVector) -> str:
         """Generate a basic preference summary without LLM (fallback)."""
         summary_parts = []
 
-        if pv.financial.importance > 0.7:
+        # Use simplified 7-dimensional structure
+        if pv.financial_importance > 0.7:
             summary_parts.append("• Financial compensation is important to you")
 
-        if pv.job_security.importance > 0.7:
+        if pv.job_security_importance > 0.7:
             summary_parts.append("• Job security and stability matter to you")
 
-        if pv.career_advancement.importance > 0.7:
+        if pv.career_advancement_importance > 0.7:
             summary_parts.append("• Career growth is important to you")
+
+        if pv.work_life_balance_importance > 0.7:
+            summary_parts.append("• Work-life balance is important to you")
+
+        if pv.social_impact_importance > 0.7:
+            summary_parts.append("• Making a positive social impact matters to you")
 
         if not summary_parts:
             summary_parts.append("• I've learned about your job preferences")

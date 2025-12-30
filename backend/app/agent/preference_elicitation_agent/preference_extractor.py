@@ -6,9 +6,10 @@ to vignettes using LLM-based analysis.
 """
 
 import logging
-from typing import Any, Optional
+from typing import Any, Optional, Callable, Dict
 
 from pydantic import BaseModel, Field
+import numpy as np
 
 from app.agent.preference_elicitation_agent.types import (
     Vignette,
@@ -464,6 +465,56 @@ class PreferenceExtractor:
             # Other types: direct replacement
             if weight > 0.6:
                 setattr(current, field_name, value)
+
+    # ========== NEW: Adaptive D-Efficiency Methods ==========
+
+    def __init_likelihood_calculator(self):
+        """Lazy initialization of likelihood calculator."""
+        if not hasattr(self, '_likelihood_calculator') or self._likelihood_calculator is None:
+            from app.agent.preference_elicitation_agent.bayesian.likelihood_calculator import LikelihoodCalculator
+            self._likelihood_calculator = LikelihoodCalculator()
+
+    async def extract_likelihood(
+        self,
+        vignette: Vignette,
+        user_response: str,
+        chosen_option: str  # "A" or "B"
+    ) -> Callable[[Dict, np.ndarray], float]:
+        """
+        Extract likelihood function for Bayesian update.
+
+        This method creates a likelihood function P(choice|β, vignette)
+        that can be used to update posterior beliefs about preferences.
+
+        Args:
+            vignette: The vignette shown to the user
+            user_response: User's response (for logging/context)
+            chosen_option: Which option was chosen ("A" or "B")
+
+        Returns:
+            Likelihood function: P(choice|β, vignette)
+        """
+        self.__init_likelihood_calculator()
+
+        # Create observation dict
+        observation = {
+            "vignette": vignette,
+            "chosen_option": chosen_option,
+            "user_response": user_response
+        }
+
+        # Return likelihood function
+        likelihood_fn = self._likelihood_calculator.create_likelihood_function(
+            vignette,
+            chosen_option
+        )
+
+        self._logger.info(
+            f"Created likelihood function for vignette {vignette.vignette_id}, "
+            f"chosen option: {chosen_option}"
+        )
+
+        return likelihood_fn
 
 
 # System instructions for experience-based preference extraction

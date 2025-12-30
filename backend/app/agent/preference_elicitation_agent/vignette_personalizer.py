@@ -418,3 +418,202 @@ Generate a personalized vignette that:
             category: len(templates)
             for category, templates in self._templates_by_category.items()
         }
+
+    async def personalize_concrete_vignette(
+        self,
+        vignette: Vignette,
+        user_context: UserContext
+    ) -> tuple[Vignette, "PersonalizationLog"]:
+        """
+        Personalize a concrete vignette (from offline optimization)
+        while preserving exact attribute values.
+
+        Takes a vignette with fixed attributes and generates personalized
+        text descriptions that match the user's background, without changing
+        any of the numerical/categorical attribute values.
+
+        Args:
+            vignette: Concrete vignette from offline optimization
+            user_context: User's background context
+
+        Returns:
+            Tuple of (personalized_vignette, personalization_log)
+
+        Raises:
+            Exception: If personalization fails after retries (handled by LLMCaller)
+        """
+        from app.agent.preference_elicitation_agent.types import PersonalizationLog
+
+        # Store original values for logging
+        original_data = {
+            "scenario_text": vignette.scenario_text,
+            "option_a_title": vignette.options[0].title,
+            "option_a_description": vignette.options[0].description,
+            "option_b_title": vignette.options[1].title,
+            "option_b_description": vignette.options[1].description
+        }
+
+        # Extract trade-off from attribute differences
+        trade_off_desc = self._extract_trade_off_from_vignette(vignette)
+
+        # Build personalization prompt
+        prompt = f"""You are personalizing a career preference question for a Kenyan youth.
+
+**User Background:**
+{self._format_user_context(user_context)}
+
+**Vignette Attributes (DO NOT CHANGE THESE VALUES):**
+Option A: {self._format_attributes(vignette.options[0].attributes)}
+Option B: {self._format_attributes(vignette.options[1].attributes)}
+
+**Trade-Off Being Tested:**
+{trade_off_desc}
+
+**Your Task:**
+Generate personalized job titles and descriptions that:
+1. Match the user's background (industry, role, experience level)
+2. Feel realistic and relevant to THIS specific person
+3. Use Kenyan companies, job types, and context
+4. Maintain the EXACT trade-off shown in the attributes above
+5. Make both options attractive in different ways (create real dilemma)
+
+**CRITICAL:**
+- DO NOT invent different attribute values
+- The descriptions must MATCH the attributes exactly
+- Only personalize job titles, company names, and descriptive language
+- If wage=25000 in attributes, description must say "KES 25,000/month"
+- If physical_demand=1, description must mention high physical demands
+- If flexibility=0, description must mention fixed schedules
+
+**Example of Good Personalization:**
+User: Software Developer
+Attributes: wage=30000, flexibility=1, remote_work=1
+✓ Title: "Remote Full-Stack Developer at Kenyan Startup"
+✓ Description: "Work remotely for a growing fintech startup building M-PESA integrations. Monthly salary of KES 30,000 with flexible hours..."
+
+**Example of Bad Personalization (inventing different values):**
+❌ Description: "Earn KES 50,000/month..." (wage was 30000!)
+❌ Description: "Fixed 9-5 schedule" (flexibility was 1!)
+
+Generate personalized content now:
+"""
+
+        caller = LLMCaller[GeneratedVignetteContent](
+            model_response_type=GeneratedVignetteContent
+        )
+
+        response, _ = await caller.call_llm(
+            llm=self._llm,
+            llm_input=prompt,
+            logger=self._logger
+        )
+
+        personalization_log = PersonalizationLog(
+            vignette_id=vignette.vignette_id,
+            original=original_data,
+            user_context={
+                "role": user_context.current_role,
+                "industry": user_context.industry,
+                "experience_level": user_context.experience_level
+            }
+        )
+
+        if response is None:
+            # Personalization failed after retries - use original vignette
+            self._logger.warning(
+                f"Personalization failed for vignette {vignette.vignette_id}, using original text"
+            )
+            personalization_log.personalization_successful = False
+            personalization_log.error_message = "LLM personalization failed after retries"
+            personalization_log.attributes_preserved = True  # No changes made
+            return vignette, personalization_log
+
+        # Create personalized vignette with new text but same attributes
+        personalized_options = []
+        for i, (original_opt, new_title, new_desc) in enumerate([
+            (vignette.options[0], response.option_a_title, response.option_a_description),
+            (vignette.options[1], response.option_b_title, response.option_b_description)
+        ]):
+            personalized_opt = VignetteOption(
+                option_id=original_opt.option_id,
+                title=new_title,
+                description=new_desc,
+                attributes=original_opt.attributes.copy()  # Preserve exact attributes
+            )
+            personalized_options.append(personalized_opt)
+
+        personalized_vignette = Vignette(
+            vignette_id=vignette.vignette_id,
+            category=vignette.category,
+            scenario_text=response.scenario_intro,
+            options=personalized_options,
+            follow_up_questions=vignette.follow_up_questions,
+            targeted_dimensions=vignette.targeted_dimensions,
+            difficulty_level=vignette.difficulty_level
+        )
+
+        # Validate attributes were preserved
+        attrs_preserved = (
+            personalized_vignette.options[0].attributes == vignette.options[0].attributes and
+            personalized_vignette.options[1].attributes == vignette.options[1].attributes
+        )
+
+        if not attrs_preserved:
+            self._logger.error(
+                f"CRITICAL: Attributes changed during personalization for {vignette.vignette_id}! "
+                f"Using original vignette."
+            )
+            personalization_log.personalization_successful = False
+            personalization_log.error_message = "Attribute validation failed"
+            personalization_log.attributes_preserved = False
+            return vignette, personalization_log
+
+        # Log successful personalization
+        personalization_log.personalized = {
+            "scenario_text": response.scenario_intro,
+            "option_a_title": response.option_a_title,
+            "option_a_description": response.option_a_description,
+            "option_b_title": response.option_b_title,
+            "option_b_description": response.option_b_description,
+            "reasoning": response.reasoning
+        }
+        personalization_log.personalization_successful = True
+        personalization_log.attributes_preserved = True
+
+        self._logger.info(
+            f"Successfully personalized vignette {vignette.vignette_id}: {response.reasoning}"
+        )
+
+        return personalized_vignette, personalization_log
+
+    def _extract_trade_off_from_vignette(self, vignette: Vignette) -> str:
+        """
+        Extract the key trade-off being tested by comparing option attributes.
+
+        Args:
+            vignette: Vignette with two options
+
+        Returns:
+            Human-readable description of the trade-off
+        """
+        attrs_a = vignette.options[0].attributes
+        attrs_b = vignette.options[1].attributes
+
+        differences = []
+        for key in attrs_a.keys():
+            val_a = attrs_a.get(key)
+            val_b = attrs_b.get(key)
+            if val_a != val_b:
+                differences.append(f"{key}: A={val_a}, B={val_b}")
+
+        if not differences:
+            return "Options are identical (no trade-off)"
+
+        return "Key differences:\n- " + "\n- ".join(differences)
+
+    def _format_attributes(self, attributes: dict) -> str:
+        """Format attribute dictionary for display in prompts."""
+        lines = []
+        for key, value in attributes.items():
+            lines.append(f"  {key}: {value}")
+        return "\n".join(lines)
