@@ -180,93 +180,88 @@ def create_sample_experiences() -> List[ExperienceEntity]:
     return [
         ExperienceEntity(
             uuid="exp-1",
-            experience_title="Software Developer",
-            company="TechCorp Kenya",
-            location="Nairobi",
-            timeline=Timeline(start="2020", end="2022"),
+            experience_title="High School Teacher (Mathematics & Physics)",
+            company="Alliance High School",
+            location="Kikuyu",
+            timeline=Timeline(start="2018", end="2023"),
             work_type=WorkType.FORMAL_SECTOR_WAGED_EMPLOYMENT
         ),
         ExperienceEntity(
             uuid="exp-2",
-            experience_title="Freelance Web Designer",
+            experience_title="Private Tutor",
             company="Self-employed",
-            location="Mombasa",
-            timeline=Timeline(start="2022", end="2023"),
+            location="Nairobi",
+            timeline=Timeline(start="2023", end="Present"),
             work_type=WorkType.SELF_EMPLOYMENT
         ),
         ExperienceEntity(
             uuid="exp-3",
-            experience_title="Shop Assistant",
-            company="Local Retail Store",
-            location="Kisumu",
-            timeline=Timeline(start="2019", end="2020"),
+            experience_title="Student Teacher",
+            company="Mang'u High School",
+            location="Thika",
+            timeline=Timeline(start="2017", end="2017"),
             work_type=WorkType.FORMAL_SECTOR_WAGED_EMPLOYMENT
         )
     ]
 
 
 def display_preference_vector(pv: PreferenceVector):
-    """Display preference vector within a rich table."""
-    table = Table(title="Preference Vector", box=box.ROUNDED, show_lines=True)
-    table.add_column("Category", style="cyan", no_wrap=True)
-    table.add_column("Preferences", style="white")
+    """Display preference vector within a rich table (simplified 7-dimensional structure)."""
+    table = Table(title="Preference Vector (Simplified - 7 Dimensions)", box=box.ROUNDED, show_lines=True)
+    table.add_column("Dimension", style="cyan", no_wrap=True)
+    table.add_column("Importance", style="yellow", justify="center")
+    table.add_column("Interpretation", style="white")
 
-    # Financial
-    min_salary = f"${pv.financial.minimum_acceptable_salary:,}" if pv.financial.minimum_acceptable_salary else "Not set"
-    financial_details = (
-        f"Importance: {pv.financial.importance:.2f}\n"
-        f"Min Salary: {min_salary}\n"
-        f"Benefits Importance: {pv.financial.benefits_importance:.2f}"
-    )
-    table.add_row("Financial", financial_details)
+    # Map importance to interpretation
+    def interpret(value: float) -> str:
+        if value >= 0.7:
+            return "HIGH"
+        elif value >= 0.5:
+            return "MODERATE"
+        elif value >= 0.3:
+            return "LOW"
+        else:
+            return "VERY LOW"
 
-    # Work Environment
-    commute = f"{pv.work_environment.commute_tolerance_minutes} mins" if pv.work_environment.commute_tolerance_minutes else "Not set"
-    env_details = (
-        f"Remote: {pv.work_environment.remote_work_preference or 'not_set'}\n"
-        f"Commute: {commute}\n"
-        f"Autonomy: {pv.work_environment.autonomy_importance:.2f}\n"
-        f"Flexibility: {pv.work_environment.work_hours_flexibility_importance:.2f}"
+    table.add_row(
+        "1. Financial Compensation",
+        f"{pv.financial_importance:.2f}",
+        f"{interpret(pv.financial_importance)} - Salary, benefits, compensation"
     )
-    table.add_row("Work Environment", env_details)
+    table.add_row(
+        "2. Work Environment",
+        f"{pv.work_environment_importance:.2f}",
+        f"{interpret(pv.work_environment_importance)} - Remote, commute, autonomy, pace"
+    )
+    table.add_row(
+        "3. Career Advancement",
+        f"{pv.career_advancement_importance:.2f}",
+        f"{interpret(pv.career_advancement_importance)} - Growth, learning, promotion"
+    )
+    table.add_row(
+        "4. Work-Life Balance",
+        f"{pv.work_life_balance_importance:.2f}",
+        f"{interpret(pv.work_life_balance_importance)} - Hours, flexibility, family time"
+    )
+    table.add_row(
+        "5. Job Security",
+        f"{pv.job_security_importance:.2f}",
+        f"{interpret(pv.job_security_importance)} - Stability, contract type, risk"
+    )
+    table.add_row(
+        "6. Task Preferences",
+        f"{pv.task_preference_importance:.2f}",
+        f"{interpret(pv.task_preference_importance)} - Routine, cognitive, manual, social"
+    )
+    table.add_row(
+        "7. Social Impact",
+        f"{pv.social_impact_importance:.2f}",
+        f"{interpret(pv.social_impact_importance)} - Purpose, helping others, community"
+    )
 
-    # Job Security
-    sec_details = (
-        f"Importance: {pv.job_security.importance:.2f}\n"
-        f"Stability: {pv.job_security.income_stability_required}\n"
-        f"Risk Tolerance: {pv.job_security.risk_tolerance}\n"
-        f"Contract: {pv.job_security.contract_type_preference}"
-    )
-    table.add_row("Job Security", sec_details)
-
-    # Career Advancement
-    career_details = (
-        f"Importance: {pv.career_advancement.importance:.2f}\n"
-        f"Learning Value: {pv.career_advancement.learning_opportunities_value}\n"
-        f"Skill Dev: {pv.career_advancement.skill_development_importance:.2f}"
-    )
-    table.add_row("Career Advancement", career_details)
-
-    # Work-Life Balance
-    max_hours = pv.work_life_balance.max_acceptable_hours_per_week or "Not set"
-    wlb_details = (
-        f"Importance: {pv.work_life_balance.importance:.2f}\n"
-        f"Max Hours: {max_hours}\n"
-        f"Weekend Work: {pv.work_life_balance.weekend_work_tolerance}"
-    )
-    table.add_row("Work-Life Balance", wlb_details)
-
-    # Task Preferences
-    task_details = (
-        f"Social: {pv.task_preferences.social_tasks_preference:.2f}\n"
-        f"Routine: {pv.task_preferences.routine_tasks_tolerance:.2f}\n"
-        f"Cognitive: {pv.task_preferences.cognitive_tasks_preference:.2f}\n"
-        f"Manual: {pv.task_preferences.manual_tasks_preference:.2f}"
-    )
-    table.add_row("Task Preferences", task_details)
-    
-    # Overall Confidence
-    table.add_row("Overall Confidence", f"[bold]{pv.confidence_score:.2f}[/]")
+    # Overall Stats
+    table.add_row("", "", "")  # Separator
+    table.add_row("Overall Confidence", f"[bold]{pv.confidence_score:.2f}[/]", f"{pv.n_vignettes_completed} vignettes completed")
 
     console.print(table)
 
@@ -361,14 +356,14 @@ async def test_preference_vector():
 
         # Modify some preferences
         print_section("Modifying Preferences")
-        pv.financial.importance = 0.8
-        pv.financial.minimum_acceptable_salary = 60000
-        pv.work_environment.remote_work_preference = "strongly_prefer"
-        pv.work_environment.commute_tolerance_minutes = 30
-        pv.job_security.importance = 0.7
+        pv.financial_importance = 0.8
+        pv.work_environment_importance = 0.6
+        pv.job_security_importance = 0.7
+        pv.social_impact_importance = 0.9
         pv.confidence_score = 0.65
+        pv.n_vignettes_completed = 5
 
-        print_info("Updated financial, work environment, and job security preferences")
+        print_info("Updated financial, work environment, job security, and social impact importance")
         display_preference_vector(pv)
 
         console.input("\n[dim]Press Enter to continue...[/]")
@@ -379,19 +374,34 @@ async def test_preference_vector():
         traceback.print_exc()
 
 
-async def test_full_conversation():
+async def test_full_conversation(use_hybrid_mode: bool = False):
     """Test a full conversation with the agent."""
-    print_header("Interactive Conversation Test")
+    if use_hybrid_mode:
+        print_header("Interactive Conversation Test - HYBRID MODE (Offline + Personalization)")
+    else:
+        print_header("Interactive Conversation Test")
 
     print_info("This will start a conversation with the preference elicitation agent.")
-    print_info("Type 'quit' to exit, 'state' to see current state, 'preferences' to see preference vector.\n")
+    if use_hybrid_mode:
+        print_info("Type 'quit' to exit, 'state' to see state, 'preferences' to see vector, 'logs' to see personalization logs.\n")
+    else:
+        print_info("Type 'quit' to exit, 'state' to see current state, 'preferences' to see preference vector.\n")
 
     session_stats = SessionStats()
 
     try:
-        # Create agent
-        agent = PreferenceElicitationAgent()
-        print_success("Created preference elicitation agent")
+        # Create agent with optional hybrid mode
+        if use_hybrid_mode:
+            offline_output_dir = str(Path(__file__).parent.parent / "offline_output")
+            agent = PreferenceElicitationAgent(
+                use_offline_with_personalization=True,
+                offline_output_dir=offline_output_dir
+            )
+            print_success("Created preference elicitation agent in HYBRID mode")
+            print_info(f"Using offline vignettes from: {offline_output_dir}")
+        else:
+            agent = PreferenceElicitationAgent()
+            print_success("Created preference elicitation agent")
 
         # Create initial state
         sample_experiences = create_sample_experiences()
@@ -409,13 +419,37 @@ async def test_full_conversation():
             )
         console.print(exp_table)
 
-        state = PreferenceElicitationAgentState(
-            session_id=12345,
-            initial_experiences_snapshot=sample_experiences,
-            use_db6_for_fresh_data=False
-        )
+        # Initialize state
+        # NOTE: For hybrid mode, do NOT set use_adaptive_selection=True in state
+        # The hybrid mode is controlled by VignetteEngine's use_offline_with_personalization flag
+        # The engine internally handles Bayesian updates, so we still initialize posterior fields
+        if use_hybrid_mode:
+            # Initialize with Bayesian posterior for hybrid mode tracking
+            import numpy as np
+            prior_mean = np.zeros(7)
+            prior_cov = np.eye(7)
+
+            state = PreferenceElicitationAgentState(
+                session_id=12345,
+                initial_experiences_snapshot=sample_experiences,
+                use_db6_for_fresh_data=False,
+                use_adaptive_selection=False,  # DO NOT set True - hybrid mode uses different routing
+                posterior_mean=prior_mean.tolist(),
+                posterior_covariance=prior_cov.tolist(),
+                fisher_information_matrix=np.zeros((7, 7)).tolist()
+            )
+            print_info("Initialized Bayesian posterior (prior: μ=0, Σ=I)")
+        else:
+            state = PreferenceElicitationAgentState(
+                session_id=12345,
+                initial_experiences_snapshot=sample_experiences,
+                use_db6_for_fresh_data=False
+            )
+
         agent.set_state(state)
         print_success("Initialized agent state with sample experiences")
+        if use_hybrid_mode:
+            print_info("Hybrid mode: offline D-optimal vignettes + LLM personalization")
 
         # Create conversation context
         conversation_history = ConversationHistory()
@@ -439,6 +473,27 @@ async def test_full_conversation():
                     continue
                 elif user_input.lower() == 'preferences':
                     display_preference_vector(state.preference_vector)
+                    continue
+                elif user_input.lower() == 'logs' and use_hybrid_mode:
+                    # Display personalization logs in hybrid mode
+                    if agent._personalization_logs:
+                        log_table = Table(title="Personalization Logs", box=box.ROUNDED, show_lines=True)
+                        log_table.add_column("#", style="dim")
+                        log_table.add_column("Vignette ID", style="cyan")
+                        log_table.add_column("Success", style="green")
+                        log_table.add_column("Attributes Preserved", style="yellow")
+
+                        for i, log in enumerate(agent._personalization_logs, 1):
+                            log_table.add_row(
+                                str(i),
+                                log.vignette_id,
+                                "✓" if log.personalization_successful else "✗",
+                                "✓" if log.attributes_preserved else "✗"
+                            )
+                        console.print(log_table)
+                        print_info(f"Total personalizations: {len(agent._personalization_logs)}")
+                    else:
+                        print_info("No personalization logs yet")
                     continue
 
                 user_message = user_input
@@ -671,6 +726,7 @@ async def main_menu():
             "Test State Management (state methods, persistence)",
             "Test Vignette Selection Logic (adaptive selection)",
             "Full Interactive Conversation (chat with agent)",
+            "Full Interactive Conversation - HYBRID MODE (offline + personalization)",
             "Run All Tests",
             "Change Logging Level",
             "Exit"
@@ -685,8 +741,10 @@ async def main_menu():
         elif choice == 4:
             await test_vignette_selection()
         elif choice == 5:
-            await test_full_conversation()
+            await test_full_conversation(use_hybrid_mode=False)
         elif choice == 6:
+            await test_full_conversation(use_hybrid_mode=True)
+        elif choice == 7:
             print_info("Running all tests...")
             await test_vignette_engine()
             await test_preference_vector()
@@ -695,7 +753,7 @@ async def main_menu():
             print_success("All component tests complete!")
             print_info("Skipping full conversation test (run manually from menu)")
             console.input("\n[dim]Press Enter to return to menu...[/]")
-        elif choice == 7:
+        elif choice == 8:
             # Change logging level
             print_section("Change Logging Level")
             new_log_choice = display_menu([
@@ -705,7 +763,7 @@ async def main_menu():
             ])
             setup_logging(log_levels[new_log_choice])
             print_success(f"Logging changed to {logging.getLevelName(log_levels[new_log_choice])} level")
-        elif choice == 8:
+        elif choice == 9:
             print_info("Exiting...")
             break
 
