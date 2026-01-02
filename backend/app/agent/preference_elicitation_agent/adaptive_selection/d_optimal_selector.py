@@ -34,7 +34,8 @@ class DOptimalSelector:
         vignettes: List[Vignette],
         posterior: PosteriorDistribution,
         current_fim: np.ndarray,
-        vignettes_shown: List[Vignette]
+        vignettes_shown: List[Vignette],
+        use_bayesian: bool = True
     ) -> Optional[Vignette]:
         """
         Select vignette that maximizes expected D-efficiency gain.
@@ -44,11 +45,13 @@ class DOptimalSelector:
             posterior: Current posterior distribution
             current_fim: Fisher Information Matrix so far
             vignettes_shown: Vignettes already presented
+            use_bayesian: If True, use Bayesian D-optimal (accounts for uncertainty)
 
         Returns:
             Vignette with highest expected information gain
         """
         posterior_mean = np.array(posterior.mean)
+        posterior_cov = np.array(posterior.covariance) if hasattr(posterior, 'covariance') else None
 
         best_vignette = None
         best_det_increase = -np.inf
@@ -58,12 +61,21 @@ class DOptimalSelector:
         available_vignettes = [v for v in vignettes if v.vignette_id not in vignette_ids_shown]
 
         for vignette in available_vignettes:
-            # Compute expected FIM if this vignette is shown
-            _, det_increase = self.fisher_calculator.compute_expected_fim(
-                vignette,
-                posterior_mean,
-                current_fim
-            )
+            # Use Bayesian criterion if covariance available and enabled
+            if use_bayesian and posterior_cov is not None:
+                _, det_increase = self.fisher_calculator.compute_bayesian_expected_fim(
+                    vignette,
+                    posterior_mean,
+                    posterior_cov,
+                    current_fim
+                )
+            else:
+                # Fallback to standard D-optimal
+                _, det_increase = self.fisher_calculator.compute_expected_fim(
+                    vignette,
+                    posterior_mean,
+                    current_fim
+                )
 
             if det_increase > best_det_increase:
                 best_det_increase = det_increase
