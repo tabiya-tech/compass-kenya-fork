@@ -42,6 +42,7 @@ from app.agent.preference_elicitation_agent.preference_extractor import (
 )
 from app.agent.preference_elicitation_agent.metadata_extractor import MetadataExtractor
 from app.agent.preference_elicitation_agent.user_context_extractor import UserContextExtractor
+from app.agent.preference_elicitation_agent import bws_utils
 from app.agent.prompt_template.agent_prompt_template import (
     STD_AGENT_CHARACTER,
     STD_LANGUAGE_STYLE
@@ -98,6 +99,9 @@ class ConversationResponse(BaseModel):
 
     finished: bool
     """Whether the preference elicitation is complete"""
+
+    metadata: Optional[dict] = None
+    """Optional structured metadata for UI rendering (e.g., BWS tasks, vignettes)"""
 
     class Config:
         extra = "forbid"
@@ -415,6 +419,8 @@ class PreferenceElicitationAgent(Agent):
                 response, llm_stats = await self._handle_intro_phase(msg, context)
             elif self._state.conversation_phase == "EXPERIENCE_QUESTIONS":
                 response, llm_stats = await self._handle_experience_questions_phase(msg, context)
+            elif self._state.conversation_phase == "BWS":
+                response, llm_stats = await self._handle_bws_phase(msg, context)
             elif self._state.conversation_phase == "VIGNETTES":
                 response, llm_stats = await self._handle_vignettes_phase(msg, context)
             elif self._state.conversation_phase == "FOLLOW_UP":
@@ -526,6 +532,127 @@ class PreferenceElicitationAgent(Agent):
             # Don't fail the conversation - just log the error
             self.logger.error(f"Failed to save preference vector to DB6: {e}", exc_info=True)
 
+    async def _handle_bws_phase(
+        self,
+        user_input: str,
+        context: ConversationContext
+    ) -> tuple[ConversationResponse, list[LLMStats]]:
+        """
+        Handle the Best-Worst Scaling (BWS) occupation ranking phase.
+
+        This phase shows 12 tasks where users pick best and worst occupations
+        from sets of 5, building a ranking over all 40 occupation groups.
+
+        Args:
+            user_input: User's message
+            context: Conversation context
+
+        Returns:
+            Tuple of (ConversationResponse, LLMStats)
+        """
+        # Load BWS tasks
+        tasks = bws_utils.load_bws_tasks()
+        total_tasks = len(tasks)
+
+        # Parse previous response if this isn't the first task
+        if self._state.bws_tasks_completed > 0 and user_input.strip():
+            try:
+                # Get the previous task's occupations
+                prev_task = tasks[self._state.bws_tasks_completed - 1]
+                prev_occupations = prev_task["occupations"]
+
+                # Parse user's choice
+                best_occ, worst_occ = bws_utils.parse_bws_response(user_input, prev_occupations)
+
+                # Save response
+                self._state.bws_responses.append({
+                    "task_id": self._state.bws_tasks_completed - 1,
+                    "alts": prev_occupations,
+                    "best": best_occ,
+                    "worst": worst_occ,
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                })
+
+                self.logger.info(
+                    f"BWS Task {self._state.bws_tasks_completed}/{total_tasks} completed: "
+                    f"best={best_occ}, worst={worst_occ}"
+                )
+
+            except ValueError as e:
+                # Parsing failed - ask for clarification
+                return ConversationResponse(
+                    reasoning=f"Failed to parse BWS response: {str(e)}",
+                    message=str(e),
+                    finished=False
+                ), []
+
+        # Check if BWS phase is complete
+        if self._state.bws_tasks_completed >= total_tasks:
+            # Compute occupation scores
+            scores = bws_utils.compute_occupation_scores(self._state.bws_responses)
+            self._state.occupation_scores = scores
+
+            # Get top 10
+            top_10 = bws_utils.get_top_k_occupations(scores, k=10)
+            self._state.top_10_occupations = top_10
+
+            # Mark BWS complete and transition to vignettes
+            self._state.bws_phase_complete = True
+            self._state.conversation_phase = "VIGNETTES"
+
+            # Log completion
+            occupation_labels = bws_utils.load_occupation_labels()
+            top_labels = [occupation_labels.get(code, code) for code in top_10[:5]]
+            self.logger.info(f"BWS phase complete. Top 5 occupations: {top_labels}")
+
+            # Transition message
+            message = (
+                "Perfect! I now have a good sense of the types of work that interest you.\n\n"
+                "Next, I'd like to understand what matters to you **within** these job types. "
+                "I'll show you some job scenarios, and you can tell me which you'd prefer."
+            )
+
+            return ConversationResponse(
+                reasoning="BWS phase complete, transitioning to vignettes",
+                message=message,
+                finished=False
+            ), []
+
+        # Show next BWS task
+        current_task = tasks[self._state.bws_tasks_completed]
+        task_number = self._state.bws_tasks_completed + 1
+
+        message = bws_utils.format_bws_question(current_task, task_number, total_tasks)
+
+        # Build metadata for structured UI rendering
+        occupation_groups = bws_utils.load_occupation_groups()
+        occupation_map = {occ["code"]: occ for occ in occupation_groups}
+
+        occupations_metadata = []
+        for occ_code in current_task["occupations"]:
+            occ_data = occupation_map.get(occ_code, {})
+            occupations_metadata.append({
+                "code": occ_code,
+                "label": occ_data.get("label", f"Occupation {occ_code}"),
+                "description": occ_data.get("description", "")
+            })
+
+        metadata = {
+            "interaction_type": "bws_task",
+            "task_number": task_number,
+            "total_tasks": total_tasks,
+            "occupations": occupations_metadata
+        }
+
+        self._state.bws_tasks_completed += 1
+
+        return ConversationResponse(
+            reasoning=f"Showing BWS task {task_number}/{total_tasks}",
+            message=message,
+            finished=False,
+            metadata=metadata
+        ), []
+
     async def _handle_intro_phase(
         self,
         user_input: str,
@@ -607,10 +734,10 @@ class PreferenceElicitationAgent(Agent):
                 all_llm_stats=all_llm_stats
             )
 
-        # After 2-3 turns of experience questions, move to vignettes
+        # After 2-3 turns of experience questions, move to BWS (occupation ranking)
         if self._state.conversation_turn_count >= 4:
-            self._state.conversation_phase = "VIGNETTES"
-            return await self._handle_vignettes_phase(user_input, context)
+            self._state.conversation_phase = "BWS"
+            return await self._handle_bws_phase("", context)  # Start BWS with empty input
 
         # Get experiences (from DB6 or snapshot)
         experiences = await self._get_experiences_for_questions()

@@ -52,8 +52,30 @@ class PreferenceElicitationAgentState(BaseModel):
     production (with Epic 1 DB6 available).
     """
 
-    conversation_phase: Literal["INTRO", "EXPERIENCE_QUESTIONS", "VIGNETTES", "FOLLOW_UP", "WRAPUP", "COMPLETE"] = "INTRO"
+    conversation_phase: Literal["INTRO", "EXPERIENCE_QUESTIONS", "BWS", "VIGNETTES", "FOLLOW_UP", "WRAPUP", "COMPLETE"] = "INTRO"
     """Current phase of the preference elicitation conversation"""
+
+    # ========== BWS (Best-Worst Scaling) Phase ==========
+    bws_phase_complete: bool = False
+    """Whether the BWS occupation ranking phase is complete"""
+
+    bws_tasks_completed: int = 0
+    """Number of BWS tasks completed (out of 12)"""
+
+    bws_responses: list[dict[str, Any]] = Field(default_factory=list)
+    """
+    BWS responses collected.
+    Format: [{"task_id": 0, "alts": ["11","21","31","41","51"], "best": "21", "worst": "41"}, ...]
+    """
+
+    occupation_scores: Optional[dict[str, float]] = None
+    """
+    Simple scoring for each occupation (code → score).
+    Score = count(best) - count(worst)
+    """
+
+    top_10_occupations: list[str] = Field(default_factory=list)
+    """Top 10 occupation codes ranked by BWS scores"""
 
     completed_vignettes: list[str] = Field(default_factory=list)
     """List of vignette IDs that have been completed"""
@@ -168,6 +190,12 @@ class PreferenceElicitationAgentState(BaseModel):
             ] if doc.get("initial_experiences_snapshot") else None,
             use_db6_for_fresh_data=doc.get("use_db6_for_fresh_data", False),
             conversation_phase=doc.get("conversation_phase", "INTRO"),
+            # BWS fields
+            bws_phase_complete=doc.get("bws_phase_complete", False),
+            bws_tasks_completed=doc.get("bws_tasks_completed", 0),
+            bws_responses=list(doc.get("bws_responses", [])),
+            occupation_scores=doc.get("occupation_scores"),
+            top_10_occupations=list(doc.get("top_10_occupations", [])),
             completed_vignettes=doc.get("completed_vignettes", []),
             current_vignette_id=doc.get("current_vignette_id"),
             vignette_responses=[
