@@ -129,6 +129,83 @@ class FisherInformationCalculator:
 
         return expected_new_fim, det_increase
 
+    def compute_bayesian_expected_fim(
+        self,
+        vignette: Vignette,
+        posterior_mean: np.ndarray,
+        posterior_covariance: np.ndarray,
+        current_fim: np.ndarray
+    ) -> Tuple[np.ndarray, float]:
+        """
+        Compute Bayesian D-optimal criterion accounting for directional uncertainty.
+
+        Instead of just maximizing det(FIM), we weight the FIM by the posterior covariance.
+        This prioritizes vignettes that test dimensions where we're most uncertain.
+
+        Key insight: A vignette is more valuable if it tests dimensions where
+        we have high posterior variance.
+
+        Formula:
+            Weighted FIM = x_diff^T * Cov * x_diff
+            where x_diff = attributes of option A - attributes of option B
+
+        This makes the score depend on:
+        1. How much the vignette contrasts attributes (x_diff)
+        2. How uncertain we are in those dimensions (Cov)
+
+        Args:
+            vignette: Candidate vignette
+            posterior_mean: Current posterior mean
+            posterior_covariance: Current posterior covariance (uncertainty)
+            current_fim: FIM from vignettes shown so far
+
+        Returns:
+            (expected_new_fim, bayesian_det_increase)
+        """
+        # Compute FIM contribution of this vignette
+        vignette_fim = self.compute_fim(vignette, posterior_mean)
+
+        # Expected new FIM = current + contribution
+        expected_new_fim = current_fim + vignette_fim
+
+        # Compute standard determinant increase
+        current_det = self.compute_d_efficiency(current_fim)
+        expected_det = self.compute_d_efficiency(expected_new_fim)
+        standard_increase = expected_det - current_det
+
+        # Weight by directional uncertainty
+        # Extract the feature difference vector (what this vignette tests)
+        try:
+            # Extract features from vignette
+            if hasattr(vignette, 'option_a') and hasattr(vignette, 'option_b'):
+                x_A = self.likelihood_calculator._extract_features(vignette.option_a)
+                x_B = self.likelihood_calculator._extract_features(vignette.option_b)
+            else:
+                option_a = next((opt for opt in vignette.options if opt.option_id == "A"), vignette.options[0])
+                option_b = next((opt for opt in vignette.options if opt.option_id == "B"), vignette.options[1])
+                x_A = self.likelihood_calculator._extract_features(option_a)
+                x_B = self.likelihood_calculator._extract_features(option_b)
+
+            x_diff = x_A - x_B
+
+            # Compute uncertainty-weighted score
+            # High score if: vignette tests dimensions with high variance
+            regularized_cov = posterior_covariance + np.eye(posterior_covariance.shape[0]) * 1e-8
+
+            # Weighted score: how much uncertainty does this vignette address?
+            # x_diff^T * Cov * x_diff measures variance in the direction of x_diff
+            directional_uncertainty = x_diff.T @ regularized_cov @ x_diff
+
+            # Bayesian score: standard FIM increase weighted by directional uncertainty
+            # Higher if vignette tests uncertain dimensions
+            bayesian_increase = standard_increase * (1.0 + directional_uncertainty)
+
+        except (np.linalg.LinAlgError, ValueError, AttributeError):
+            # Fallback to standard D-optimal on error
+            bayesian_increase = standard_increase
+
+        return expected_new_fim, bayesian_increase
+
     def compute_d_efficiency(self, fim: np.ndarray) -> float:
         """
         Compute D-efficiency (determinant of FIM).
