@@ -586,11 +586,13 @@ class VignetteEngine:
             return await self._select_adaptive_vignette(state)  # Recursive call to get first end vignette
 
         # Use D-optimal selector to find most informative vignette
+        # Enable Bayesian mode to adapt based on posterior uncertainty
         best_vignette = await self._d_optimal_selector.select_next_vignette(
             vignettes=available_vignettes,
             posterior=posterior,
             current_fim=current_fim,
-            vignettes_shown=vignettes_shown
+            vignettes_shown=vignettes_shown,
+            use_bayesian=True  # Use Bayesian D-optimal (accounts for uncertainty)
         )
 
         if best_vignette:
@@ -703,11 +705,13 @@ class VignetteEngine:
                 return await self._select_offline_with_personalization(state, user_context, personalization_log_callback)
 
             # Use D-optimal selector
+            # Enable Bayesian mode to adapt based on posterior uncertainty
             selected_vignette = await self._d_optimal_selector.select_next_vignette(
                 vignettes=available_vignettes,
                 posterior=posterior,
                 current_fim=current_fim,
-                vignettes_shown=vignettes_shown
+                vignettes_shown=vignettes_shown,
+                use_bayesian=True  # Use Bayesian D-optimal (accounts for uncertainty)
             )
 
             if selected_vignette:
@@ -960,11 +964,13 @@ class VignetteEngine:
                 return None
 
             # Use D-optimal selector
+            # Enable Bayesian mode to adapt based on posterior uncertainty
             best_vignette = await self._d_optimal_selector.select_next_vignette(
                 vignettes=available_vignettes,
                 posterior=posterior,
                 current_fim=current_fim,
-                vignettes_shown=vignettes_shown
+                vignettes_shown=vignettes_shown,
+                use_bayesian=True  # Use Bayesian D-optimal (accounts for uncertainty)
             )
 
             if best_vignette:
