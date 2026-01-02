@@ -266,6 +266,88 @@ def display_preference_vector(pv: PreferenceVector):
     console.print(table)
 
 
+def display_bws_task(metadata: dict) -> str:
+    """
+    Display a BWS task with occupations and get user selections.
+
+    Returns JSON response string: {"type": "bws_response", "best": "...", "worst": "..."}
+    """
+    import json
+
+    task_num = metadata.get("task_number", 0)
+    total = metadata.get("total_tasks", 12)
+    occupations = metadata.get("occupations", [])
+
+    # Create table for occupations
+    table = Table(
+        title=f"[bold]BWS Task {task_num} of {total}[/]",
+        box=box.ROUNDED,
+        show_header=True,
+        header_style="bold cyan"
+    )
+    table.add_column("Option", style="bold yellow", width=8)
+    table.add_column("Job Type", style="bold white", width=40)
+    table.add_column("Examples", style="dim", width=50)
+
+    # Map letters to occupations
+    occupation_map = {}
+    for i, occ in enumerate(occupations):
+        letter = chr(65 + i)  # A, B, C, D, E
+        occupation_map[letter] = occ["code"]
+
+        # Format label (title case if all uppercase)
+        label = occ["label"]
+        if label.isupper():
+            label = label.title()
+
+        table.add_row(
+            letter,
+            label,
+            occ.get("description", "")
+        )
+
+    console.print(table)
+    console.print("\n[bold]Select your preferences:[/]")
+
+    # Get MOST preferred
+    while True:
+        most = console.input("[bold green]Which would you MOST like to do? (A-E): [/]").strip().upper()
+        if most in occupation_map:
+            break
+        print_error(f"Please enter a letter between A and E")
+
+    # Get LEAST preferred
+    while True:
+        least = console.input("[bold red]Which would you LEAST like to do? (A-E): [/]").strip().upper()
+        if least in occupation_map:
+            if least != most:
+                break
+            print_error("You cannot select the same option for both MOST and LEAST")
+        else:
+            print_error(f"Please enter a letter between A and E")
+
+    # Show selection
+    most_label = next(o["label"] for o in occupations if o["code"] == occupation_map[most])
+    least_label = next(o["label"] for o in occupations if o["code"] == occupation_map[least])
+
+    if most_label.isupper():
+        most_label = most_label.title()
+    if least_label.isupper():
+        least_label = least_label.title()
+
+    print_success(f"Most preferred: {most} - {most_label}")
+    print_success(f"Least preferred: {least} - {least_label}")
+
+    # Return JSON response
+    response = {
+        "type": "bws_response",
+        "best": occupation_map[most],
+        "worst": occupation_map[least]
+    }
+
+    return json.dumps(response)
+
+
 def display_state_info(state: PreferenceElicitationAgentState):
     """Display current agent state information."""
     table = Table(title="Agent State", box=box.ROUNDED)
@@ -275,6 +357,15 @@ def display_state_info(state: PreferenceElicitationAgentState):
     table.add_row("Session ID", str(state.session_id))
     table.add_row("Phase", f"[bold]{state.conversation_phase}[/]")
     table.add_row("Turn Count", str(state.conversation_turn_count))
+
+    # BWS progress if in BWS phase
+    if hasattr(state, 'bws_tasks_completed'):
+        table.add_row("BWS Progress", f"{state.bws_tasks_completed}/12")
+        if state.bws_phase_complete:
+            table.add_row("BWS Status", "[green]✓ Complete[/]")
+            if state.top_10_occupations:
+                table.add_row("Top Occupations", f"{len(state.top_10_occupations)} ranked")
+
     completed = len(state.completed_vignettes)
     total = completed + len(state.categories_to_explore)
     table.add_row("Vignettes Progress", f"{completed}/{total}")
@@ -518,14 +609,72 @@ async def test_full_conversation(use_hybrid_mode: bool = False):
                 with console.status("[bold green]Agent is thinking...", spinner="dots"):
                     output = await agent.execute(agent_input, context)
 
-                # Display agent response
-                print_agent(output.message_for_user)
+                # Check if we're in BWS phase and have metadata
+                # For BWS tasks, we need to get the ConversationResponse that has metadata
+                # Since AgentOutput doesn't include metadata, we'll check the state instead
+                is_bws_task = False
+                if hasattr(state, 'conversation_phase') and state.conversation_phase == "BWS":
+                    # Check if we just got a BWS task (not the transition message)
+                    if hasattr(state, 'bws_phase_complete') and not state.bws_phase_complete:
+                        # Also check we have tasks remaining
+                        if hasattr(state, 'bws_tasks_completed') and state.bws_tasks_completed < 12:
+                            is_bws_task = True
+
+                if is_bws_task:
+                    # Display the agent message first (intro/question text)
+                    print_agent(output.message_for_user)
+
+                    # Now we need to get the BWS metadata from the agent's last response
+                    # Since metadata isn't in AgentOutput, we'll access it directly
+                    # We need to call the BWS handler to get metadata
+                    from app.agent.preference_elicitation_agent import bws_utils
+
+                    # Get current task
+                    tasks = bws_utils.load_bws_tasks()
+                    current_task_idx = state.bws_tasks_completed - 1  # Already incremented
+
+                    if 0 <= current_task_idx < len(tasks):
+                        current_task = tasks[current_task_idx]
+                        occupation_groups = bws_utils.load_occupation_groups()
+                        occupation_map = {occ["code"]: occ for occ in occupation_groups}
+
+                        occupations_metadata = []
+                        for occ_code in current_task["occupations"]:
+                            occ_data = occupation_map.get(occ_code, {})
+                            occupations_metadata.append({
+                                "code": occ_code,
+                                "label": occ_data.get("label", f"Occupation {occ_code}"),
+                                "description": occ_data.get("description", "")
+                            })
+
+                        metadata = {
+                            "interaction_type": "bws_task",
+                            "task_number": current_task_idx + 1,
+                            "total_tasks": len(tasks),
+                            "occupations": occupations_metadata
+                        }
+
+                        # Display BWS UI and get response
+                        user_message = display_bws_task(metadata)
+
+                        # Create new agent input with the BWS response
+                        agent_input = AgentInput(message=user_message, is_artificial=False)
+
+                        # Execute agent again to process the response
+                        with console.status("[bold green]Agent is thinking...", spinner="dots"):
+                            output = await agent.execute(agent_input, context)
+
+                        # Display agent's acknowledgment/next task
+                        print_agent(output.message_for_user)
+                else:
+                    # Normal conversation - display agent response
+                    print_agent(output.message_for_user)
 
                 # Collect stats
                 input_tokens = sum(stat.prompt_token_count for stat in output.llm_stats)
                 output_tokens = sum(stat.response_token_count for stat in output.llm_stats)
                 latency = output.agent_response_time_in_sec
-                
+
                 session_stats.add_turn(input_tokens, output_tokens, latency)
 
                 # Show turn stats
