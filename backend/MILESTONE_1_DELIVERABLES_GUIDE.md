@@ -265,6 +265,19 @@ https://github.com/tabiya-tech/compass-kenya-fork/blob/stevealila/backend/app/sc
 ```bash
 # Run all platforms
 python3 -m app.scrapers.run_all_scrapers
+
+# Or is venv is set up
+cd backend
+.\.venv\Scripts\Activate.ps1
+python -m app.scrapers.run_all_scrapers
+
+# Or to run without MongoDB
+cd backend
+$env:USE_LOCAL_FIXTURE = '1'
+$env:SCRAPER_FIXTURE_DIR = 'C:/Users/jasmi/OneDrive - Nexus365/Documents/PhD - Oxford BSG/Paper writing projects/Ongoing/Compass/Tabiya South Africa v1.0.1-rc.1'
+$env:SCRAPER_OUTPUT_DIR = 'C:/Users/jasmi/OneDrive - Nexus365/Documents/PhD - Oxford BSG/Paper writing projects/Ongoing/Compass/Kenya Trial/data'
+.\.venv\Scripts\Activate.ps1
+python -m app.scrapers.run_all_scrapers
 ```
 
 #### **Run Single Platform:**

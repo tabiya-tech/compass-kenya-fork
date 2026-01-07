@@ -38,10 +38,12 @@ PLATFORMS = {
     'fuzu': {
         'name': 'Fuzu',
         'url': 'https://www.fuzu.com/kenya/job',
-        'wait_selector': 'section.job-content',
-        'wait_time': 15,  # Fuzu is slower
+        # broaden the wait_selector to handle multiple possible listing containers
+        'wait_selector': 'section.job-content, div.job, div.listing, article.job',
+        'wait_time': 25,  # increase wait time for Fuzu which can be slow
         'selectors': {
-            'job_cards': 'section.job-content',
+            # accept multiple possible card selectors to be resilient to small DOM changes
+            'job_cards': 'section.job-content, div.job, div.listing, article.job',
             'title': 'h1',
             'company': 'a[data-cy="company-name"]',
             'location': 'a[href*="/job/nairobi"]',
@@ -55,8 +57,8 @@ PLATFORMS = {
     'jobwebkenya': {
         'name': 'JobWebKenya',
         'url': 'https://jobwebkenya.com/jobs/',
-        'wait_selector': 'li.job',
-        'wait_time': 10,
+        'wait_selector': 'li.job, div.job, article.job',
+        'wait_time': 15,
         'selectors': {
             'job_cards': 'li.job',
             'title': 'div#titlo strong a',
@@ -71,8 +73,8 @@ PLATFORMS = {
     'myjobmag': {
         'name': 'MyJobMag',
         'url': 'https://www.myjobmag.co.ke/jobs',
-        'wait_selector': 'li.job-list-li',
-        'wait_time': 10,
+        'wait_selector': 'li.job-list-li, div.job-list, article.job',
+        'wait_time': 15,
         'selectors': {
             'job_cards': 'li.job-list-li',
             'title': 'li.job-info h2 a',
