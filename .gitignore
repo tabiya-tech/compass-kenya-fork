@@ -7,5 +7,6 @@
 credentials*.json
 .run/
 
+ken-product/
 
 __pycache__/
