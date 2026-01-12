@@ -113,6 +113,7 @@ class ConversationService(IConversationService):
         # get the current index in the conversation history, so that we can return only the new messages
         current_index = len(context.all_history.turns)
 
+
         # Set turn_index in context for observability logging
         turn_index_ctx_var.set(current_index)
 
@@ -125,6 +126,7 @@ class ConversationService(IConversationService):
         state.agent_director_state.persona_type = persona_type
         state.collect_experience_state.persona_type = persona_type
         state.skills_explorer_agent_state.persona_type = persona_type
+
 
         await self._agent_director.execute(user_input=user_input)
         # get the context again after updating the history

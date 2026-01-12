@@ -51,8 +51,8 @@ _GLOSSARY = {
         Dokta - Doctor.
         Mhasibu - Accountant / Bookkeeper.
         Karani - Clerk / Office worker.
-        Mwal - Teacher.
-        Makani - Engineer.
+        Mwalimu - Teacher.
+        Mhandisi - Engineer.
         Rubani - Pilot.
         Nahodha - Captain.
         Kiongozi - Leader / Manager.
