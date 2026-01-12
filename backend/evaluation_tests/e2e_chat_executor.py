@@ -216,12 +216,10 @@ class E2EChatExecutor:
         # Record experience metrics
         experiences_discovered = self.get_experiences_discovered()
         experiences_explored = self.get_experiences_explored()
-
         skills_data = []
         for exp in experiences_explored:
             if hasattr(exp, 'top_skills') and exp.top_skills:
                 skills_data.append(len(exp.top_skills))
-
         self._metrics_collector.record_experiences(
             experiences_discovered=len(experiences_discovered),
             experiences_explored=len(experiences_explored),
