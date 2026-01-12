@@ -20,6 +20,7 @@ from app.metrics.application_state_metrics_recorder.recorder import IApplication
 from app.job_preferences.service import IJobPreferencesService
 from app.job_preferences.types import JobPreferences
 
+from app.context_vars import turn_index_ctx_var
 
 class ConversationAlreadyConcludedError(Exception):
     """
@@ -110,6 +111,10 @@ class ConversationService(IConversationService):
         context = await self._conversation_memory_manager.get_conversation_context()
         # get the current index in the conversation history, so that we can return only the new messages
         current_index = len(context.all_history.turns)
+
+        # Set turn_index in context for observability logging
+        turn_index_ctx_var.set(current_index)
+
         await self._agent_director.execute(user_input=user_input)
         # get the context again after updating the history
         context = await self._conversation_memory_manager.get_conversation_context()
