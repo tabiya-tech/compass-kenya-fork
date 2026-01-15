@@ -327,7 +327,7 @@ class MasterScraper:
 async def main():
     """Entry point for running all scrapers."""
     scraper = MasterScraper()
-    await scraper.run_all(max_jobs_per_platform=100)
+    await scraper.run_all(max_jobs_per_platform=20)
 
 
 if __name__ == "__main__":
