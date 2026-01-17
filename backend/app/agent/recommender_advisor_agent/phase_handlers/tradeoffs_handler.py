@@ -43,11 +43,11 @@ class TradeoffsPhaseHandler(BasePhaseHandler):
         Handle discussing preference vs demand tradeoffs.
         """
         all_llm_stats: list[LLMStats] = []
-        
+
         # Get the user's preferred occupation and alternatives
         preferred_occ = self._get_user_preferred_occupation(state)
         high_demand_alt = self._get_high_demand_alternative(state)
-        
+
         if preferred_occ is None:
             # No clear preference, go back to exploration
             state.conversation_phase = ConversationPhase.CAREER_EXPLORATION
@@ -56,22 +56,26 @@ class TradeoffsPhaseHandler(BasePhaseHandler):
                 message="Let me understand - which of these career paths interests you most?",
                 finished=False
             ), []
-        
+
         # If no high-demand alternative, skip tradeoffs entirely
         if high_demand_alt is None or high_demand_alt.uuid == preferred_occ.uuid:
-            state.conversation_phase = ConversationPhase.ACTION_PLANNING
+            state.conversation_phase = ConversationPhase.CAREER_EXPLORATION
             return ConversationResponse(
                 reasoning="No tradeoff needed - proceeding with user's choice",
                 message=f"Great choice with **{preferred_occ.occupation}**! Let's talk about your next steps.",
                 finished=False
             ), []
-        
+
         # Generate tradeoff discussion
         response, llm_stats = await self._generate_tradeoff_message(
-            preferred_occ, high_demand_alt, state, context
+            preferred_occ, high_demand_alt, state, context, user_input
         )
         all_llm_stats.extend(llm_stats)
-        
+
+        # After presenting the tradeoff, transition to CAREER_EXPLORATION
+        # so the user can explore their chosen option
+        state.conversation_phase = ConversationPhase.CAREER_EXPLORATION
+
         return response, all_llm_stats
     
     def _get_user_preferred_occupation(
@@ -115,7 +119,8 @@ class TradeoffsPhaseHandler(BasePhaseHandler):
         preferred: OccupationRecommendation,
         alternative: OccupationRecommendation,
         state: RecommenderAdvisorAgentState,
-        context: ConversationContext
+        context: ConversationContext,
+        user_input: str
     ) -> tuple[ConversationResponse, list[LLMStats]]:
         """Generate the tradeoff discussion message."""
         
@@ -147,6 +152,7 @@ HARD RULES:
 - Don't imply their preference is wrong
 - Present information, let THEM decide
 - Use language like "Here's the tradeoff to consider..."
+- Set finished=false (the conversation continues after this)
 
 {get_json_response_instructions()}
 """
@@ -155,7 +161,8 @@ HARD RULES:
             llm=self._conversation_llm,
             llm_input=ConversationHistoryFormatter.format_for_agent_generative_prompt(
                 model_response_instructions=prompt,
-                conversation_context=context,
+                context=context,
+                user_input=user_input
             ),
             logger=self.logger
         )
