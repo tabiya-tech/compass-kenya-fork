@@ -110,22 +110,19 @@ class CommitmentLevel(str, Enum):
 
 class ActionType(str, Enum):
     """Types of actions user can commit to."""
-    
+
     APPLY_TO_JOB = "apply_to_job"
     """Submit job application"""
-    
+
     ENROLL_IN_TRAINING = "enroll_in_training"
     """Enroll in training course"""
-    
+
     EXPLORE_OCCUPATION = "explore_occupation"
     """Research occupation further"""
-    
+
     RESEARCH_EMPLOYER = "research_employer"
     """Learn more about specific employer"""
-    
-    UPDATE_CV = "update_cv"
-    """Update resume/CV for applications"""
-    
+
     NETWORK = "network"
     """Reach out to contacts in the field"""
 
