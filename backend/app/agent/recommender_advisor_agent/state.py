@@ -142,6 +142,13 @@ class RecommenderAdvisorAgentState(BaseModel):
         description="Whether we pivoted to training due to occupation rejections"
     )
     
+    # === TRADEOFFS TRACKING ===
+    tradeoffs_discussed_for: list[str] = Field(
+        default_factory=list,
+        description="IDs of occupations for which tradeoffs have been discussed"
+    )
+
+    
     # === ACTION COMMITMENT ===
     action_commitment: Optional[ActionCommitment] = Field(
         default=None,

@@ -37,18 +37,22 @@ from app.agent.recommender_advisor_agent.types import (
     Node2VecRecommendations,
     OccupationRecommendation,
     OpportunityRecommendation,
-    SkillsTrainingRecommendation
+    SkillsTrainingRecommendation,
+    ActionType,
+    CommitmentLevel
 )
 from app.agent.preference_elicitation_agent.types import PreferenceVector
 from app.agent.recommender_advisor_agent.phase_handlers.intro_handler import IntroPhaseHandler
 from app.agent.recommender_advisor_agent.phase_handlers.present_handler import PresentPhaseHandler
 from app.agent.recommender_advisor_agent.phase_handlers.exploration_handler import ExplorationPhaseHandler
 from app.agent.recommender_advisor_agent.phase_handlers.concerns_handler import ConcernsPhaseHandler
+from app.agent.recommender_advisor_agent.phase_handlers.action_handler import ActionPhaseHandler
 from app.agent.recommender_advisor_agent.intent_classifier import IntentClassifier
 from app.agent.recommender_advisor_agent.llm_response_models import (
     ConversationResponse,
     ResistanceClassification,
-    UserIntentClassification
+    UserIntentClassification,
+    ActionExtractionResult
 )
 from app.agent.recommender_advisor_agent.recommendation_interface import RecommendationInterface
 from app.agent.llm_caller import LLMCaller
@@ -61,6 +65,11 @@ from app.conversation_memory.conversation_formatter import ConversationHistoryFo
 from app.agent.agent_types import AgentInput, AgentOutput
 from common_libs.llm.generative_models import GeminiGenerativeLLM
 from app.countries import Country
+from app.vector_search.esco_search_service import OccupationSearchService, VectorSearchConfig
+from app.vector_search.embeddings_model import GoogleEmbeddingService
+from app.server_dependencies.db_dependencies import CompassDBProvider
+from app.app_config import get_application_config
+from common_libs.environment_settings.constants import EmbeddingConfig
 import os
 
 # Install rich traceback handler
@@ -196,7 +205,16 @@ def display_menu(options: List[str]) -> int:
 
 
 def create_sample_recommendations() -> Node2VecRecommendations:
-    """Create sample recommendations for testing."""
+    """
+    Create sample recommendations for testing.
+
+    PERSONA: Hassan, 24, Mombasa
+    - Completed Form 4, some technical college
+    - Has worked casual jobs at the port, helped uncle with electrical repairs
+    - Good with hands, basic phone/mobile money skills
+    - Wants stable income but values flexibility
+    - Family expects him to contribute financially
+    """
     return Node2VecRecommendations(
         youth_id="test_user_123",
         generated_at="2026-01-09T10:30:00Z",
@@ -204,74 +222,198 @@ def create_sample_recommendations() -> Node2VecRecommendations:
         occupation_recommendations=[
             OccupationRecommendation(
                 uuid="occ_001_uuid",
-                originUuid="esco_2512_origin",
+                originUuid="kesco_7411_origin",
                 rank=1,
-                occupation_id="ESCO_2512",
-                occupation_code="2512",
-                occupation="Data Analyst",
-                confidence_score=0.87,
-                skills_match_score=0.85,
-                preference_match_score=0.90,
-                labor_demand_score=0.88,
-                graph_proximity_score=0.84,
+                occupation_id="KESCO_7411",
+                occupation_code="7411",
+                occupation="Fundi wa Stima (Electrician)",
+                confidence_score=0.88,
+                skills_match_score=0.82,
+                preference_match_score=0.85,
+                labor_demand_score=0.92,
+                graph_proximity_score=0.88,
                 labor_demand_category="high",
-                salary_range="KES 60,000-120,000/month",
-                justification="Your analytical skills and Python experience align strongly with this role. High demand in Kenya's growing tech sector.",
-                essential_skills=["data analysis", "statistics", "Python", "SQL", "Excel"],
-                description="Analyze data to help organizations make informed business decisions",
+                salary_range="KES 800-2,000/day (job-based) or KES 25,000-45,000/month",
+                justification="Your hands-on experience helping your uncle with electrical work gives you a strong foundation. High demand in Mombasa's growing construction and hotel sector.",
+                essential_skills=[
+                    "Basic wiring and installation",
+                    "Reading electrical diagrams",
+                    "Safety procedures",
+                    "Using multimeter and tools",
+                    "Customer communication"
+                ],
+                description="Electricians install, maintain, and repair electrical wiring and systems in homes, hotels, and businesses.",
                 typical_tasks=[
-                    "Collect and clean data from various sources",
-                    "Create visualizations and dashboards",
-                    "Identify trends and patterns in datasets",
-                    "Present findings to stakeholders"
+                    "Install and repair electrical wiring in buildings",
+                    "Fix faulty sockets, switches, and lighting",
+                    "Install ceiling fans and water heaters",
+                    "Troubleshoot electrical problems",
+                    "Quote jobs and collect payment from clients"
                 ],
                 career_path_next_steps=[
-                    "Junior Data Analyst (1-2 years)",
-                    "Data Analyst",
-                    "Senior Data Analyst (3-5 years)",
-                    "Data Science Lead"
+                    "Apprentice/Helper → Fundi (1-2 years)",
+                    "Fundi → Certified Electrician (Grade Test)",
+                    "Certified → Contractor/Own business",
+                    "Specialize in solar installation (growing demand)"
                 ],
-                skill_gaps=["advanced SQL", "machine learning basics"],
-                user_skill_coverage=0.75
+                skill_gaps=["Formal certification (Grade Test)", "Industrial wiring"],
+                user_skill_coverage=0.55
             ),
             OccupationRecommendation(
                 uuid="occ_002_uuid",
-                originUuid="esco_2422_origin",
+                originUuid="kesco_8322_origin",
                 rank=2,
-                occupation_id="ESCO_2422",
-                occupation_code="2422",
-                occupation="Monitoring & Evaluation Specialist",
-                confidence_score=0.82,
-                skills_match_score=0.80,
-                preference_match_score=0.85,
-                labor_demand_score=0.75,
-                graph_proximity_score=0.80,
-                labor_demand_category="medium",
-                salary_range="KES 50,000-100,000/month",
-                justification="Strong alignment with your social impact values and analytical background in development sector.",
-                essential_skills=["M&E frameworks", "data collection", "report writing", "project management"],
-                description="Design and implement monitoring and evaluation systems for development projects",
-                skill_gaps=["M&E frameworks", "donor reporting"],
-                user_skill_coverage=0.65
+                occupation_id="KESCO_8322",
+                occupation_code="8322",
+                occupation="Boda-Boda Rider / Delivery Driver",
+                confidence_score=0.79,
+                skills_match_score=0.70,
+                preference_match_score=0.88,
+                labor_demand_score=0.85,
+                graph_proximity_score=0.72,
+                labor_demand_category="high",
+                salary_range="KES 500-1,500/day depending on hustle",
+                justification="Offers immediate income and flexibility you value. Your knowledge of Mombasa streets is an asset. Can start quickly while building other skills.",
+                essential_skills=[
+                    "Motorcycle riding (valid license)",
+                    "Knowledge of local routes",
+                    "Basic phone/M-Pesa skills",
+                    "Customer service",
+                    "Time management"
+                ],
+                description="Boda-boda riders provide passenger transport and delivery services using motorcycles.",
+                typical_tasks=[
+                    "Transport passengers around the city",
+                    "Deliver food, packages, and goods",
+                    "Navigate traffic efficiently",
+                    "Manage daily earnings and fuel costs",
+                    "Maintain motorcycle in good condition"
+                ],
+                career_path_next_steps=[
+                    "Rider (employed) → Own motorcycle",
+                    "Join delivery apps (Glovo, Uber Eats)",
+                    "Build regular customer base",
+                    "Grow to 2-3 bikes with riders (fleet owner)"
+                ],
+                skill_gaps=["Motorcycle license (if not yet obtained)"],
+                user_skill_coverage=0.75
             ),
             OccupationRecommendation(
                 uuid="occ_003_uuid",
-                originUuid="esco_2431_origin",
+                originUuid="kesco_9329_origin",
                 rank=3,
-                occupation_id="ESCO_2431",
-                occupation_code="2431",
-                occupation="Marketing Coordinator",
-                confidence_score=0.78,
-                skills_match_score=0.70,
-                preference_match_score=0.82,
-                labor_demand_score=0.82,
+                occupation_id="KESCO_9329",
+                occupation_code="9329",
+                occupation="Port Cargo Handler / Stevedore",
+                confidence_score=0.74,
+                skills_match_score=0.78,
+                preference_match_score=0.65,
+                labor_demand_score=0.80,
                 graph_proximity_score=0.75,
-                labor_demand_category="high",
-                salary_range="KES 45,000-90,000/month",
-                justification="Your communication skills and creativity fit marketing roles, with strong job availability.",
-                essential_skills=["digital marketing", "content creation", "social media", "analytics"],
-                skill_gaps=["SEO", "Google Analytics", "paid advertising"],
-                user_skill_coverage=0.55
+                labor_demand_category="medium",
+                salary_range="KES 600-1,200/day (casual) or KES 20,000-35,000/month",
+                justification="Your experience with casual port work is valuable. More organized positions offer better pay and some job security.",
+                essential_skills=[
+                    "Physical fitness and stamina",
+                    "Following safety protocols",
+                    "Basic cargo handling",
+                    "Teamwork",
+                    "Punctuality and reliability"
+                ],
+                description="Cargo handlers load, unload, and move goods at the port, warehouses, and shipping yards.",
+                typical_tasks=[
+                    "Load and unload cargo from ships/trucks",
+                    "Operate basic cargo equipment",
+                    "Sort and stack containers/goods",
+                    "Follow safety procedures strictly",
+                    "Work in shifts (day/night)"
+                ],
+                career_path_next_steps=[
+                    "Casual laborer → Registered handler",
+                    "Get forklift/equipment certification",
+                    "Handler → Supervisor/Tally clerk",
+                    "Move to logistics/clearing agent roles"
+                ],
+                skill_gaps=["Forklift certification", "Container handling training"],
+                user_skill_coverage=0.70
+            ),
+            OccupationRecommendation(
+                uuid="occ_004_uuid",
+                originUuid="kesco_7233_origin",
+                rank=4,
+                occupation_id="KESCO_7233",
+                occupation_code="7233",
+                occupation="Boat/Marine Equipment Fundi",
+                confidence_score=0.71,
+                skills_match_score=0.68,
+                preference_match_score=0.75,
+                labor_demand_score=0.70,
+                graph_proximity_score=0.72,
+                labor_demand_category="medium",
+                salary_range="KES 1,000-3,000/job or KES 20,000-40,000/month (busy season)",
+                justification="Mombasa's fishing and tourism boat industry needs repair skills. Combines your electrical knowledge with marine work.",
+                essential_skills=[
+                    "Outboard motor repair",
+                    "Basic electrical troubleshooting",
+                    "Fiberglass patching",
+                    "Engine maintenance",
+                    "Customer negotiation"
+                ],
+                description="Marine fundis repair and maintain boats, outboard motors, and marine electrical systems.",
+                typical_tasks=[
+                    "Repair outboard motors for fishermen",
+                    "Fix electrical systems on boats",
+                    "Patch and maintain boat hulls",
+                    "Install marine equipment",
+                    "Travel to different landing sites for jobs"
+                ],
+                career_path_next_steps=[
+                    "Learn from experienced marine fundi",
+                    "Specialize in outboard motors (Yamaha, etc.)",
+                    "Build reputation at fish landing sites",
+                    "Open marine repair shop"
+                ],
+                skill_gaps=["Marine engine training", "Fiberglass work"],
+                user_skill_coverage=0.45
+            ),
+            OccupationRecommendation(
+                uuid="occ_005_uuid",
+                originUuid="kesco_5221_origin",
+                rank=5,
+                occupation_id="KESCO_5221",
+                occupation_code="5221",
+                occupation="Market Vendor / Trader",
+                confidence_score=0.68,
+                skills_match_score=0.60,
+                preference_match_score=0.80,
+                labor_demand_score=0.75,
+                graph_proximity_score=0.65,
+                labor_demand_category="medium",
+                salary_range="KES 300-1,000/day profit (depends on product and location)",
+                justification="Low startup cost, flexible hours, and potential to grow. Your M-Pesa skills help with transactions.",
+                essential_skills=[
+                    "Basic math and pricing",
+                    "Customer service",
+                    "M-Pesa transactions",
+                    "Negotiation",
+                    "Stock management"
+                ],
+                description="Market vendors sell goods (food, household items, phone accessories, etc.) at markets, streets, or small stalls.",
+                typical_tasks=[
+                    "Source and buy goods for resale",
+                    "Set up stall and display products",
+                    "Negotiate prices with customers",
+                    "Manage daily cash and M-Pesa payments",
+                    "Track what sells well"
+                ],
+                career_path_next_steps=[
+                    "Start small (phone accessories, fruits)",
+                    "Build regular customers",
+                    "Get permanent stall/kiosk",
+                    "Grow to wholesale or multiple stalls"
+                ],
+                skill_gaps=["Sourcing goods at good prices", "Business record-keeping"],
+                user_skill_coverage=0.65
             )
         ],
         opportunity_recommendations=[
@@ -279,57 +421,149 @@ def create_sample_recommendations() -> Node2VecRecommendations:
                 uuid="opp_001_uuid",
                 originUuid="job_001_origin",
                 rank=1,
-                opportunity_title="Junior Data Analyst - Safaricom",
-                location="Nairobi",
-                employer="Safaricom PLC",
-                contract_type="full_time",
-                salary_range="KES 50,000-80,000/month",
-                application_deadline="2026-02-15",
-                essential_skills=["data analysis", "Python", "Excel"]
+                opportunity_title="Electrical Apprenticeship - Nyali Construction Site",
+                location="Nyali, Mombasa",
+                employer="Nyali Heights Development",
+                contract_type="contract",
+                salary_range="KES 500-800/day + skills training",
+                justification="Learn from certified electricians while earning. The foreman is known to train serious workers.",
+                essential_skills=["Basic wiring", "Willingness to learn", "Physical work"]
+            ),
+            OpportunityRecommendation(
+                uuid="opp_002_uuid",
+                originUuid="job_002_origin",
+                rank=2,
+                opportunity_title="Glovo Delivery Partner",
+                location="Mombasa (various zones)",
+                employer="Glovo Kenya",
+                contract_type="freelance",
+                salary_range="KES 100-200 per delivery",
+                posting_url="https://glovoapp.com/ke/riders",
+                justification="Flexible hours, paid per delivery. Good way to earn while exploring other opportunities.",
+                essential_skills=["Motorcycle + license", "Smartphone", "M-Pesa"]
+            ),
+            OpportunityRecommendation(
+                uuid="opp_003_uuid",
+                originUuid="job_003_origin",
+                rank=3,
+                opportunity_title="Cargo Handler - Kilindini Port",
+                location="Mombasa Port",
+                employer="Various shipping agents",
+                contract_type="contract",
+                salary_range="KES 800-1,200/day",
+                justification="Regular work available. Being registered with a gang gives more consistent income than casual pickup.",
+                essential_skills=["Physical fitness", "Reliability", "Safety awareness"]
             )
         ],
         skillstraining_recommendations=[
             SkillsTrainingRecommendation(
-                uuid="trn_001_uuid",
-                originUuid="course_001_origin",
+                uuid="skill_001_uuid",
+                originUuid="training_001_origin",
                 rank=1,
-                skill="Python Programming",
-                training_title="Python for Data Analysis",
-                provider="Coursera",
+                skill="Electrical Installation (Grade Test Preparation)",
+                training_title="Electrician Grade III Certification",
+                provider="Mombasa Technical Training Institute",
+                estimated_hours=160,
+                cost="KES 15,000-20,000",
+                location="Mombasa Technical",
+                delivery_mode="in_person",
+                target_occupations=["Electrician", "Maintenance Technician"],
+                fills_gap_for=["occ_001_uuid"],
+                justification="The Grade Test certification opens doors to formal employment and higher-paying contracts. Many hotels and companies require certified electricians."
+            ),
+            SkillsTrainingRecommendation(
+                uuid="skill_002_uuid",
+                originUuid="training_002_origin",
+                rank=2,
+                skill="Solar Panel Installation",
+                training_title="Solar PV Installation Training",
+                provider="Kenya Power / Various NGOs",
                 estimated_hours=40,
-                cost="Free (audit)",
-                location="Online",
-                delivery_mode="online",
-                target_occupations=["Data Analyst", "Data Scientist"],
-                fills_gap_for=["occ_001_uuid"]
+                cost="Free - KES 10,000 (NGO programs often subsidized)",
+                location="Mombasa / Kilifi",
+                delivery_mode="hybrid",
+                target_occupations=["Solar Technician", "Electrician"],
+                fills_gap_for=["occ_001_uuid"],
+                justification="Solar is booming in Coast region. Adds to your electrical skills and pays very well."
+            ),
+            SkillsTrainingRecommendation(
+                uuid="skill_003_uuid",
+                originUuid="training_003_origin",
+                rank=3,
+                skill="Motorcycle Riding License",
+                training_title="NTSA Motorcycle License (Class A)",
+                provider="Approved Driving Schools",
+                estimated_hours=20,
+                cost="KES 3,000-5,000",
+                location="Mombasa driving schools",
+                delivery_mode="in_person",
+                target_occupations=["Boda-Boda Rider", "Delivery Driver"],
+                fills_gap_for=["occ_002_uuid"],
+                justification="Required for legal boda-boda work and delivery apps. Protects you from police harassment and opens formal delivery opportunities."
+            ),
+            SkillsTrainingRecommendation(
+                uuid="skill_004_uuid",
+                originUuid="training_004_origin",
+                rank=4,
+                skill="Forklift Operation",
+                training_title="Forklift Operator Certificate",
+                provider="Industrial Training Centres",
+                estimated_hours=40,
+                cost="KES 8,000-12,000",
+                location="Mombasa",
+                delivery_mode="in_person",
+                target_occupations=["Forklift Operator", "Warehouse Supervisor"],
+                fills_gap_for=["occ_003_uuid"],
+                justification="Certified forklift operators earn much more at the port. Opens path to supervisor roles."
             )
-        ]
+        ],
+        confidence=0.82
     )
 
 
 def create_sample_skills_vector() -> dict:
-    """Create sample skills vector for testing."""
+    """
+    Create sample skills vector for testing.
+
+    Matches Hassan's informal sector background:
+    - Electrical work experience (from uncle)
+    - Port casual labor experience
+    - Mobile money/phone skills
+    - Physical/hands-on work
+    """
     return {
         "top_skills": [
-            {"preferredLabel": "Data Analysis", "proficiency": 0.8},
-            {"preferredLabel": "Statistics", "proficiency": 0.7},
-            {"preferredLabel": "Python Programming", "proficiency": 0.6},
-            {"preferredLabel": "Excel", "proficiency": 0.85},
-            {"preferredLabel": "Research Methods", "proficiency": 0.75}
+            {"preferredLabel": "Basic Electrical Wiring", "proficiency": 0.6},
+            {"preferredLabel": "Manual Handling / Physical Labor", "proficiency": 0.8},
+            {"preferredLabel": "M-Pesa / Mobile Money", "proficiency": 0.85},
+            {"preferredLabel": "Customer Service", "proficiency": 0.65},
+            {"preferredLabel": "Tool Usage (hand tools)", "proficiency": 0.7},
+            {"preferredLabel": "Motorcycle Riding", "proficiency": 0.5},
+            {"preferredLabel": "Basic Math / Pricing", "proficiency": 0.7}
         ]
     }
 
 
 def create_sample_preference_vector() -> PreferenceVector:
-    """Create sample preference vector for testing."""
+    """
+    Create sample preference vector for testing.
+
+    Matches Hassan's priorities:
+    - Financial needs (family pressure) → HIGH
+    - Work-life balance (values flexibility) → HIGH
+    - Job security (wants stability) → MODERATE-HIGH
+    - Career advancement → MODERATE (open to growth)
+    - Work environment → MODERATE (okay with physical work)
+    - Social impact → LOW (practical focus)
+    """
     return PreferenceVector(
-        financial_importance=0.75,
-        work_environment_importance=0.80,
-        career_advancement_importance=0.70,
-        work_life_balance_importance=0.85,
-        job_security_importance=0.65,
-        task_preference_importance=0.60,
-        social_impact_importance=0.90
+        financial_importance=0.85,         # High - needs to support family
+        work_environment_importance=0.55,  # Moderate - okay with physical work outdoors
+        career_advancement_importance=0.60, # Moderate - interested but not primary focus
+        work_life_balance_importance=0.80, # High - values flexibility
+        job_security_importance=0.70,      # Moderate-high - wants stable income
+        task_preference_importance=0.65,   # Moderate - prefers hands-on work
+        social_impact_importance=0.40      # Lower - practical/financial focus first
     )
 
 
@@ -423,6 +657,10 @@ async def initialize_handlers():
 
     # Initialize LLM exactly like the agent does
     from common_libs.llm.models_utils import LLMConfig, LOW_TEMPERATURE_GENERATION_CONFIG, JSON_GENERATION_CONFIG
+    from app.agent.recommender_advisor_agent.phase_handlers.tradeoffs_handler import TradeoffsPhaseHandler
+    from app.agent.recommender_advisor_agent.phase_handlers.followup_handler import FollowupPhaseHandler
+    from app.agent.recommender_advisor_agent.phase_handlers.skills_pivot_handler import SkillsPivotPhaseHandler
+    from app.agent.recommender_advisor_agent.phase_handlers.wrapup_handler import WrapupPhaseHandler
 
     llm_config = LLMConfig(
         generation_config=LOW_TEMPERATURE_GENERATION_CONFIG | JSON_GENERATION_CONFIG
@@ -446,39 +684,124 @@ async def initialize_handlers():
         model_response_type=UserIntentClassification
     )
 
+    action_caller = LLMCaller[ActionExtractionResult](
+        model_response_type=ActionExtractionResult
+    )
+
     # Initialize recommendation interface
     recommendation_interface = RecommendationInterface(node2vec_client=None)
 
     # Initialize IntentClassifier (centralized intent classification)
     intent_classifier = IntentClassifier(intent_caller=intent_caller)
 
-    # Initialize handlers in dependency order
+    # Initialize occupation search service for out-of-list occupation handling
+    # (manually create since we're outside FastAPI context)
+    occupation_search_service = None  # Default to None
+    try:
+        console.print("[dim]Initializing occupation search service...[/]")
+        app_config = get_application_config()
+        embedding_config = EmbeddingConfig()
+
+        # Get database connection
+        taxonomy_db = await CompassDBProvider.get_taxonomy_db()
+
+        # Create embedding service
+        embedding_service = GoogleEmbeddingService(model_name=app_config.embeddings_model_name)
+
+        # Create occupation search config
+        occupation_vector_search_config = VectorSearchConfig(
+            collection_name=embedding_config.occupation_collection_name,
+            index_name=embedding_config.embedding_index,
+            embedding_key=embedding_config.embedding_key,
+        )
+
+        # Create occupation search service
+        occupation_search_service = OccupationSearchService(
+            taxonomy_db,
+            embedding_service,
+            occupation_vector_search_config,
+            app_config.taxonomy_model_id
+        )
+        console.print(f"[green]✓ Occupation search service initialized (service={type(occupation_search_service).__name__})[/]")
+    except Exception as e:
+        import traceback
+        console.print(f"[red]✗ Failed to initialize occupation search service:[/]")
+        console.print(f"[red]{e}[/]")
+        console.print(f"[dim]{traceback.format_exc()}[/]")
+        console.print("[yellow]  Out-of-list occupation search will be disabled[/]")
+        occupation_search_service = None
+
+    # Initialize handlers in dependency order (handlers with no dependencies first)
     concerns_handler = ConcernsPhaseHandler(
         conversation_llm=llm,
         conversation_caller=conversation_caller,
-        resistance_caller=resistance_caller
-    )
-
-    exploration_handler = ExplorationPhaseHandler(
-        conversation_llm=llm,
-        conversation_caller=conversation_caller,
-        intent_classifier=intent_classifier,
-        concerns_handler=concerns_handler  # Pass concerns handler for seamless transitions
+        resistance_caller=resistance_caller,
+        occupation_search_service=occupation_search_service
     )
 
     intro_handler = IntroPhaseHandler(
         conversation_llm=llm,
         conversation_caller=conversation_caller,
-        recommendation_interface=recommendation_interface
+        recommendation_interface=recommendation_interface,
+        occupation_search_service=occupation_search_service
+    )
+
+    tradeoffs_handler = TradeoffsPhaseHandler(
+        conversation_llm=llm,
+        conversation_caller=conversation_caller
+    )
+
+    skills_pivot_handler = SkillsPivotPhaseHandler(
+        conversation_llm=llm,
+        conversation_caller=conversation_caller
+    )
+
+    wrapup_handler = WrapupPhaseHandler(
+        conversation_llm=llm,
+        conversation_caller=conversation_caller,
+        db6_client=None  # Optional DB6 client
+    )
+
+    followup_handler = FollowupPhaseHandler(
+        conversation_llm=llm,
+        conversation_caller=conversation_caller,
+        intent_classifier=intent_classifier
+    )
+
+    # Handlers with dependencies
+    exploration_handler = ExplorationPhaseHandler(
+        conversation_llm=llm,
+        conversation_caller=conversation_caller,
+        intent_classifier=intent_classifier,
+        concerns_handler=concerns_handler,
+        tradeoffs_handler=tradeoffs_handler,
+        occupation_search_service=occupation_search_service
     )
 
     present_handler = PresentPhaseHandler(
         conversation_llm=llm,
         conversation_caller=conversation_caller,
         intent_classifier=intent_classifier,
-        exploration_handler=exploration_handler,  # Pass exploration handler for seamless transitions
-        concerns_handler=concerns_handler  # Pass concerns handler for seamless transitions
+        exploration_handler=exploration_handler,
+        concerns_handler=concerns_handler,
+        tradeoffs_handler=tradeoffs_handler,
+        occupation_search_service=occupation_search_service
     )
+
+
+    action_handler = ActionPhaseHandler(
+        conversation_llm=llm,
+        conversation_caller=conversation_caller,
+        action_caller=action_caller,
+        intent_classifier=intent_classifier
+    )
+
+    # Set up delegation chains after all handlers are initialized
+    exploration_handler._action_handler = action_handler
+    exploration_handler._tradeoffs_handler = tradeoffs_handler
+    action_handler._present_handler = present_handler
+    action_handler._concerns_handler = concerns_handler
+    action_handler._wrapup_handler = wrapup_handler
 
     print_success("Phase handlers initialized!")
 
@@ -486,7 +809,13 @@ async def initialize_handlers():
         ConversationPhase.INTRO: intro_handler,
         ConversationPhase.PRESENT_RECOMMENDATIONS: present_handler,
         ConversationPhase.CAREER_EXPLORATION: exploration_handler,
-        ConversationPhase.ADDRESS_CONCERNS: concerns_handler
+        ConversationPhase.ADDRESS_CONCERNS: concerns_handler,
+        ConversationPhase.ACTION_PLANNING: action_handler,
+        ConversationPhase.DISCUSS_TRADEOFFS: tradeoffs_handler,
+        ConversationPhase.FOLLOW_UP: followup_handler,
+        ConversationPhase.SKILLS_UPGRADE_PIVOT: skills_pivot_handler,
+        ConversationPhase.WRAPUP: wrapup_handler,
+        ConversationPhase.COMPLETE: wrapup_handler  # Use wrapup_handler.handle_complete
     }
 
 
@@ -805,6 +1134,423 @@ async def test_concerns_phase():
         traceback.print_exc()
 
 
+async def test_action_phase():
+    """Test the ACTION_PLANNING phase."""
+    print_header("Testing ACTION_PLANNING Phase")
+
+    try:
+        handlers = await initialize_handlers()
+
+        # Create state with selected occupation and exploration completed
+        recommendations = create_sample_recommendations()
+        selected_occ = recommendations.occupation_recommendations[0]
+
+        state = RecommenderAdvisorAgentState(
+            session_id="test_session_12345",
+            youth_id="test_user_123",
+            country_of_user=TEST_COUNTRY,
+            conversation_phase=ConversationPhase.ACTION_PLANNING,
+            recommendations=recommendations,
+            skills_vector=create_sample_skills_vector(),
+            preference_vector=create_sample_preference_vector(),
+            current_focus_id=selected_occ.uuid,
+            current_recommendation_type="occupation"
+        )
+
+        print_info(f"Planning actions for: {selected_occ.occupation}")
+
+        # Create context with previous exploration
+        conversation_history = ConversationHistory()
+        conversation_history.turns.append(
+            ConversationTurn(
+                index=0,
+                input=AgentInput(message="Tell me about Data Analyst", is_artificial=False),
+                output=AgentOutput(
+                    message_for_user="Let's explore Data Analyst...",
+                    finished=False,
+                    llm_stats=[],
+                    agent_response_time_in_sec=1.0
+                )
+            )
+        )
+
+        context = ConversationContext(
+            all_history=conversation_history,
+            history=conversation_history,
+            summary=""
+        )
+
+        # Execute ACTION handler
+        print_info("Executing ACTION_PLANNING handler with LLM...")
+        handler = handlers[ConversationPhase.ACTION_PLANNING]
+
+        with console.status("[bold green]LLM generating action plan...", spinner="dots"):
+            response, llm_stats = await handler.handle("I want to apply for this", state, context)
+
+        # Display response
+        print_agent(response.message)
+
+        # Show stats
+        print_section("LLM Stats")
+        if llm_stats:
+            stats_table = Table(box=box.SIMPLE)
+            stats_table.add_column("Metric", style="cyan")
+            stats_table.add_column("Value", style="yellow")
+
+            total_input = sum(s.prompt_token_count for s in llm_stats)
+            total_output = sum(s.response_token_count for s in llm_stats)
+            total_latency = sum(s.response_time_in_sec for s in llm_stats)
+
+            stats_table.add_row("Input Tokens", f"{total_input:,}")
+            stats_table.add_row("Output Tokens", f"{total_output:,}")
+            stats_table.add_row("Latency", f"{total_latency:.2f}s")
+
+            console.print(stats_table)
+
+        # Show action commitment
+        if state.action_commitment:
+            print_section("Action Commitment")
+            commitment = state.action_commitment
+            commit_table = Table(box=box.ROUNDED)
+            commit_table.add_column("Property", style="cyan")
+            commit_table.add_column("Value", style="yellow")
+
+            commit_table.add_row("Recommendation", commitment.recommendation_title)
+            commit_table.add_row("Action Type", commitment.action_type.value)
+            commit_table.add_row("Commitment Level", commitment.commitment_level.value)
+            if commitment.barriers_mentioned:
+                commit_table.add_row("Barriers", ", ".join(commitment.barriers_mentioned))
+
+            console.print(commit_table)
+
+        console.input("\n[dim]Press Enter to continue...[/]")
+
+    except Exception as e:
+        print_error(f"Error testing ACTION phase: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+async def test_tradeoffs_phase():
+    """Test the DISCUSS_TRADEOFFS phase."""
+    print_header("Testing DISCUSS_TRADEOFFS Phase")
+
+    try:
+        handlers = await initialize_handlers()
+
+        # Create state with user preferring lower-demand option
+        recommendations = create_sample_recommendations()
+        # Assume user is interested in Marketing (rank 3, high demand)
+        # but we'll show tradeoff with Data Analyst (rank 1, high demand)
+        preferred_occ = recommendations.occupation_recommendations[2]  # Marketing
+
+        state = RecommenderAdvisorAgentState(
+            session_id="test_session_12345",
+            youth_id="test_user_123",
+            country_of_user=TEST_COUNTRY,
+            conversation_phase=ConversationPhase.DISCUSS_TRADEOFFS,
+            recommendations=recommendations,
+            skills_vector=create_sample_skills_vector(),
+            preference_vector=create_sample_preference_vector(),
+            current_focus_id=preferred_occ.uuid,
+            current_recommendation_type="occupation"
+        )
+
+        print_info(f"User prefers: {preferred_occ.occupation}")
+        print_info("Will discuss tradeoffs vs higher-demand alternatives")
+
+        # Create context
+        conversation_history = ConversationHistory()
+        context = ConversationContext(
+            all_history=conversation_history,
+            history=conversation_history,
+            summary=""
+        )
+
+        # Execute TRADEOFFS handler
+        print_info("Executing DISCUSS_TRADEOFFS handler with LLM...")
+        handler = handlers[ConversationPhase.DISCUSS_TRADEOFFS]
+
+        with console.status("[bold green]LLM generating tradeoff discussion...", spinner="dots"):
+            response, llm_stats = await handler.handle("I really like Marketing", state, context)
+
+        # Display response
+        print_agent(response.message)
+
+        # Show stats
+        print_section("LLM Stats")
+        if llm_stats:
+            stats_table = Table(box=box.SIMPLE)
+            stats_table.add_column("Metric", style="cyan")
+            stats_table.add_column("Value", style="yellow")
+
+            total_input = sum(s.prompt_token_count for s in llm_stats)
+            total_output = sum(s.response_token_count for s in llm_stats)
+            total_latency = sum(s.response_time_in_sec for s in llm_stats)
+
+            stats_table.add_row("Input Tokens", f"{total_input:,}")
+            stats_table.add_row("Output Tokens", f"{total_output:,}")
+            stats_table.add_row("Latency", f"{total_latency:.2f}s")
+
+            console.print(stats_table)
+
+        console.input("\n[dim]Press Enter to continue...[/]")
+
+    except Exception as e:
+        print_error(f"Error testing TRADEOFFS phase: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+async def test_followup_phase():
+    """Test the FOLLOW_UP phase."""
+    print_header("Testing FOLLOW_UP Phase")
+
+    # Get user input to test with
+    print_section("Enter an ambiguous response to test")
+    console.print("[dim]Examples:[/]")
+    console.print("  - ok")
+    console.print("  - hmm")
+    console.print("  - maybe")
+    console.print("  - I don't know\\n")
+
+    user_response = get_user_input("Your ambiguous response: ")
+
+    if not user_response:
+        print_error("No response provided, using default")
+        user_response = "hmm"
+
+    try:
+        handlers = await initialize_handlers()
+
+        # Create state
+        recommendations = create_sample_recommendations()
+
+        state = RecommenderAdvisorAgentState(
+            session_id="test_session_12345",
+            youth_id="test_user_123",
+            country_of_user=TEST_COUNTRY,
+            conversation_phase=ConversationPhase.FOLLOW_UP,
+            recommendations=recommendations,
+            skills_vector=create_sample_skills_vector(),
+            preference_vector=create_sample_preference_vector()
+        )
+
+        # Create context
+        conversation_history = ConversationHistory()
+        conversation_history.turns.append(
+            ConversationTurn(
+                index=0,
+                input=AgentInput(message="Ready to see recommendations", is_artificial=False),
+                output=AgentOutput(
+                    message_for_user="Here are your top matches...",
+                    finished=False,
+                    llm_stats=[],
+                    agent_response_time_in_sec=1.0
+                )
+            )
+        )
+
+        context = ConversationContext(
+            all_history=conversation_history,
+            history=conversation_history,
+            summary=""
+        )
+
+        # Execute FOLLOW_UP handler
+        print_section("Clarifying User Intent")
+        handler = handlers[ConversationPhase.FOLLOW_UP]
+
+        with console.status("[bold green]LLM clarifying intent...", spinner="dots"):
+            response, llm_stats = await handler.handle(user_response, state, context)
+
+        # Display response
+        print_agent(response.message)
+
+        # Show stats
+        print_section("LLM Stats")
+        if llm_stats:
+            stats_table = Table(box=box.SIMPLE)
+            stats_table.add_column("Metric", style="cyan")
+            stats_table.add_column("Value", style="yellow")
+
+            total_input = sum(s.prompt_token_count for s in llm_stats)
+            total_output = sum(s.response_token_count for s in llm_stats)
+            total_latency = sum(s.response_time_in_sec for s in llm_stats)
+
+            stats_table.add_row("Input Tokens", f"{total_input:,}")
+            stats_table.add_row("Output Tokens", f"{total_output:,}")
+            stats_table.add_row("Latency", f"{total_latency:.2f}s")
+
+            console.print(stats_table)
+
+        # Show phase transition
+        print_section("Phase Transition")
+        print_info(f"Next phase: {state.conversation_phase}")
+
+        console.input("\n[dim]Press Enter to continue...[/]")
+
+    except Exception as e:
+        print_error(f"Error testing FOLLOW_UP phase: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+async def test_skills_pivot_phase():
+    """Test the SKILLS_UPGRADE_PIVOT phase."""
+    print_header("Testing SKILLS_UPGRADE_PIVOT Phase")
+
+    try:
+        handlers = await initialize_handlers()
+
+        # Create state with rejected occupations
+        recommendations = create_sample_recommendations()
+
+        state = RecommenderAdvisorAgentState(
+            session_id="test_session_12345",
+            youth_id="test_user_123",
+            country_of_user=TEST_COUNTRY,
+            conversation_phase=ConversationPhase.SKILLS_UPGRADE_PIVOT,
+            recommendations=recommendations,
+            skills_vector=create_sample_skills_vector(),
+            preference_vector=create_sample_preference_vector(),
+            rejected_occupations=3  # User has rejected 3 occupations
+        )
+
+        print_info("User has rejected 3+ occupations, pivoting to training")
+
+        # Create context
+        conversation_history = ConversationHistory()
+        context = ConversationContext(
+            all_history=conversation_history,
+            history=conversation_history,
+            summary=""
+        )
+
+        # Execute SKILLS_PIVOT handler
+        print_info("Executing SKILLS_UPGRADE_PIVOT handler...")
+        handler = handlers[ConversationPhase.SKILLS_UPGRADE_PIVOT]
+
+        with console.status("[bold green]Generating training recommendations...", spinner="dots"):
+            response, llm_stats = await handler.handle("None of those feel right", state, context)
+
+        # Display response
+        print_agent(response.message)
+
+        # Show stats
+        print_section("LLM Stats")
+        if llm_stats:
+            stats_table = Table(box=box.SIMPLE)
+            stats_table.add_column("Metric", style="cyan")
+            stats_table.add_column("Value", style="yellow")
+
+            total_input = sum(s.prompt_token_count for s in llm_stats)
+            total_output = sum(s.response_token_count for s in llm_stats)
+            total_latency = sum(s.response_time_in_sec for s in llm_stats)
+
+            stats_table.add_row("Input Tokens", f"{total_input:,}")
+            stats_table.add_row("Output Tokens", f"{total_output:,}")
+            stats_table.add_row("Latency", f"{total_latency:.2f}s")
+
+            console.print(stats_table)
+
+        # Show pivot flag
+        print_section("State Changes")
+        print_info(f"Pivoted to training: {state.pivoted_to_training}")
+
+        console.input("\n[dim]Press Enter to continue...[/]")
+
+    except Exception as e:
+        print_error(f"Error testing SKILLS_PIVOT phase: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+async def test_wrapup_phase():
+    """Test the WRAPUP phase."""
+    print_header("Testing WRAPUP Phase")
+
+    try:
+        handlers = await initialize_handlers()
+
+        # Create state with action commitment
+        recommendations = create_sample_recommendations()
+        selected_occ = recommendations.occupation_recommendations[0]
+
+        # Create action commitment
+        from app.agent.recommender_advisor_agent.types import ActionCommitment
+        commitment = ActionCommitment(
+            recommendation_id=selected_occ.uuid,
+            recommendation_type="occupation",
+            recommendation_title=selected_occ.occupation,
+            action_type=ActionType.APPLY_TO_JOB,
+            commitment_level=CommitmentLevel.WILL_DO_THIS_WEEK,
+            barriers_mentioned=[]
+        )
+
+        state = RecommenderAdvisorAgentState(
+            session_id="test_session_12345",
+            youth_id="test_user_123",
+            country_of_user=TEST_COUNTRY,
+            conversation_phase=ConversationPhase.WRAPUP,
+            recommendations=recommendations,
+            skills_vector=create_sample_skills_vector(),
+            preference_vector=create_sample_preference_vector(),
+            current_focus_id=selected_occ.uuid,
+            current_recommendation_type="occupation",
+            action_commitment=commitment
+        )
+
+        print_info(f"Wrapping up session with commitment to: {selected_occ.occupation}")
+
+        # Create context
+        conversation_history = ConversationHistory()
+        context = ConversationContext(
+            all_history=conversation_history,
+            history=conversation_history,
+            summary=""
+        )
+
+        # Execute WRAPUP handler
+        print_info("Executing WRAPUP handler...")
+        handler = handlers[ConversationPhase.WRAPUP]
+
+        with console.status("[bold green]Generating session summary...", spinner="dots"):
+            response, llm_stats = await handler.handle("Yes, I'm ready to do this", state, context)
+
+        # Display response
+        print_agent(response.message)
+
+        # Show stats
+        print_section("LLM Stats")
+        if llm_stats:
+            stats_table = Table(box=box.SIMPLE)
+            stats_table.add_column("Metric", style="cyan")
+            stats_table.add_column("Value", style="yellow")
+
+            total_input = sum(s.prompt_token_count for s in llm_stats)
+            total_output = sum(s.response_token_count for s in llm_stats)
+            total_latency = sum(s.response_time_in_sec for s in llm_stats)
+
+            stats_table.add_row("Input Tokens", f"{total_input:,}")
+            stats_table.add_row("Output Tokens", f"{total_output:,}")
+            stats_table.add_row("Latency", f"{total_latency:.2f}s")
+
+            console.print(stats_table)
+
+        # Show final phase
+        print_section("Final State")
+        print_info(f"Final phase: {state.conversation_phase}")
+        print_success(f"Session finished: {response.finished}")
+
+        console.input("\n[dim]Press Enter to continue...[/]")
+
+    except Exception as e:
+        print_error(f"Error testing WRAPUP phase: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 async def test_full_conversation():
     """Test a full conversation flow."""
     print_header("Interactive Conversation Test")
@@ -1019,6 +1765,11 @@ async def main_menu():
             "Test PRESENT_RECOMMENDATIONS Phase (with LLM)",
             "Test CAREER_EXPLORATION Phase (with LLM)",
             "Test ADDRESS_CONCERNS Phase (2-step LLM)",
+            "Test ACTION_PLANNING Phase (with LLM)",
+            "Test DISCUSS_TRADEOFFS Phase (with LLM)",
+            "Test FOLLOW_UP Phase (with LLM)",
+            "Test SKILLS_UPGRADE_PIVOT Phase",
+            "Test WRAPUP Phase",
             "Full Interactive Conversation (all phases)",
             "View Sample Data (recommendations, skills, preferences)",
             "Change Logging Level",
@@ -1034,8 +1785,18 @@ async def main_menu():
         elif choice == 4:
             await test_concerns_phase()
         elif choice == 5:
-            await test_full_conversation()
+            await test_action_phase()
         elif choice == 6:
+            await test_tradeoffs_phase()
+        elif choice == 7:
+            await test_followup_phase()
+        elif choice == 8:
+            await test_skills_pivot_phase()
+        elif choice == 9:
+            await test_wrapup_phase()
+        elif choice == 10:
+            await test_full_conversation()
+        elif choice == 11:
             print_section("Sample Data")
 
             print_info("Sample Skills:")
@@ -1050,7 +1811,7 @@ async def main_menu():
             display_recommendations(create_sample_recommendations())
 
             console.input("\n[dim]Press Enter to continue...[/]")
-        elif choice == 7:
+        elif choice == 12:
             # Change logging level
             print_section("Change Logging Level")
             new_log_choice = display_menu([
@@ -1060,7 +1821,7 @@ async def main_menu():
             ])
             setup_logging(log_levels[new_log_choice])
             print_success(f"Logging changed to {logging.getLevelName(log_levels[new_log_choice])} level")
-        elif choice == 8:
+        elif choice == 13:
             print_info("Exiting...")
             break
 
