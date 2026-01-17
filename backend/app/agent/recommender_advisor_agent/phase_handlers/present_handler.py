@@ -5,12 +5,15 @@ Handles the PRESENT_RECOMMENDATIONS phase where we show
 occupation recommendations to the user using LLM for natural presentation.
 """
 
+from typing import Optional
+
 from app.agent.agent_types import LLMStats
 from app.agent.llm_caller import LLMCaller
 from app.agent.recommender_advisor_agent.state import RecommenderAdvisorAgentState
 from app.agent.recommender_advisor_agent.types import (
     ConversationPhase,
-    UserInterestLevel
+    UserInterestLevel,
+    OccupationRecommendation
 )
 from app.agent.recommender_advisor_agent.llm_response_models import (
     ConversationResponse,
@@ -26,6 +29,8 @@ from app.conversation_memory.conversation_memory_manager import ConversationCont
 from app.conversation_memory.conversation_formatter import ConversationHistoryFormatter
 from app.agent.simple_llm_agent.prompt_response_template import get_json_response_instructions
 from common_libs.llm.generative_models import GeminiGenerativeLLM
+from app.vector_search.esco_entities import OccupationEntity
+from app.vector_search.similarity_search_service import SimilaritySearchService
 
 
 class PresentPhaseHandler(BasePhaseHandler):
@@ -48,6 +53,8 @@ class PresentPhaseHandler(BasePhaseHandler):
         intent_classifier: IntentClassifier = None,
         exploration_handler: 'ExplorationPhaseHandler' = None,
         concerns_handler: 'ConcernsPhaseHandler' = None,
+        tradeoffs_handler: 'TradeoffsPhaseHandler' = None,
+        occupation_search_service: Optional[SimilaritySearchService[OccupationEntity]] = None,
         **kwargs
     ):
         """
@@ -59,11 +66,15 @@ class PresentPhaseHandler(BasePhaseHandler):
             intent_classifier: Optional intent classifier for detecting user intent
             exploration_handler: Optional exploration handler for immediate transitions
             concerns_handler: Optional concerns handler for immediate transitions
+            tradeoffs_handler: Optional tradeoffs handler for immediate transitions
+            occupation_search_service: Optional occupation search service for finding occupations not in recommendations
         """
         super().__init__(conversation_llm, conversation_caller, **kwargs)
         self._intent_classifier = intent_classifier
         self._exploration_handler = exploration_handler
         self._concerns_handler = concerns_handler
+        self._tradeoffs_handler = tradeoffs_handler
+        self._occupation_search_service = occupation_search_service
     
     async def handle(
         self,
@@ -202,30 +213,6 @@ class PresentPhaseHandler(BasePhaseHandler):
 
         return '\n'.join(lines)
 
-    def _extract_skills_list(self, state: RecommenderAdvisorAgentState) -> list[str]:
-        """Extract list of skills from state.skills_vector."""
-        if not state.skills_vector:
-            return []
-
-        # Handle different possible structures
-        if isinstance(state.skills_vector, dict):
-            # Could be {"skill_name": proficiency_level} or {"skills": [...]}
-            if "skills" in state.skills_vector:
-                return state.skills_vector["skills"]
-            elif "top_skills" in state.skills_vector:
-                # Handle ExperienceEntity-like structure
-                skills = state.skills_vector.get("top_skills", [])
-                if isinstance(skills, list) and skills:
-                    # Extract skill names
-                    return [s.get("preferredLabel", s.get("name", str(s))) if isinstance(s, dict) else str(s) for s in skills]
-            else:
-                # Assume keys are skill names
-                return list(state.skills_vector.keys())
-        elif isinstance(state.skills_vector, list):
-            return state.skills_vector
-
-        return []
-
     async def _handle_user_intent(
         self,
         intent: UserIntentClassification,
@@ -257,8 +244,8 @@ class PresentPhaseHandler(BasePhaseHandler):
         elif intent.intent == "accept":
             return await self._handle_accept_intent(intent, user_input, state, context)
 
-        # For other intents (questions, unclear), stay in PRESENT phase
-        # and let the LLM handle it conversationally
+        # For other intents (questions, unclear), let LLM handle conversationally
+        # The LLM has instructions in the base prompt to handle user-suggested occupations
         return None
 
     async def _handle_explore_intent(
@@ -290,8 +277,25 @@ class PresentPhaseHandler(BasePhaseHandler):
             state.current_recommendation_type = "occupation"
             state.mark_interest(target_occ.uuid, UserInterestLevel.EXPLORING)
 
+            # Check if we should discuss tradeoffs BEFORE exploring
+            # (user interested in lower-demand occupation when high-demand alternatives exist)
+            if self._should_discuss_tradeoffs(target_occ, state):
+                state.conversation_phase = ConversationPhase.DISCUSS_TRADEOFFS
+                
+                self.logger.info(f"User interested in lower-demand {target_occ.occupation}, transitioning to DISCUSS_TRADEOFFS")
+                
+                # If we have a tradeoffs handler, immediately invoke it
+                if self._tradeoffs_handler:
+                    self.logger.info("Immediately invoking tradeoffs handler for seamless experience")
+                    return await self._tradeoffs_handler.handle(user_input, state, context)
+                
+                # Fallback: skip tradeoffs if no handler, proceed to exploration
+                self.logger.warning("No tradeoffs handler available, proceeding to EXPLORATION")
+                state.conversation_phase = ConversationPhase.CAREER_EXPLORATION
+
             # Transition to CAREER_EXPLORATION phase
-            state.conversation_phase = ConversationPhase.CAREER_EXPLORATION
+            if state.conversation_phase != ConversationPhase.DISCUSS_TRADEOFFS:
+                state.conversation_phase = ConversationPhase.CAREER_EXPLORATION
 
             self.logger.info(f"Transitioning to CAREER_EXPLORATION for {target_occ.occupation}")
 
@@ -309,8 +313,11 @@ class PresentPhaseHandler(BasePhaseHandler):
 
         # Couldn't identify which occupation - stay in PRESENT phase and let LLM handle
         # This can happen if user says general things like "tell me more" without specifying which one
+        # OR if they mention an occupation not in our recommendations (e.g., "I want to be a DJ")
+        # The LLM has instructions in the base prompt to handle user-suggested occupations appropriately
         self.logger.warning(f"Could not identify target occupation from intent. target_occupation_index={intent.target_occupation_index}, target_recommendation_id={intent.target_recommendation_id}")
         return None
+
 
     async def _handle_reject_intent(
         self,
@@ -391,6 +398,8 @@ class PresentPhaseHandler(BasePhaseHandler):
 
         In PRESENT phase, "accept" means "I want to explore this more",
         NOT "I'm ready to commit". So we transition to EXPLORATION, not ACTION.
+        But first, we check if we should discuss tradeoffs (user interested in 
+        lower-demand occupation when high-demand alternatives exist).
         """
         # Find which occupation they're interested in
         target_occ = None
@@ -408,8 +417,25 @@ class PresentPhaseHandler(BasePhaseHandler):
             state.current_recommendation_type = "occupation"
             state.mark_interest(target_occ.uuid, UserInterestLevel.EXPLORING)
 
+            # Check if we should discuss tradeoffs BEFORE exploring
+            # (user interested in lower-demand occupation when high-demand alternatives exist)
+            if self._should_discuss_tradeoffs(target_occ, state):
+                state.conversation_phase = ConversationPhase.DISCUSS_TRADEOFFS
+                
+                self.logger.info(f"User interested in lower-demand {target_occ.occupation}, transitioning to DISCUSS_TRADEOFFS")
+                
+                # If we have a tradeoffs handler, immediately invoke it
+                if self._tradeoffs_handler:
+                    self.logger.info("Immediately invoking tradeoffs handler for seamless experience")
+                    return await self._tradeoffs_handler.handle(user_input, state, context)
+                
+                # Fallback: skip tradeoffs if no handler, proceed to exploration
+                self.logger.warning("No tradeoffs handler available, proceeding to EXPLORATION")
+                state.conversation_phase = ConversationPhase.CAREER_EXPLORATION
+
             # Transition to CAREER_EXPLORATION (they want to learn more)
-            state.conversation_phase = ConversationPhase.CAREER_EXPLORATION
+            if state.conversation_phase != ConversationPhase.DISCUSS_TRADEOFFS:
+                state.conversation_phase = ConversationPhase.CAREER_EXPLORATION
 
             self.logger.info(f"User expressed interest in {target_occ.occupation}, transitioning to CAREER_EXPLORATION")
 
@@ -428,6 +454,7 @@ class PresentPhaseHandler(BasePhaseHandler):
         # Couldn't identify which occupation - stay in PRESENT
         self.logger.warning("User accepted but couldn't identify which occupation")
         return None
+
 
     async def _call_llm(self, prompt: str, user_input: str, context: ConversationContext) -> tuple[ConversationResponse, list[LLMStats]]:
         """Call LLM with the prepared prompt."""
@@ -450,3 +477,67 @@ class PresentPhaseHandler(BasePhaseHandler):
                 message="I have some career recommendations for you. Which would you like to explore first?",
                 finished=False
             ), []
+
+    def _should_discuss_tradeoffs(
+        self,
+        target_occ: OccupationRecommendation,
+        state: RecommenderAdvisorAgentState
+    ) -> bool:
+        """
+        Determine if we should discuss tradeoffs before proceeding.
+
+        Returns True if:
+        1. User's preferred occupation has lower demand than alternatives
+        2. There's a high-demand alternative available
+        3. We haven't already discussed tradeoffs for this occupation
+
+        Args:
+            target_occ: The occupation the user is interested in
+            state: Current agent state
+
+        Returns:
+            True if tradeoffs discussion is warranted, False otherwise
+        """
+        # Must have recommendations to compare
+        if not state.recommendations:
+            return False
+
+        # If target occupation is already high demand, no tradeoff needed
+        if target_occ.labor_demand_category == "high":
+            self.logger.debug(f"Target {target_occ.occupation} is high-demand, no tradeoff needed")
+            return False
+
+        # Check if we've already discussed tradeoffs for this occupation
+        if target_occ.uuid in state.tradeoffs_discussed_for:
+            self.logger.debug(f"Already discussed tradeoffs for {target_occ.occupation}")
+            return False
+
+        # Check if there's a high-demand alternative with better demand score
+        has_better_alternative = False
+        preferred_demand = target_occ.labor_demand_score or 0.0
+
+        for occ in state.recommendations.occupation_recommendations:
+            # Skip the current target
+            if occ.uuid == target_occ.uuid:
+                continue
+
+            # Check if this is a high-demand occupation with better score
+            if occ.labor_demand_category == "high":
+                alt_demand = occ.labor_demand_score or 0.0
+
+                if alt_demand > preferred_demand:
+                    has_better_alternative = True
+                    self.logger.info(
+                        f"Found high-demand alternative: {occ.occupation} "
+                        f"(demand: {alt_demand:.2f}) vs preferred {target_occ.occupation} "
+                        f"(demand: {preferred_demand:.2f})"
+                    )
+                    break
+
+        if has_better_alternative:
+            # Mark that we'll discuss tradeoffs for this occupation
+            state.tradeoffs_discussed_for.append(target_occ.uuid)
+            return True
+
+        return False
+
