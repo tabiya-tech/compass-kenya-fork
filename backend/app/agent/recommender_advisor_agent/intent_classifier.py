@@ -177,22 +177,36 @@ Other available occupations:
 {other_occs}
 
 Possible intents:
+- "accept": They're ready to commit or move forward with this occupation
+  Examples: "this sounds great", "I want to pursue this", "how do I get started?", "let's move forward", "I'm ready", "no concerns", "what next", "okay let's do it", "yes"
+  Key: ANY statement indicating readiness, agreement to proceed, or asking about next steps
+
 - "express_concern": They're expressing worry, doubt, hesitation, or identifying barriers about the occupation
   Examples: "I feel incapable", "I'm not equipped", "imposter syndrome", "I'm worried about...", "what if I can't...", "seems too hard", "I don't have the skills", "too much education needed"
   Key: ANY statement expressing self-doubt, barriers, worries, or negative feelings about their ability to succeed in this role
-- "accept": They're ready to commit or move forward with this occupation (e.g., "this sounds great", "I want to pursue this", "how do I get started?")
+
 - "reject": They don't want this occupation anymore (e.g., "not interested in this one", "let's look at something else", "this isn't for me")
+
 - "explore_different": They want to explore a different occupation instead (mention another occupation by name or number)
+
 - "ask_question": Factual/clarification questions about the current occupation that don't express concern (e.g., "what does M&E stand for?", "how long is the training?")
-- "continue_exploring": They want more information about the current occupation (e.g., "tell me more", "what else?", "okay", "go on")
+
+- "continue_exploring": They want more detailed information about the current occupation (e.g., "tell me more about the daily tasks", "what else should I know?", "go on", "continue")
+  Note: This is ONLY for requesting MORE DETAILS, not for general acknowledgment
+
 - "other": Unclear or off-topic
 
-CRITICAL DISTINCTION:
+CRITICAL DISTINCTIONS:
+- "no concerns" / "what next" / "let's move forward" = ACCEPT (ready to proceed)
+- "okay" after exploration = ACCEPT (if said without asking for more details)
 - "I feel incapable" = EXPRESS_CONCERN (self-doubt/barrier)
 - "I'm not sure I have the skills" = EXPRESS_CONCERN (self-doubt/barrier)
 - "What skills are needed?" = ASK_QUESTION (factual)
+- "tell me more about X" = CONTINUE_EXPLORING (wants details)
 - "Sounds good" = ACCEPT (positive commitment)
 - "Not for me" = REJECT (negative)
+
+PRIORITY: Check for ACCEPT first. If user says anything indicating readiness or asks "what next", classify as ACCEPT.
 
 If they mentioned a different occupation by name or number, set target_recommendation_id or target_occupation_index.
 
