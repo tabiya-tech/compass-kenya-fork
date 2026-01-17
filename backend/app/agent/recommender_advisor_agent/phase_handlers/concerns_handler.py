@@ -93,6 +93,27 @@ class ConcernsPhaseHandler(BasePhaseHandler):
                 finished=False
             ), all_llm_stats
 
+        # If user shows acceptance, offer choices
+        if classification.resistance_type == "acceptance":
+            state.conversation_phase = ConversationPhase.ACTION_PLANNING
+
+            # Get the occupation they're interested in
+            occupation_name = "this path"
+            if state.current_focus_id:
+                rec = state.get_recommendation_by_id(state.current_focus_id)
+                if rec and hasattr(rec, 'occupation'):
+                    occupation_name = rec.occupation
+
+            return ConversationResponse(
+                reasoning="User showed acceptance, offering choices to move forward",
+                message=f"Great! I'm glad that's helpful. What would you like to do next?\n\n"
+                        f"1. **Discuss next steps** for {occupation_name} (how to apply, prepare, etc.)\n"
+                        f"2. **Explore other career options** from your recommendations\n"
+                        f"3. **Keep discussing** any remaining concerns\n\n"
+                        f"Which option sounds best to you?",
+                finished=False
+            ), all_llm_stats
+
         # If no resistance, transition to action planning
         if classification.resistance_type == "none":
             state.conversation_phase = ConversationPhase.ACTION_PLANNING
@@ -101,22 +122,25 @@ class ConcernsPhaseHandler(BasePhaseHandler):
                 message="Great! It sounds like this path interests you. Let's talk about next steps.",
                 finished=False
             ), all_llm_stats
-        
+
         # Record the concern
+        # Normalize resistance type: LLM returns "BELIEF-BASED" but enum expects "belief"
+        resistance_type_normalized = classification.resistance_type.lower().replace("-based", "").replace("_based", "")
+
         concern = ConcernRecord(
             item_id=state.current_focus_id or "unknown",
             item_type=state.current_recommendation_type,
             concern=classification.concern_summary,
-            resistance_type=ResistanceType(classification.resistance_type)
+            resistance_type=ResistanceType(resistance_type_normalized)
         )
         state.add_concern(concern)
-        
+
         # Generate response based on resistance type
         response, llm_stats = await self._generate_response(
             classification, user_input, state, context
         )
         all_llm_stats.extend(llm_stats)
-        
+
         return response, all_llm_stats
     
     async def _classify_resistance(
