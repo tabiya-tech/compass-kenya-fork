@@ -46,6 +46,8 @@ class ExplorationPhaseHandler(BasePhaseHandler):
         conversation_caller,
         intent_classifier: IntentClassifier = None,
         concerns_handler: 'ConcernsPhaseHandler' = None,
+        action_handler: 'ActionPhaseHandler' = None,
+        tradeoffs_handler: 'TradeoffsPhaseHandler' = None,
         **kwargs
     ):
         """
@@ -56,10 +58,14 @@ class ExplorationPhaseHandler(BasePhaseHandler):
             conversation_caller: LLM caller for conversation responses
             intent_classifier: Optional intent classifier for detecting user intent
             concerns_handler: Optional concerns handler for immediate transitions
+            action_handler: Optional action handler for immediate transitions
+            tradeoffs_handler: Optional tradeoffs handler for immediate transitions
         """
         super().__init__(conversation_llm, conversation_caller, **kwargs)
         self._intent_classifier = intent_classifier
         self._concerns_handler = concerns_handler
+        self._action_handler = action_handler
+        self._tradeoffs_handler = tradeoffs_handler
 
     async def handle(
         self,
@@ -196,14 +202,22 @@ class ExplorationPhaseHandler(BasePhaseHandler):
 
         # Handle ACCEPT intent - user is ready to move forward
         elif intent.intent == "accept":
-            # Mark as interested and transition to ACTION_PLANNING
+            # Mark as interested
             if state.current_focus_id:
                 state.mark_interest(state.current_focus_id, UserInterestLevel.INTERESTED)
 
+            # Transition directly to ACTION_PLANNING
+            # Note: Tradeoffs are already discussed in PRESENT_RECOMMENDATIONS phase
+            # No need to discuss again here
             state.conversation_phase = ConversationPhase.ACTION_PLANNING
-
             self.logger.info("User accepted occupation, transitioning to ACTION_PLANNING")
 
+            # Invoke action handler if available
+            if self._action_handler:
+                self.logger.info("Immediately invoking action handler for seamless experience")
+                return await self._action_handler.handle(user_input, state, context)
+
+            # Fallback: just return transition message
             return ConversationResponse(
                 reasoning="User is ready to move forward, transitioning to ACTION phase",
                 message="That's great! Let's talk about your next steps and how to move forward with this path.",
@@ -253,7 +267,20 @@ class ExplorationPhaseHandler(BasePhaseHandler):
                     # Re-invoke this handler with empty input to trigger exploration of new occupation
                     return await self.handle("", state, context)
 
-            # Couldn't identify which occupation - go back to presentation
+            # Couldn't identify which occupation in our recommendations
+            # Try searching the occupation taxonomy for occupations not in our list
+            self.logger.info(f"Could not identify target occupation in recommendations. Searching taxonomy for: '{user_input}'")
+
+            # Search for the occupation in the taxonomy
+            mentioned_occ = await self._search_occupation_by_name(user_input)
+
+            if mentioned_occ:
+                # Found an occupation in taxonomy that's not in our recommendations
+                # Generate LLM-driven response to handle this gracefully (using base class method)
+                occ_summary = "Currently exploring occupations" if not state.recommendations else self._build_occupation_summary_for_context(state)
+                return await self._handle_out_of_list_occupation(mentioned_occ, user_input, state, context, occ_summary)
+
+            # Couldn't find the occupation anywhere - go back to presentation
             state.conversation_phase = ConversationPhase.PRESENT_RECOMMENDATIONS
             state.current_focus_id = None
 
@@ -265,6 +292,7 @@ class ExplorationPhaseHandler(BasePhaseHandler):
 
         # For CONTINUE_EXPLORING, ASK_QUESTION, or OTHER - stay in exploration, return None
         # to let the LLM handle it conversationally
+        # The LLM has instructions in the base prompt to handle user-suggested occupations
         return None
     
     def _build_occupation_summary(self, occ: OccupationRecommendation) -> str:
@@ -320,29 +348,22 @@ class ExplorationPhaseHandler(BasePhaseHandler):
 
         return '\n'.join(lines)
 
-    def _extract_skills_list(self, state: RecommenderAdvisorAgentState) -> list[str]:
-        """Extract list of skills from state.skills_vector."""
-        if not state.skills_vector:
-            return []
+    def _build_occupation_summary_for_context(self, state: RecommenderAdvisorAgentState) -> str:
+        """Build occupation summary for context when handling out-of-list occupations."""
+        if not state.recommendations:
+            return "No recommendations available"
 
-        # Handle different possible structures
-        if isinstance(state.skills_vector, dict):
-            # Could be {"skill_name": proficiency_level} or {"skills": [...]}
-            if "skills" in state.skills_vector:
-                return state.skills_vector["skills"]
-            elif "top_skills" in state.skills_vector:
-                # Handle ExperienceEntity-like structure
-                skills = state.skills_vector.get("top_skills", [])
-                if isinstance(skills, list) and skills:
-                    # Extract skill names
-                    return [s.get("preferredLabel", s.get("name", str(s))) if isinstance(s, dict) else str(s) for s in skills]
-            else:
-                # Assume keys are skill names
-                return list(state.skills_vector.keys())
-        elif isinstance(state.skills_vector, list):
-            return state.skills_vector
+        # Get current occupation if exploring
+        if state.current_focus_id:
+            rec = state.get_recommendation_by_id(state.current_focus_id)
+            if rec and isinstance(rec, OccupationRecommendation):
+                return f"Currently exploring: {self._build_occupation_summary(rec)}"
 
-        return []
+        # Fall back to list of recommendations
+        lines = ["Available occupations:"]
+        for i, occ in enumerate(state.recommendations.occupation_recommendations[:5], 1):
+            lines.append(f"{i}. {occ.occupation}")
+        return '\n'.join(lines)
 
     async def _call_llm(
         self,
@@ -379,3 +400,67 @@ class ExplorationPhaseHandler(BasePhaseHandler):
                 message=fallback_message,
                 finished=False
             ), []
+
+    def _should_discuss_tradeoffs(self, state: RecommenderAdvisorAgentState) -> bool:
+        """
+        Determine if we should discuss tradeoffs before proceeding to action.
+
+        Returns True if:
+        1. User's preferred occupation has lower demand than alternatives
+        2. There's a high-demand alternative available
+        3. We haven't already discussed tradeoffs for this occupation
+
+        Args:
+            state: Current agent state
+
+        Returns:
+            True if tradeoffs discussion is warranted, False otherwise
+        """
+        # Must have current focus and recommendations
+        if not state.current_focus_id or not state.recommendations:
+            return False
+
+        # Get the user's preferred occupation
+        preferred_occ = state.get_recommendation_by_id(state.current_focus_id)
+        if not preferred_occ or not isinstance(preferred_occ, OccupationRecommendation):
+            return False
+
+        # If preferred occupation is already high demand, no tradeoff needed
+        if preferred_occ.labor_demand_category == "high":
+            self.logger.debug(f"Target {preferred_occ.occupation} is high-demand, no tradeoff needed")
+            return False
+
+        # Check if we've already discussed tradeoffs for this occupation
+        if preferred_occ.uuid in state.tradeoffs_discussed_for:
+            self.logger.debug(f"Already discussed tradeoffs for {preferred_occ.occupation}")
+            return False
+
+        # Check if there's a high-demand alternative with better demand score
+        has_better_alternative = False
+        preferred_demand = preferred_occ.labor_demand_score or 0.0
+
+        for occ in state.recommendations.occupation_recommendations:
+            # Skip the current focus
+            if occ.uuid == state.current_focus_id:
+                continue
+
+            # Check if this is a high-demand occupation
+            if occ.labor_demand_category == "high":
+                alt_demand = occ.labor_demand_score or 0.0
+
+                if alt_demand > preferred_demand:
+                    has_better_alternative = True
+                    self.logger.info(
+                        f"Found high-demand alternative: {occ.occupation} "
+                        f"(demand: {alt_demand:.2f}) vs preferred {preferred_occ.occupation} "
+                        f"(demand: {preferred_demand:.2f})"
+                    )
+                    break
+
+        if has_better_alternative:
+            # Mark that we'll discuss tradeoffs for this occupation
+            state.tradeoffs_discussed_for.append(preferred_occ.uuid)
+            return True
+
+        return False
+

@@ -52,11 +52,16 @@ from common_libs.llm.generative_models import GeminiGenerativeLLM
 from common_libs.llm.models_utils import (
     LLMConfig,
     LOW_TEMPERATURE_GENERATION_CONFIG,
+    MEDIUM_TEMPERATURE_GENERATION_CONFIG,
     JSON_GENERATION_CONFIG
 )
 
 # Import PreferenceVector from Epic 2
 from app.agent.preference_elicitation_agent.types import PreferenceVector
+
+# Vector search imports for occupation search
+from app.vector_search.esco_entities import OccupationEntity
+from app.vector_search.similarity_search_service import SimilaritySearchService
 
 # DB6 imports (Epic 1 dependency - optional)
 try:
@@ -82,25 +87,29 @@ class RecommenderAdvisorAgent(Agent):
         self,
         db6_client: Optional['DB6Client'] = None,
         node2vec_client: Optional[Any] = None,
+        occupation_search_service: Optional[SimilaritySearchService[OccupationEntity]] = None,
     ):
         """
         Initialize the Recommender/Advisor Agent.
-        
+
         Args:
             db6_client: Optional DB6 client for Epic 1 Youth Database integration.
             node2vec_client: Optional Node2Vec client for generating recommendations.
+            occupation_search_service: Optional occupation search service for finding occupations not in recommendations.
         """
         super().__init__(
             agent_type=AgentType.RECOMMENDER_ADVISOR_AGENT,
             is_responsible_for_conversation_history=False
         )
-        
+
         self._state: Optional[RecommenderAdvisorAgentState] = None
         self._db6_client = db6_client
+        self._occupation_search_service = occupation_search_service
         
         # Initialize LLM
         llm_config = LLMConfig(
-            generation_config=LOW_TEMPERATURE_GENERATION_CONFIG | JSON_GENERATION_CONFIG
+            # generation_config=LOW_TEMPERATURE_GENERATION_CONFIG | JSON_GENERATION_CONFIG
+            generation_config=MEDIUM_TEMPERATURE_GENERATION_CONFIG | JSON_GENERATION_CONFIG
         )
         
         conversation_system_instructions = self._build_conversation_system_instructions()
@@ -139,6 +148,7 @@ class RecommenderAdvisorAgent(Agent):
             conversation_llm=self._conversation_llm,
             conversation_caller=self._conversation_caller,
             recommendation_interface=self._recommendation_interface,
+            occupation_search_service=self._occupation_search_service,
             logger=self.logger
         )
 
@@ -147,6 +157,7 @@ class RecommenderAdvisorAgent(Agent):
             conversation_llm=self._conversation_llm,
             conversation_caller=self._conversation_caller,
             resistance_caller=self._resistance_caller,
+            occupation_search_service=self._occupation_search_service,
             logger=self.logger
         )
 
@@ -155,6 +166,7 @@ class RecommenderAdvisorAgent(Agent):
             conversation_llm=self._conversation_llm,
             conversation_caller=self._conversation_caller,
             intent_classifier=self._intent_classifier,
+            occupation_search_service=self._occupation_search_service,
             logger=self.logger
         )
 
@@ -163,6 +175,7 @@ class RecommenderAdvisorAgent(Agent):
             conversation_llm=self._conversation_llm,
             conversation_caller=self._conversation_caller,
             intent_classifier=self._intent_classifier,
+            occupation_search_service=self._occupation_search_service,
             logger=self.logger
         )
         
@@ -189,9 +202,10 @@ class RecommenderAdvisorAgent(Agent):
             conversation_llm=self._conversation_llm,
             conversation_caller=self._conversation_caller,
             action_caller=self._action_caller,
+            intent_classifier=self._intent_classifier,
             logger=self.logger
         )
-        
+
         self._wrapup_handler = WrapupPhaseHandler(
             conversation_llm=self._conversation_llm,
             conversation_caller=self._conversation_caller,
@@ -200,12 +214,21 @@ class RecommenderAdvisorAgent(Agent):
         )
 
         # Set up delegation chains for seamless phase transitions
-        # ExplorationHandler can delegate to ConcernsHandler
+        # ExplorationHandler can delegate to ConcernsHandler, ActionHandler, and TradeoffsHandler
         self._exploration_handler._concerns_handler = self._concerns_handler
+        self._exploration_handler._action_handler = self._action_handler
+        self._exploration_handler._tradeoffs_handler = self._tradeoffs_handler
 
-        # PresentHandler can delegate to ExplorationHandler and ConcernsHandler
+        # PresentHandler can delegate to ExplorationHandler, ConcernsHandler, and TradeoffsHandler
         self._present_handler._exploration_handler = self._exploration_handler
         self._present_handler._concerns_handler = self._concerns_handler
+        self._present_handler._tradeoffs_handler = self._tradeoffs_handler
+
+        # ActionHandler can delegate to PresentHandler, ConcernsHandler, and WrapupHandler
+        self._action_handler._present_handler = self._present_handler
+        self._action_handler._concerns_handler = self._concerns_handler
+        self._action_handler._wrapup_handler = self._wrapup_handler
+
     
     def _build_conversation_system_instructions(self) -> str:
         """Build system instructions for the conversation LLM."""
