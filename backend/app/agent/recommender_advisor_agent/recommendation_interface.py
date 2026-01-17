@@ -89,12 +89,20 @@ class RecommendationInterface:
     def get_stub_recommendations(self, youth_id: str) -> Node2VecRecommendations:
         """
         Get stub recommendations for development without Node2Vec.
-        
-        These are realistic sample recommendations for testing the agent.
-        
+
+        These are realistic sample recommendations for testing the agent,
+        based on a Mombasa youth persona with informal sector background.
+
+        PERSONA: Hassan, 24, Mombasa
+        - Completed Form 4, some technical college
+        - Has worked casual jobs at the port, helped uncle with electrical repairs
+        - Good with hands, basic phone/mobile money skills
+        - Wants stable income but values flexibility
+        - Family expects him to contribute financially
+
         Args:
             youth_id: User/youth identifier
-            
+
         Returns:
             Node2VecRecommendations with sample data
         """
@@ -103,84 +111,198 @@ class RecommendationInterface:
             occupation_recommendations=[
                 OccupationRecommendation(
                     uuid="occ_001_uuid",
-                    originUuid="esco_2512_origin",
+                    originUuid="kesco_7411_origin",
                     rank=1,
-                    occupation_id="ESCO_2512",
-                    occupation_code="2512",
-                    occupation="Data Analyst",
-                    confidence_score=0.85,
-                    justification="Matches your analytical skills and preference for structured work. Growing field with many opportunities.",
-                    skills_match_score=0.75,
-                    preference_match_score=0.88,
-                    labor_demand_score=0.90,
-                    graph_proximity_score=0.82,
-                    essential_skills=["Excel", "SQL", "Data Visualization", "Statistical Analysis"],
-                    user_skill_coverage=0.6,
-                    skill_gaps=["Python", "Machine Learning basics"],
-                    description="Data Analysts collect, process, and analyze data to help organizations make informed decisions.",
-                    typical_tasks=[
-                        "Collect and clean data from various sources",
-                        "Create reports and visualizations",
-                        "Identify trends and patterns",
-                        "Present findings to stakeholders"
+                    occupation_id="KESCO_7411",
+                    occupation_code="7411",
+                    occupation="Fundi wa Stima (Electrician)",
+                    confidence_score=0.88,
+                    justification="Your hands-on experience helping your uncle with electrical work gives you a strong foundation. High demand in Mombasa's growing construction and hotel sector.",
+                    skills_match_score=0.82,
+                    preference_match_score=0.85,
+                    labor_demand_score=0.92,
+                    graph_proximity_score=0.88,
+                    essential_skills=[
+                        "Basic wiring and installation",
+                        "Reading electrical diagrams",
+                        "Safety procedures",
+                        "Using multimeter and tools",
+                        "Customer communication"
                     ],
-                    career_path_next_steps=["Junior Data Analyst", "Senior Data Analyst", "Data Scientist", "Analytics Manager"],
+                    user_skill_coverage=0.55,
+                    skill_gaps=["Formal certification (Grade Test)", "Industrial wiring"],
+                    description="Electricians install, maintain, and repair electrical wiring and systems in homes, hotels, and businesses.",
+                    typical_tasks=[
+                        "Install and repair electrical wiring in buildings",
+                        "Fix faulty sockets, switches, and lighting",
+                        "Install ceiling fans and water heaters",
+                        "Troubleshoot electrical problems",
+                        "Quote jobs and collect payment from clients"
+                    ],
+                    career_path_next_steps=[
+                        "Apprentice/Helper → Fundi (1-2 years)",
+                        "Fundi → Certified Electrician (Grade Test)",
+                        "Certified → Contractor/Own business",
+                        "Specialize in solar installation (growing demand)"
+                    ],
                     labor_demand_category="high",
-                    salary_range="KES 60,000-120,000/month"
+                    salary_range="KES 800-2,000/day (job-based) or KES 25,000-45,000/month (employed)"
                 ),
                 OccupationRecommendation(
                     uuid="occ_002_uuid",
-                    originUuid="esco_2513_origin",
+                    originUuid="kesco_8322_origin",
                     rank=2,
-                    occupation_id="ESCO_2513",
-                    occupation_code="2513",
-                    occupation="M&E Specialist",
-                    confidence_score=0.78,
-                    justification="Uses your fieldwork experience and evaluation skills. Common in NGO sector (aligns with your values).",
+                    occupation_id="KESCO_8322",
+                    occupation_code="8322",
+                    occupation="Boda-Boda Rider / Delivery Driver",
+                    confidence_score=0.79,
+                    justification="Offers immediate income and flexibility you value. Your knowledge of Mombasa streets is an asset. Can start quickly while building other skills.",
                     skills_match_score=0.70,
-                    preference_match_score=0.82,
-                    labor_demand_score=0.75,
-                    graph_proximity_score=0.78,
-                    essential_skills=["Program Evaluation", "Report Writing", "Data Collection", "Stakeholder Management"],
-                    user_skill_coverage=0.5,
-                    skill_gaps=["M&E Frameworks", "Impact Assessment"],
-                    description="Monitoring and Evaluation Specialists design and implement systems to track program effectiveness.",
-                    typical_tasks=[
-                        "Design monitoring frameworks",
-                        "Collect and analyze program data",
-                        "Write evaluation reports",
-                        "Provide recommendations for improvement"
+                    preference_match_score=0.88,
+                    labor_demand_score=0.85,
+                    graph_proximity_score=0.72,
+                    essential_skills=[
+                        "Motorcycle riding (valid license)",
+                        "Knowledge of local routes",
+                        "Basic phone/M-Pesa skills",
+                        "Customer service",
+                        "Time management"
                     ],
-                    career_path_next_steps=["M&E Officer", "M&E Specialist", "M&E Manager", "Program Director"],
-                    labor_demand_category="medium",
-                    salary_range="KES 50,000-100,000/month"
+                    user_skill_coverage=0.75,
+                    skill_gaps=["Motorcycle license (if not yet obtained)"],
+                    description="Boda-boda riders provide passenger transport and delivery services using motorcycles.",
+                    typical_tasks=[
+                        "Transport passengers around the city",
+                        "Deliver food, packages, and goods",
+                        "Navigate traffic efficiently",
+                        "Manage daily earnings and fuel costs",
+                        "Maintain motorcycle in good condition"
+                    ],
+                    career_path_next_steps=[
+                        "Rider (employed) → Own motorcycle",
+                        "Join delivery apps (Glovo, Uber Eats)",
+                        "Build regular customer base",
+                        "Grow to 2-3 bikes with riders (fleet owner)"
+                    ],
+                    labor_demand_category="high",
+                    salary_range="KES 500-1,500/day depending on hustle"
                 ),
                 OccupationRecommendation(
                     uuid="occ_003_uuid",
-                    originUuid="esco_2514_origin",
+                    originUuid="kesco_9329_origin",
                     rank=3,
-                    occupation_id="ESCO_2514",
-                    occupation_code="2514",
-                    occupation="Research Assistant",
-                    confidence_score=0.72,
-                    justification="Leverages your research and writing skills. Good stepping stone with flexible arrangements.",
-                    skills_match_score=0.80,
-                    preference_match_score=0.70,
-                    labor_demand_score=0.65,
-                    graph_proximity_score=0.74,
-                    essential_skills=["Research Methods", "Academic Writing", "Literature Review", "Data Entry"],
-                    user_skill_coverage=0.65,
-                    skill_gaps=["Statistical Software (SPSS/Stata)"],
-                    description="Research Assistants support academic and policy research projects.",
-                    typical_tasks=[
-                        "Conduct literature reviews",
-                        "Collect and enter data",
-                        "Assist with analysis",
-                        "Help prepare publications"
+                    occupation_id="KESCO_9329",
+                    occupation_code="9329",
+                    occupation="Port Cargo Handler / Stevedore",
+                    confidence_score=0.74,
+                    justification="Your experience with casual port work is valuable. More organized positions offer better pay and some job security.",
+                    skills_match_score=0.78,
+                    preference_match_score=0.65,
+                    labor_demand_score=0.80,
+                    graph_proximity_score=0.75,
+                    essential_skills=[
+                        "Physical fitness and stamina",
+                        "Following safety protocols",
+                        "Basic cargo handling",
+                        "Teamwork",
+                        "Punctuality and reliability"
                     ],
-                    career_path_next_steps=["Research Assistant", "Research Associate", "Research Fellow", "Lead Researcher"],
+                    user_skill_coverage=0.70,
+                    skill_gaps=["Forklift certification", "Container handling training"],
+                    description="Cargo handlers load, unload, and move goods at the port, warehouses, and shipping yards.",
+                    typical_tasks=[
+                        "Load and unload cargo from ships/trucks",
+                        "Operate basic cargo equipment",
+                        "Sort and stack containers/goods",
+                        "Follow safety procedures strictly",
+                        "Work in shifts (day/night)"
+                    ],
+                    career_path_next_steps=[
+                        "Casual laborer → Registered handler",
+                        "Get forklift/equipment certification",
+                        "Handler → Supervisor/Tally clerk",
+                        "Move to logistics/clearing agent roles"
+                    ],
                     labor_demand_category="medium",
-                    salary_range="KES 40,000-80,000/month"
+                    salary_range="KES 600-1,200/day (casual) or KES 20,000-35,000/month (registered)"
+                ),
+                OccupationRecommendation(
+                    uuid="occ_004_uuid",
+                    originUuid="kesco_7233_origin",
+                    rank=4,
+                    occupation_id="KESCO_7233",
+                    occupation_code="7233",
+                    occupation="Boat/Marine Equipment Fundi",
+                    confidence_score=0.71,
+                    justification="Mombasa's fishing and tourism boat industry needs repair skills. Combines your electrical knowledge with marine work.",
+                    skills_match_score=0.68,
+                    preference_match_score=0.75,
+                    labor_demand_score=0.70,
+                    graph_proximity_score=0.72,
+                    essential_skills=[
+                        "Outboard motor repair",
+                        "Basic electrical troubleshooting",
+                        "Fiberglass patching",
+                        "Engine maintenance",
+                        "Customer negotiation"
+                    ],
+                    user_skill_coverage=0.45,
+                    skill_gaps=["Marine engine training", "Fiberglass work"],
+                    description="Marine fundis repair and maintain boats, outboard motors, and marine electrical systems.",
+                    typical_tasks=[
+                        "Repair outboard motors for fishermen",
+                        "Fix electrical systems on boats",
+                        "Patch and maintain boat hulls",
+                        "Install marine equipment",
+                        "Travel to different landing sites for jobs"
+                    ],
+                    career_path_next_steps=[
+                        "Learn from experienced marine fundi",
+                        "Specialize in outboard motors (Yamaha, etc.)",
+                        "Build reputation at fish landing sites",
+                        "Open marine repair shop"
+                    ],
+                    labor_demand_category="medium",
+                    salary_range="KES 1,000-3,000/job or KES 20,000-40,000/month (busy season)"
+                ),
+                OccupationRecommendation(
+                    uuid="occ_005_uuid",
+                    originUuid="kesco_5221_origin",
+                    rank=5,
+                    occupation_id="KESCO_5221",
+                    occupation_code="5221",
+                    occupation="Market Vendor / Trader",
+                    confidence_score=0.68,
+                    justification="Low startup cost, flexible hours, and potential to grow. Your M-Pesa skills help with transactions.",
+                    skills_match_score=0.60,
+                    preference_match_score=0.80,
+                    labor_demand_score=0.75,
+                    graph_proximity_score=0.65,
+                    essential_skills=[
+                        "Basic math and pricing",
+                        "Customer service",
+                        "M-Pesa transactions",
+                        "Negotiation",
+                        "Stock management"
+                    ],
+                    user_skill_coverage=0.65,
+                    skill_gaps=["Sourcing goods at good prices", "Business record-keeping"],
+                    description="Market vendors sell goods (food, household items, phone accessories, etc.) at markets, streets, or small stalls.",
+                    typical_tasks=[
+                        "Source and buy goods for resale",
+                        "Set up stall and display products",
+                        "Negotiate prices with customers",
+                        "Manage daily cash and M-Pesa payments",
+                        "Track what sells well"
+                    ],
+                    career_path_next_steps=[
+                        "Start small (phone accessories, fruits)",
+                        "Build regular customers",
+                        "Get permanent stall/kiosk",
+                        "Grow to wholesale or multiple stalls"
+                    ],
+                    labor_demand_category="medium",
+                    salary_range="KES 300-1,000/day profit (depends on product and location)"
                 )
             ],
             opportunity_recommendations=[
@@ -188,25 +310,39 @@ class RecommendationInterface:
                     uuid="opp_001_uuid",
                     originUuid="job_001_origin",
                     rank=1,
-                    opportunity_title="Internship at XYZ Foundation",
-                    location="Nairobi",
-                    justification="Entry-level position that builds foundation in impact evaluation. 6-month program with potential for full-time hire.",
-                    essential_skills=["Data Analysis", "Report Writing"],
-                    employer="XYZ Foundation",
-                    salary_range="KES 25,000-35,000/month",
-                    contract_type="internship",
+                    opportunity_title="Electrical Apprenticeship - Nyali Construction Site",
+                    location="Nyali, Mombasa",
+                    justification="Learn from certified electricians while earning. The foreman is known to train serious workers.",
+                    essential_skills=["Basic wiring", "Willingness to learn", "Physical work"],
+                    employer="Nyali Heights Development",
+                    salary_range="KES 500-800/day + skills training",
+                    contract_type="contract",
                     related_occupation_id="occ_001_uuid"
                 ),
                 OpportunityRecommendation(
                     uuid="opp_002_uuid",
                     originUuid="job_002_origin",
                     rank=2,
-                    opportunity_title="Research Assistantship at ABC Lab",
-                    location="Remote",
-                    justification="Flexible work arrangement with focus on quantitative analysis.",
-                    essential_skills=["Research Methods", "Statistical Analysis"],
-                    employer="ABC Research Lab",
-                    salary_range="KES 30,000-40,000/month",
+                    opportunity_title="Glovo Delivery Partner",
+                    location="Mombasa (various zones)",
+                    justification="Flexible hours, paid per delivery. Good way to earn while exploring other opportunities.",
+                    essential_skills=["Motorcycle + license", "Smartphone", "M-Pesa"],
+                    employer="Glovo Kenya",
+                    salary_range="KES 100-200 per delivery",
+                    contract_type="freelance",
+                    posting_url="https://glovoapp.com/ke/riders",
+                    related_occupation_id="occ_002_uuid"
+                ),
+                OpportunityRecommendation(
+                    uuid="opp_003_uuid",
+                    originUuid="job_003_origin",
+                    rank=3,
+                    opportunity_title="Cargo Handler - Kilindini Port",
+                    location="Mombasa Port",
+                    justification="Regular work available. Being registered with a gang gives more consistent income than casual pickup.",
+                    essential_skills=["Physical fitness", "Reliability", "Safety awareness"],
+                    employer="Various shipping agents",
+                    salary_range="KES 800-1,200/day",
                     contract_type="contract",
                     related_occupation_id="occ_003_uuid"
                 )
@@ -216,32 +352,62 @@ class RecommendationInterface:
                     uuid="skill_001_uuid",
                     originUuid="training_001_origin",
                     rank=1,
-                    skill="Data Analysis with Python",
-                    training_title="Google Data Analytics Professional Certificate",
-                    provider="Coursera",
-                    estimated_hours=200,
-                    justification="Industry-recognized certification that covers key data analysis skills. Opens doors to many analyst roles.",
-                    cost="Free with financial aid",
-                    location="Online",
-                    delivery_mode="online",
-                    target_occupations=["Data Analyst", "Business Analyst", "Research Assistant"],
-                    fills_gap_for=["occ_001_uuid", "occ_003_uuid"]
+                    skill="Electrical Installation (Grade Test Preparation)",
+                    training_title="Electrician Grade III Certification",
+                    provider="Mombasa Technical Training Institute",
+                    estimated_hours=160,
+                    justification="The Grade Test certification opens doors to formal employment and higher-paying contracts. Many hotels and companies require certified electricians.",
+                    cost="KES 15,000-20,000",
+                    location="Mombasa Technical",
+                    delivery_mode="in_person",
+                    target_occupations=["Electrician", "Maintenance Technician"],
+                    fills_gap_for=["occ_001_uuid"]
                 ),
                 SkillsTrainingRecommendation(
                     uuid="skill_002_uuid",
                     originUuid="training_002_origin",
                     rank=2,
-                    skill="M&E Fundamentals",
-                    training_title="Introduction to Monitoring & Evaluation",
-                    provider="ALX",
+                    skill="Solar Panel Installation",
+                    training_title="Solar PV Installation Training",
+                    provider="Kenya Power / Various NGOs",
                     estimated_hours=40,
-                    justification="Quick course covering M&E frameworks used in NGOs and development sector.",
-                    cost="KES 5,000",
-                    location="Online",
-                    delivery_mode="online",
-                    target_occupations=["M&E Specialist", "Program Officer"],
+                    justification="Solar is booming in Coast region. Adds to your electrical skills and pays very well.",
+                    cost="Free - KES 10,000 (NGO programs often subsidized)",
+                    location="Mombasa / Kilifi",
+                    delivery_mode="hybrid",
+                    target_occupations=["Solar Technician", "Electrician"],
+                    fills_gap_for=["occ_001_uuid"]
+                ),
+                SkillsTrainingRecommendation(
+                    uuid="skill_003_uuid",
+                    originUuid="training_003_origin",
+                    rank=3,
+                    skill="Motorcycle Riding License",
+                    training_title="NTSA Motorcycle License (Class A)",
+                    provider="Approved Driving Schools",
+                    estimated_hours=20,
+                    justification="Required for legal boda-boda work and delivery apps. Protects you from police harassment and opens formal delivery opportunities.",
+                    cost="KES 3,000-5,000",
+                    location="Mombasa driving schools",
+                    delivery_mode="in_person",
+                    target_occupations=["Boda-Boda Rider", "Delivery Driver"],
                     fills_gap_for=["occ_002_uuid"]
+                ),
+                SkillsTrainingRecommendation(
+                    uuid="skill_004_uuid",
+                    originUuid="training_004_origin",
+                    rank=4,
+                    skill="Forklift Operation",
+                    training_title="Forklift Operator Certificate",
+                    provider="Industrial Training Centres",
+                    estimated_hours=40,
+                    justification="Certified forklift operators earn much more at the port. Opens path to supervisor roles.",
+                    cost="KES 8,000-12,000",
+                    location="Mombasa",
+                    delivery_mode="in_person",
+                    target_occupations=["Forklift Operator", "Warehouse Supervisor"],
+                    fills_gap_for=["occ_003_uuid"]
                 )
             ],
-            confidence=0.78
+            confidence=0.82
         )
