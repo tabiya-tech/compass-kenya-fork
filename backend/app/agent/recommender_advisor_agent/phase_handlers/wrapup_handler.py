@@ -58,21 +58,21 @@ class WrapupPhaseHandler(BasePhaseHandler):
         context: ConversationContext
     ) -> tuple[ConversationResponse, list[LLMStats]]:
         """
-        Handle session wrapup.
+        Handle session wrapup and finish conversation.
         """
         # Build summary
         summary = self._build_session_summary(state)
-        
+
         # Save to DB6
         await self._save_session_to_db6(state)
-        
-        # Move to complete
+
+        # Mark as complete and finish
         state.conversation_phase = ConversationPhase.COMPLETE
-        
+
         return ConversationResponse(
-            reasoning="Summarizing session and saving to DB6",
+            reasoning="Session complete, showing summary and finishing",
             message=summary,
-            finished=False
+            finished=True
         ), []
     
     async def handle_complete(
@@ -93,27 +93,27 @@ class WrapupPhaseHandler(BasePhaseHandler):
     def _build_session_summary(self, state: RecommenderAdvisorAgentState) -> str:
         """Build the session summary message."""
         parts = ["Perfect! Here's what we've discussed:\n"]
-        
+
         # Current focus
         if state.current_focus_id:
             focus_title = self._get_focus_title(state)
             parts.append(f"\n**Your top match:** {focus_title}")
-        
+
         # Action commitment
         if state.action_commitment:
             commitment = state.action_commitment
             action_display = commitment.action_type.value.replace("_", " ").title()
             timeline_display = commitment.commitment_level.value.replace("_", " ").title()
-            
+
             parts.append(f"\n**Next step:** {action_display}")
             parts.append(f"\n**Timeline:** {timeline_display}")
-            
+
             if commitment.barriers_mentioned:
                 parts.append(f"\n**Potential barriers:** {', '.join(commitment.barriers_mentioned)}")
-        
+
         parts.append("\n\nI've saved this to your profile so we can follow up.")
-        parts.append("\n\nBefore we wrap - what's the ONE thing that might stop you from taking this step? Let's talk through it now so you're prepared.")
-        
+        parts.append("\n\nGood luck with your next steps! Remember - persistence beats perfection. You've got this! 🚀")
+
         return "".join(parts)
     
     def _get_focus_title(self, state: RecommenderAdvisorAgentState) -> str:
