@@ -18,7 +18,6 @@ def _get_locale_section():
         - Never mix languages - your entire response must be in {language_label} only.
         """)
 
-
 def get_language_style(*, with_locale: bool = True, for_json_output: bool = False) -> str:
     """
     Get the language style instructions.
