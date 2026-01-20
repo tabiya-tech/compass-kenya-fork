@@ -120,6 +120,21 @@ class ExplorationPhaseHandler(BasePhaseHandler):
             # Check if intent classification succeeded
             if intent is not None:
                 self.logger.info(f"Intent classified as: {intent.intent}, reasoning: {intent.reasoning}")
+                self.logger.info(f"Intent target_recommendation_id: {intent.target_recommendation_id}")
+                self.logger.info(f"Intent target_occupation_index: {intent.target_occupation_index}")
+                self.logger.info(f"Intent requested_occupation_name: {intent.requested_occupation_name}")
+
+                # Also print to console for debugging
+                print(f"\n{'='*80}")
+                print(f"[INTENT CLASSIFIER DEBUG]")
+                print(f"User Input: {user_input}")
+                print(f"Current Focus ID: {state.current_focus_id}")
+                print(f"Classified Intent: {intent.intent}")
+                print(f"Reasoning: {intent.reasoning}")
+                print(f"Target Recommendation ID: {intent.target_recommendation_id}")
+                print(f"Target Occupation Index: {intent.target_occupation_index}")
+                print(f"Requested Occupation Name: {intent.requested_occupation_name}")
+                print(f"{'='*80}\n")
 
                 # Handle the intent and potentially transition phases
                 phase_transition = await self._handle_user_intent(intent, user_input, state, context)
@@ -131,6 +146,14 @@ class ExplorationPhaseHandler(BasePhaseHandler):
 
         # Build occupation summary for LLM
         occ_summary = self._build_occupation_summary(rec)
+        
+        # Build list of ALL available occupations with UUIDs for occupation switching
+        all_occupations_list = ""
+        if state.recommendations:
+            occ_lines = ["\n\n**ALL AVAILABLE OCCUPATIONS (with UUIDs for discussed_occupation_id)**:"]
+            for i, occ in enumerate(state.recommendations.occupation_recommendations[:5], 1):
+                occ_lines.append(f"{i}. {occ.occupation} (uuid: {occ.uuid})")
+            all_occupations_list = "\n".join(occ_lines)
 
         # Build full context for LLM
         skills_list = self._extract_skills_list(state)
@@ -141,17 +164,45 @@ class ExplorationPhaseHandler(BasePhaseHandler):
         context_block = build_context_block(
             skills=skills_list,
             preference_vector=pref_vec_dict,
-            recommendations_summary=f"Currently exploring: {occ_summary}",
+            recommendations_summary=f"Currently exploring: {occ_summary}{all_occupations_list}",
             conversation_history=conv_history,
             country_of_user=state.country_of_user
         )
 
+        # Create example response with discussed_occupation_id to ensure LLM knows about this field
+        example_response = ConversationResponse(
+            reasoning="The user expressed interest in Fundi wa Stima (Electrician), so I will discuss that occupation and set discussed_occupation_id to track the switch.",
+            message="Let's explore what being a Fundi wa Stima (Electrician) involves...",
+            finished=False,
+            discussed_occupation_id="occ_001_uuid"  # Example UUID - LLM should use actual UUID from list
+        )
+
         # Build prompt for LLM
-        full_prompt = context_block + CAREER_EXPLORATION_PROMPT + get_json_response_instructions()
+        full_prompt = context_block + CAREER_EXPLORATION_PROMPT + get_json_response_instructions(examples=[example_response])
 
         # Call LLM to generate exploration
         response, llm_stats = await self._call_llm(full_prompt, user_input, context, rec)
         all_llm_stats.extend(llm_stats)
+
+        # === RESPONSE-BASED FOCUS UPDATE ===
+        # If the LLM discussed a different occupation than our current focus,
+        # update the state to reflect the actual occupation being discussed.
+        # This handles occupation switches that the intent classifier might have missed.
+        if response.discussed_occupation_id and response.discussed_occupation_id != state.current_focus_id:
+            new_focus = state.get_recommendation_by_id(response.discussed_occupation_id)
+            if new_focus:
+                self.logger.info(
+                    f"LLM discussed different occupation: {new_focus.occupation} (uuid: {response.discussed_occupation_id}). "
+                    f"Updating focus from {state.current_focus_id} to {response.discussed_occupation_id}"
+                )
+                state.current_focus_id = response.discussed_occupation_id
+                state.current_recommendation_type = "occupation"
+                state.mark_interest(response.discussed_occupation_id, UserInterestLevel.EXPLORING)
+                
+                # Update metadata to reflect the actual occupation discussed
+                rec = new_focus
+            else:
+                self.logger.warning(f"Could not find occupation with UUID: {response.discussed_occupation_id}")
 
         # Add metadata
         response.metadata = self._build_metadata(
@@ -181,8 +232,28 @@ class ExplorationPhaseHandler(BasePhaseHandler):
         """
         self.logger.info(f"Handling intent during exploration: {intent.intent}")
 
+        print(f"\n{'='*80}")
+        print(f"[_handle_user_intent DEBUG]")
+        print(f"Intent: {intent.intent}")
+        print(f"User Input: {user_input}")
+        print(f"Current Focus: {state.current_focus_id}")
+        print(f"Target Rec ID: {intent.target_recommendation_id}")
+        print(f"Target Occ Index: {intent.target_occupation_index}")
+        print(f"{'='*80}\n")
+
+        # GUARDRAIL: Check for off-recommendation requests first
+        if intent.intent == "request_outside_recommendations":
+            self.logger.warning(f"GUARDRAIL TRIGGERED: User requested occupation outside recommendations: {intent.requested_occupation_name}")
+            # Use strict guardrail to redirect back to recommendations
+            return await self._handle_request_outside_recommendations(
+                requested_occupation_name=intent.requested_occupation_name or "that occupation",
+                user_input=user_input,
+                state=state,
+                context=context
+            )
+
         # Handle CONCERN intent - user expressing worries/doubts
-        if intent.intent == "express_concern":
+        elif intent.intent == "express_concern":
             # Transition to ADDRESS_CONCERNS phase
             state.conversation_phase = ConversationPhase.ADDRESS_CONCERNS
 
@@ -245,20 +316,36 @@ class ExplorationPhaseHandler(BasePhaseHandler):
 
         # Handle EXPLORE_DIFFERENT - user wants to explore a different occupation
         elif intent.intent == "explore_different":
+            print(f"\n{'='*80}")
+            print(f"[EXPLORE_DIFFERENT HANDLER]")
+            print(f"target_recommendation_id: {intent.target_recommendation_id}")
+            print(f"target_occupation_index: {intent.target_occupation_index}")
+            print(f"{'='*80}\n")
+
             if intent.target_recommendation_id or intent.target_occupation_index:
                 # Find the new occupation
                 target_occ = None
                 if intent.target_occupation_index and state.recommendations:
                     idx = intent.target_occupation_index - 1
                     occupations = state.recommendations.occupation_recommendations
+                    print(f"[DEBUG] Trying to find occupation at index {idx} (0-based)")
                     if 0 <= idx < len(occupations):
                         target_occ = occupations[idx]
+                        print(f"[DEBUG] Found occupation: {target_occ.occupation} (uuid: {target_occ.uuid})")
+                    else:
+                        print(f"[DEBUG] Index {idx} out of range (total: {len(occupations)})")
 
                 elif intent.target_recommendation_id:
+                    print(f"[DEBUG] Looking up by UUID: {intent.target_recommendation_id}")
                     target_occ = state.get_recommendation_by_id(intent.target_recommendation_id)
+                    if target_occ:
+                        print(f"[DEBUG] Found occupation: {target_occ.occupation}")
+                    else:
+                        print(f"[DEBUG] No occupation found with UUID: {intent.target_recommendation_id}")
 
                 if target_occ:
                     # Switch focus to new occupation
+                    print(f"[DEBUG] SWITCHING FOCUS from {state.current_focus_id} to {target_occ.uuid}")
                     state.current_focus_id = target_occ.uuid
                     state.mark_interest(target_occ.uuid, UserInterestLevel.EXPLORING)
 
@@ -266,6 +353,10 @@ class ExplorationPhaseHandler(BasePhaseHandler):
 
                     # Re-invoke this handler with empty input to trigger exploration of new occupation
                     return await self.handle("", state, context)
+                else:
+                    print(f"[DEBUG] target_occ is None - could not find occupation!")
+            else:
+                print(f"[DEBUG] Neither target_recommendation_id nor target_occupation_index was set!")
 
             # Couldn't identify which occupation in our recommendations
             # Try searching the occupation taxonomy for occupations not in our list
@@ -298,6 +389,7 @@ class ExplorationPhaseHandler(BasePhaseHandler):
     def _build_occupation_summary(self, occ: OccupationRecommendation) -> str:
         """Build a detailed summary of the occupation for LLM context."""
         lines = [f"**{occ.occupation}**"]
+        lines.append(f"UUID: {occ.uuid}")  # Include UUID for occupation tracking
         lines.append(f"Occupation Code: {occ.occupation_code}")
         lines.append(f"Confidence Score: {occ.confidence_score:.0%}")
 

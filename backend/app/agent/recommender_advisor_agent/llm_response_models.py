@@ -24,6 +24,12 @@ class ConversationResponse(BaseModel):
     finished: bool
     """Whether the recommender session is complete"""
     
+    discussed_occupation_id: Optional[str] = Field(
+        default=None,
+        description="UUID of the occupation primarily discussed in this response. Set this when your response focuses on a specific occupation from the recommendations list."
+    )
+    """UUID of the occupation being discussed, used to track focus across turns"""
+    
     metadata: Optional[dict] = None
     """Optional structured metadata for UI rendering"""
     
@@ -84,7 +90,7 @@ class UserIntentClassification(BaseModel):
         description="Reasoning about what the user wants to do"
     )
     intent: str = Field(
-        description="User intent: 'explore_occupation', 'show_opportunities', 'express_concern', 'ask_question', 'reject', 'accept', 'discuss_next_steps', 'explore_alternatives', 'address_more_concerns', 'other'"
+        description="User intent: 'explore_occupation', 'show_opportunities', 'express_concern', 'ask_question', 'reject', 'accept', 'discuss_next_steps', 'explore_alternatives', 'address_more_concerns', 'request_outside_recommendations', 'other'"
     )
     target_recommendation_id: Optional[str] = Field(
         default=None,
@@ -94,6 +100,10 @@ class UserIntentClassification(BaseModel):
         default=None,
         description="Index (1-based) of occupation if they said a number like '1' or 'first'"
     )
-    
+    requested_occupation_name: Optional[str] = Field(
+        default=None,
+        description="Name of occupation/career requested that is NOT in recommendations (e.g., 'DJ', 'pilot', 'astronaut')"
+    )
+
     class Config:
         extra = "forbid"

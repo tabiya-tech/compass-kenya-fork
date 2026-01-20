@@ -391,6 +391,12 @@ Let's dive into **[Occupation]**:
 ```
 
 **IMPORTANT**: This is an ongoing conversation. Set `finished` to `false` - the user needs to respond to your question about their concerns. The conversation is NOT complete.
+
+**CRITICAL - Occupation Tracking**: 
+When your response primarily discusses a specific occupation from the recommendations list, you MUST set `discussed_occupation_id` to that occupation's UUID. 
+- If the user mentions a DIFFERENT occupation and you respond about it, set `discussed_occupation_id` to the NEW occupation's UUID
+- This is essential for tracking which occupation the user is currently focused on
+- Example: If user says "tell me about the electrician instead" and you respond about Electrician (uuid: occ_001), set `discussed_occupation_id` to "occ_001"
 """
 
 

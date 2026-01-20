@@ -81,6 +81,7 @@ class BasePhaseHandler(ABC):
         """
         return {k: v for k, v in kwargs.items() if v is not None}
 
+
     async def _search_occupation_by_name(self, occupation_name: str) -> Optional[OccupationEntity]:
         """
         Search occupation taxonomy for an occupation mentioned by the user.
@@ -121,37 +122,38 @@ class BasePhaseHandler(ABC):
             self.logger.error(f"Occupation search failed for '{occupation_name}': {e}")
             return None
 
-    async def _handle_out_of_list_occupation(
+    async def _handle_request_outside_recommendations(
         self,
-        found_occupation: OccupationEntity,
+        requested_occupation_name: str,
         user_input: str,
         state: RecommenderAdvisorAgentState,
-        context: ConversationContext,
-        recommendations_summary: str
+        context: ConversationContext
     ) -> tuple[ConversationResponse, list[LLMStats]]:
         """
-        Handle case where user mentioned an occupation not in our recommendations.
+        STRICT GUARDRAIL: Handle when user requests occupation outside recommendations.
 
-        Uses LLM to generate a contextual, conversational response that:
-        1. Acknowledges we found the occupation
-        2. Explains why it wasn't in recommendations (if possible)
-        3. Offers choices: explore it anyway, understand alternatives, or see similar options
-
-        This is a shared method used by all phase handlers.
+        This guardrail politely redirects users back to data-driven recommendations
+        without offering to explore the off-list occupation. The response:
+        1. Acknowledges their interest
+        2. Explains recommendations are based on their skills/preferences
+        3. Redirects to comparing requested occupation with available options
+        4. Encourages exploration of recommended paths
 
         Args:
-            found_occupation: The occupation found in the taxonomy
+            requested_occupation_name: Name of occupation user requested (e.g., "DJ", "pilot")
             user_input: The user's original message
             state: Current agent state
             context: Conversation context
-            recommendations_summary: Summary of current recommendations for context
 
         Returns:
-            Tuple of (ConversationResponse, LLMStats)
+            Tuple of (ConversationResponse, list of LLMStats)
         """
         all_llm_stats: list[LLMStats] = []
 
-        self.logger.info(f"Generating LLM response for out-of-list occupation: {found_occupation.preferredLabel}")
+        self.logger.info(f"GUARDRAIL: User requested occupation outside recommendations: '{requested_occupation_name}'")
+
+        # Search for the occupation in taxonomy (optional - to personalize response)
+        found_occupation = await self._search_occupation_by_name(requested_occupation_name)
 
         # Import here to avoid circular dependency
         from app.agent.recommender_advisor_agent.prompts import build_context_block
@@ -161,56 +163,99 @@ class BasePhaseHandler(ABC):
         pref_vec_dict = state.preference_vector.model_dump() if state.preference_vector else {}
         conv_history = ConversationHistoryFormatter.format_to_string(context)
 
+        # Build recommendations summary
+        recs_summary = ""
+        if state.recommendations and state.recommendations.occupation_recommendations:
+            recs_summary = "\n".join([
+                f"- {occ.occupation} (match: {occ.confidence_score:.0%})"
+                for occ in state.recommendations.occupation_recommendations[:5]
+            ])
+
         context_block = build_context_block(
             skills=skills_list,
             preference_vector=pref_vec_dict,
-            recommendations_summary=recommendations_summary,
+            recommendations_summary=recs_summary,
             conversation_history=conv_history,
             country_of_user=state.country_of_user
         )
 
-        # Build prompt for handling out-of-list occupation
-        prompt = context_block + f"""
-## OUT-OF-LIST OCCUPATION REQUEST
-
-**USER REQUEST**: The user mentioned "{found_occupation.preferredLabel}" which is NOT in our top recommendations.
-
-**OCCUPATION FOUND IN DATABASE**:
+        # Build occupation info if found in taxonomy
+        occupation_info = ""
+        if found_occupation:
+            occupation_info = f"""
+**OCCUPATION INFO** (found in database):
 - Name: {found_occupation.preferredLabel}
-- Code: {found_occupation.code}
 - Description: {found_occupation.description or 'No description available'}
+"""
 
-**YOUR TASK**:
-The user wants to explore "{found_occupation.preferredLabel}", but it's not among our top recommendations based on their skills and preferences.
+        # Build detailed user profile summary
+        user_skills_summary = ", ".join(skills_list) if skills_list else "No specific skills identified"
 
+        # Build preferences summary
+        preferences_summary = ""
+        if pref_vec_dict:
+            key_prefs = []
+            for pref_key, pref_value in pref_vec_dict.items():
+                if isinstance(pref_value, (int, float)) and pref_value > 0.7:
+                    key_prefs.append(f"{pref_key}: {pref_value:.2f}")
+            preferences_summary = ", ".join(key_prefs) if key_prefs else "No strong preferences identified"
+        else:
+            preferences_summary = "No preferences data available"
+
+        prompt = context_block + f"""
+## GUARDRAIL: OFF-RECOMMENDATION REQUEST
+
+**USER REQUEST**: The user wants to explore "{requested_occupation_name}" which is NOT in our data-driven recommendations.
+
+{occupation_info}
+
+**USER PROFILE SUMMARY**:
+- **Current Skills**: {user_skills_summary}
+- **Key Preferences**: {preferences_summary}
+
+**RECOMMENDED OCCUPATIONS** (based on data-driven matching):
+{recs_summary}
+
+**YOUR TASK - COMPREHENSIVE COMPARISON & REDIRECT**:
 Generate a response that:
-1. **Acknowledges** you found this occupation in our database
-2. **Briefly explains** why it likely wasn't in the top recommendations:
-   - Check if their skills seem relevant (you have their skills list above)
-   - Consider if it matches their preferences
-   - You can infer general market demand if you have knowledge of this occupation
-   - Be honest but not discouraging
-3. **Offers a choice**:
-   - "Would you like to explore {found_occupation.preferredLabel} anyway?" (respect their autonomy)
-   - "Would you like to understand why I recommended these alternatives instead?"
-   - "There might be similar occupations in my recommendations - want to see if any overlap?"
+1. **Acknowledges their interest warmly** in {requested_occupation_name}
+2. **Provides honest, unbiased comparison**:
+   - Analyze if {requested_occupation_name} requires skills they DON'T currently have (skills mismatch)
+   - Analyze if {requested_occupation_name} aligns with their stated preferences (preferences mismatch)
+   - Compare {requested_occupation_name} with the recommended occupations above
+   - Be truthful - if there's a mismatch, explain it clearly without bias
+3. **Redirect to recommended options**: Encourage exploring the data-driven recommendations that DO match their profile
+4. **Keep door open for growth**: Acknowledge they can build toward {requested_occupation_name} in the future
+
+**ANALYSIS REQUIREMENTS**:
+- **Skills Mismatch**: If {requested_occupation_name} needs skills like [X, Y, Z] that aren't in their current skillset, SAY SO clearly
+  Example: "Being a DJ typically requires skills in music production, mixing, and event promotion - which are different from your current electrical and manual labor skills."
+
+- **Preferences Mismatch**: If {requested_occupation_name} doesn't align with their preferences (e.g., they value stability but DJ work is unstable), SAY SO clearly
+  Example: "DJ work tends to be gig-based and unpredictable, which might not align with your preference for job security (0.85)."
+
+- **Be Balanced**: Don't be discouraging, but don't be overly optimistic either. Give them the facts.
 
 **TONE GUIDELINES**:
-- Be conversational and natural, not robotic
-- Don't make them feel bad for asking about this occupation
-- Frame it as expanding their options, not shutting them down
-- Acknowledge their interest: "I can see why {found_occupation.preferredLabel} appeals to you"
-- Be truthful but supportive
-- Respect their autonomy - if they want to explore it, that's valid
+- Warm and understanding, never dismissive
+- Data-driven and honest - show the comparison
+- Supportive but realistic
+- Frame as "helping you make an informed choice"
+- 3-5 sentences (more detail than before)
+
+**EXAMPLE STRUCTURE**:
+"I hear you're interested in being a DJ. Being a DJ typically requires [skills they don't have], and the work tends to be [mismatch with preferences]. The careers I recommended - [occupation 1], [occupation 2] - align more closely with your current skills in [X, Y] and your preference for [Z]. These paths offer a stronger foundation for your immediate career growth. If DJ work is still appealing long-term, you could consider building those skills over time."
 
 **CRITICAL**:
-- Your response must be a JSON object matching ConversationResponse schema
-- Set `finished` to `false` - the conversation continues
-- Keep the message conversational (2-4 sentences)
+- Response must be JSON matching ConversationResponse schema
+- Set `finished` to `false` - conversation continues
+- Be comprehensive (3-5 sentences) - show the comparison clearly
+- Don't offer to explore the off-list occupation now
+- Do acknowledge it as a potential future path
 
 """ + get_json_response_instructions()
 
-        # Call LLM to generate contextual response
+        # Call LLM to generate guardrail response
         try:
             response, llm_stats = await self._conversation_caller.call_llm(
                 llm=self._conversation_llm,
@@ -223,15 +268,21 @@ Generate a response that:
             )
             all_llm_stats.extend(llm_stats)
 
-            self.logger.info(f"Generated LLM response for out-of-list occupation: {response.message[:100]}...")
+            self.logger.info(f"GUARDRAIL response generated: {response.message[:100]}...")
             return response, all_llm_stats
 
         except Exception as e:
-            self.logger.error(f"LLM call failed for out-of-list occupation: {e}")
-            # Fallback to basic acknowledgment
+            self.logger.error(f"LLM call failed for guardrail response: {e}")
+            # Fallback to comprehensive hardcoded guardrail
+            skills_str = ", ".join(skills_list[:3]) if skills_list else "your current skills"
+            recs_str = ""
+            if state.recommendations and state.recommendations.occupation_recommendations:
+                top_recs = state.recommendations.occupation_recommendations[:2]
+                recs_str = " and ".join([occ.occupation for occ in top_recs])
+
             return ConversationResponse(
-                reasoning=f"User mentioned {found_occupation.preferredLabel} (not in recommendations), LLM failed - using fallback",
-                message=f"I found {found_occupation.preferredLabel} in our database. While it wasn't among my top recommendations based on your profile, I'm happy to explore it with you if you're interested. Would you like to learn more about it, or hear why I suggested the alternatives instead?",
+                reasoning=f"GUARDRAIL: User requested {requested_occupation_name} (not in recommendations), LLM failed - using fallback",
+                message=f"I hear you're interested in {requested_occupation_name}. {requested_occupation_name} may require different skills and work conditions than what aligns with your current background in {skills_str}. The careers I recommended - {recs_str} - match more closely with your existing skills and preferences. These paths offer a stronger foundation for immediate opportunities. We can explore how the recommended options align with what you're looking for.",
                 finished=False
             ), all_llm_stats
 
