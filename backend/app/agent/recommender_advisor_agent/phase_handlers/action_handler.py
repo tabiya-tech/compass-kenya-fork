@@ -95,7 +95,32 @@ class ActionPhaseHandler(BasePhaseHandler):
 
             # Handle semantic intents with immediate delegation
 
-            if intent.intent == "discuss_next_steps":
+            # GUARDRAIL: Check for off-recommendation requests first
+            if intent.intent == "request_outside_recommendations":
+                self.logger.warning(f"GUARDRAIL TRIGGERED: User requested occupation outside recommendations: {intent.requested_occupation_name}")
+                # Use strict guardrail to redirect back to recommendations
+                return await self._handle_request_outside_recommendations(
+                    requested_occupation_name=intent.requested_occupation_name or "that occupation",
+                    user_input=user_input,
+                    state=state,
+                    context=context
+                )
+
+            elif intent.intent == "accept":
+                # User accepted/understood the previous explanation (likely post-guardrail)
+                # Continue with action planning for the ORIGINAL recommendation they were exploring
+                self.logger.info("User accepted explanation, continuing with action planning for current focus")
+                # Fall through to normal action planning flow below
+
+            elif intent.intent == "ask_question":
+                # User has questions (likely about the comparison or mismatch)
+                # Generate response that answers their question while staying in ACTION_PLANNING
+                self.logger.info("User has questions, generating response while staying in ACTION_PLANNING")
+                response, llm_stats = await self._generate_action_prompt(user_input, state, context)
+                all_llm_stats.extend(llm_stats)
+                return response, all_llm_stats
+
+            elif intent.intent == "discuss_next_steps":
                 # User wants to continue with action planning
                 # Stay in ACTION_PLANNING and continue normally
                 self.logger.info("User chose to discuss next steps, continuing in ACTION_PLANNING")
