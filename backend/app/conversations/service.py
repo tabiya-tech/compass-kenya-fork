@@ -128,6 +128,7 @@ class ConversationService(IConversationService):
         state.skills_explorer_agent_state.persona_type = persona_type
 
 
+
         await self._agent_director.execute(user_input=user_input)
         # get the context again after updating the history
         context = await self._conversation_memory_manager.get_conversation_context()
