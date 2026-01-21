@@ -17,6 +17,10 @@ import json
 from pathlib import Path
 from datetime import timedelta
 from typing import List, Optional
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Rich imports
 from rich.console import Console
@@ -143,6 +147,10 @@ def setup_logging(level=logging.INFO):
     logging.getLogger('httpcore').setLevel(logging.WARNING)
     logging.getLogger('google').setLevel(logging.WARNING)
     logging.getLogger('urllib3').setLevel(logging.WARNING)
+
+    # FORCE agent loggers to be visible
+    logging.getLogger('ExplorationPhaseHandler').setLevel(logging.DEBUG)
+    logging.getLogger('IntentClassifier').setLevel(logging.DEBUG)
 
 
 def print_header(text: str):
@@ -736,6 +744,7 @@ async def initialize_handlers():
         conversation_llm=llm,
         conversation_caller=conversation_caller,
         resistance_caller=resistance_caller,
+        intent_classifier=intent_classifier,
         occupation_search_service=occupation_search_service
     )
 

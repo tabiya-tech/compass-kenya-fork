@@ -228,8 +228,19 @@ class PresentPhaseHandler(BasePhaseHandler):
         """
         self.logger.info(f"Classified intent: {intent.intent} (reasoning: {intent.reasoning})")
 
+        # GUARDRAIL: Check for off-recommendation requests first
+        if intent.intent == "request_outside_recommendations":
+            self.logger.warning(f"GUARDRAIL TRIGGERED: User requested occupation outside recommendations: {intent.requested_occupation_name}")
+            # Use strict guardrail to redirect back to recommendations
+            return await self._handle_request_outside_recommendations(
+                requested_occupation_name=intent.requested_occupation_name or "that occupation",
+                user_input=user_input,
+                state=state,
+                context=context
+            )
+
         # Handle EXPLORE intent - user wants to learn more about a specific occupation
-        if intent.intent == "explore_occupation":
+        elif intent.intent == "explore_occupation":
             return await self._handle_explore_intent(intent, user_input, state, context)
 
         # Handle REJECT intent - user is rejecting recommendations

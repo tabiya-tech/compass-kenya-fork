@@ -49,16 +49,19 @@ class ConcernsPhaseHandler(BasePhaseHandler):
         conversation_llm: GeminiGenerativeLLM,
         conversation_caller: LLMCaller[ConversationResponse],
         resistance_caller: LLMCaller[ResistanceClassification],
+        intent_classifier=None,
         **kwargs
     ):
         """
         Initialize the concerns handler.
-        
+
         Args:
             resistance_caller: LLM caller for resistance classification
+            intent_classifier: Optional intent classifier for detecting non-concern intents
         """
         super().__init__(conversation_llm, conversation_caller, **kwargs)
         self._resistance_caller = resistance_caller
+        self._intent_classifier = intent_classifier
     
     async def handle(
         self,
@@ -71,7 +74,65 @@ class ConcernsPhaseHandler(BasePhaseHandler):
         """
         all_llm_stats: list[LLMStats] = []
 
-        # Classify the resistance type
+        # FIRST: Check if user is NOT expressing a concern, but rather requesting something else
+        # (e.g., "what if i want to become a boda guy?" - switching to different recommendation)
+        if self._intent_classifier:
+            intent, intent_stats = await self._intent_classifier.classify_intent(
+                user_input=user_input,
+                state=state,
+                context=context,
+                phase=ConversationPhase.ADDRESS_CONCERNS,
+                llm=self._conversation_llm,
+                logger=self.logger
+            )
+            all_llm_stats.extend(intent_stats)
+
+            if intent:
+                # GUARDRAIL: Check for off-recommendation requests
+                if intent.intent == "request_outside_recommendations":
+                    self.logger.warning(f"GUARDRAIL TRIGGERED in CONCERNS: User requested occupation outside recommendations: {intent.requested_occupation_name}")
+                    return await self._handle_request_outside_recommendations(
+                        requested_occupation_name=intent.requested_occupation_name or "that occupation",
+                        user_input=user_input,
+                        state=state,
+                        context=context
+                    )
+
+                # Handle user wanting to explore a different occupation FROM recommendations
+                if intent.intent == "explore_occupation" and (intent.target_recommendation_id or intent.target_occupation_index):
+                    self.logger.info(f"User wants to switch to different recommendation during concerns phase")
+                    # Transition to CAREER_EXPLORATION for the new occupation
+                    target_occ = None
+                    if intent.target_occupation_index and state.recommendations:
+                        idx = intent.target_occupation_index - 1
+                        occupations = state.recommendations.occupation_recommendations
+                        if 0 <= idx < len(occupations):
+                            target_occ = occupations[idx]
+                    elif intent.target_recommendation_id:
+                        target_occ = state.get_recommendation_by_id(intent.target_recommendation_id)
+
+                    if target_occ:
+                        state.current_focus_id = target_occ.uuid
+                        state.current_recommendation_type = "occupation"
+                        state.conversation_phase = ConversationPhase.CAREER_EXPLORATION
+
+                        return ConversationResponse(
+                            reasoning=f"User wants to explore {target_occ.occupation} instead, transitioning to CAREER_EXPLORATION",
+                            message=f"Okay, let's explore the {target_occ.occupation} option instead.",
+                            finished=False
+                        ), all_llm_stats
+
+                # If user accepted/agreed, move to action planning
+                if intent.intent == "accept":
+                    self.logger.info("User accepted/understood concern discussion, moving to ACTION_PLANNING")
+                    state.conversation_phase = ConversationPhase.ACTION_PLANNING
+                    return ConversationResponse(
+                        reasoning="User accepted/understood, transitioning to action planning",
+                        message="Great! Let's talk about next steps.",
+                        finished=False
+                    ), all_llm_stats
+
+        # SECOND: If no routing intent detected, classify the resistance type
         classification, llm_stats = await self._classify_resistance(user_input, context)
         all_llm_stats.extend(llm_stats)
 

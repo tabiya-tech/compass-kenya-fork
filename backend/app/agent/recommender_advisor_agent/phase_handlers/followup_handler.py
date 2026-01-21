@@ -69,10 +69,21 @@ class FollowupPhaseHandler(BasePhaseHandler):
             logger=self.logger
         )
         all_llm_stats.extend(llm_stats)
-        
+
+        # GUARDRAIL: Check for off-recommendation requests first
+        if intent.intent == "request_outside_recommendations":
+            self.logger.warning(f"GUARDRAIL TRIGGERED: User requested occupation outside recommendations: {intent.requested_occupation_name}")
+            # Use strict guardrail to redirect back to recommendations
+            return await self._handle_request_outside_recommendations(
+                requested_occupation_name=intent.requested_occupation_name or "that occupation",
+                user_input=user_input,
+                state=state,
+                context=context
+            )
+
         # Route based on intent
         next_phase = self._get_next_phase(intent, state)
-        
+
         if next_phase:
             state.conversation_phase = next_phase
             
