@@ -157,6 +157,7 @@ class RecommenderAdvisorAgent(Agent):
             conversation_llm=self._conversation_llm,
             conversation_caller=self._conversation_caller,
             resistance_caller=self._resistance_caller,
+            intent_classifier=self._intent_classifier,
             occupation_search_service=self._occupation_search_service,
             logger=self.logger
         )
