@@ -11,3 +11,7 @@ session_logs/
 
 # Generated offline optimization outputs
 offline_output/
+
+exports/
+evaluation_tests/test_output/
+evaluation_tests/golden_transcripts/output/
