@@ -148,10 +148,6 @@ def setup_logging(level=logging.INFO):
     logging.getLogger('google').setLevel(logging.WARNING)
     logging.getLogger('urllib3').setLevel(logging.WARNING)
 
-    # FORCE agent loggers to be visible
-    logging.getLogger('ExplorationPhaseHandler').setLevel(logging.DEBUG)
-    logging.getLogger('IntentClassifier').setLevel(logging.DEBUG)
-
 
 def print_header(text: str):
     """Print a formatted header."""
@@ -952,11 +948,6 @@ async def test_present_phase():
             stats_table.add_row("Latency", f"{total_latency:.2f}s")
 
             console.print(stats_table)
-
-        # Show metadata
-        if response.metadata:
-            print_section("Response Metadata")
-            console.print(json.dumps(response.metadata, indent=2))
 
         console.input("\n[dim]Press Enter to continue...[/]")
 
