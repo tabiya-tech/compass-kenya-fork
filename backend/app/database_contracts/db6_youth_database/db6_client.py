@@ -90,8 +90,8 @@ class DB6Client(ABC):
     **IMPLEMENTATION**: Epic 1 contractor will provide the concrete implementation.
     **USAGE**: Epic 2, Epic 3, and Epic 4 agents will use this interface.
 
-    Expected implementation location (by Epic 1 contractor):
-    - compass/backend/app/epic1/db6_youth_database/db6_client_impl.py
+    Expected implementation location:
+    - compass/backend/app/database_contracts/db6_youth_database/db6_client_impl.py
 
     The implementation should:
     - Store profiles in MongoDB (or agreed database)

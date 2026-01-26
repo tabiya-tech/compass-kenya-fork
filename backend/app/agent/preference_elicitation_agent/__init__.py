@@ -28,7 +28,7 @@ from app.agent.preference_elicitation_agent.preference_extractor import (
 
 # DB6 exports (Epic 1 dependency - optional)
 try:
-    from app.epic1.db6_youth_database import DB6Client, YouthProfile
+    from app.database_contracts.db6_youth_database import DB6Client, YouthProfile
 except ImportError:
     # Epic 1 not available - this is expected during development
     DB6Client = None

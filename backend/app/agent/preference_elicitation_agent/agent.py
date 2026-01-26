@@ -77,7 +77,7 @@ from common_libs.llm.models_utils import (
 
 # DB6 imports (Epic 1 dependency - optional)
 try:
-    from app.epic1.db6_youth_database.db6_client import DB6Client, YouthProfile
+    from app.database_contracts.db6_youth_database.db6_client import DB6Client, YouthProfile
 except ImportError:
     # Epic 1 not available yet, 
     DB6Client = None

@@ -233,7 +233,7 @@ class TestDB6Integration:
     @pytest.fixture
     def mock_db6_client(self):
         """Create a mock DB6 client for testing."""
-        from app.epic1.db6_youth_database.db6_client import StubDB6Client
+        from app.database_contracts.db6_youth_database.db6_client import StubDB6Client
         return StubDB6Client()
 
     @pytest.fixture
@@ -262,7 +262,7 @@ class TestDB6Integration:
     @pytest.fixture
     def sample_youth_profile(self, sample_experiences):
         """Create a sample youth profile for testing."""
-        from app.epic1.db6_youth_database.db6_client import YouthProfile
+        from app.database_contracts.db6_youth_database.db6_client import YouthProfile
         return YouthProfile(
             youth_id="youth-123",
             past_experiences=sample_experiences
@@ -276,7 +276,7 @@ class TestDB6ClientStub:
     async def test_save_and_get_youth_profile(self):
         """Test saving and retrieving a youth profile."""
         # GIVEN a stub DB6 client
-        from app.epic1.db6_youth_database.db6_client import StubDB6Client, YouthProfile
+        from app.database_contracts.db6_youth_database.db6_client import StubDB6Client, YouthProfile
         client = StubDB6Client()
 
         # AND a youth profile
@@ -297,7 +297,7 @@ class TestDB6ClientStub:
     async def test_get_nonexistent_profile(self):
         """Test getting a profile that doesn't exist."""
         # GIVEN a stub DB6 client
-        from app.epic1.db6_youth_database.db6_client import StubDB6Client
+        from app.database_contracts.db6_youth_database.db6_client import StubDB6Client
         client = StubDB6Client()
 
         # WHEN getting a non-existent profile
@@ -309,7 +309,7 @@ class TestDB6ClientStub:
     async def test_update_existing_profile(self):
         """Test updating an existing youth profile."""
         # GIVEN a stub DB6 client with an existing profile
-        from app.epic1.db6_youth_database.db6_client import StubDB6Client, YouthProfile
+        from app.database_contracts.db6_youth_database.db6_client import StubDB6Client, YouthProfile
         from app.agent.preference_elicitation_agent.types import PreferenceVector
         client = StubDB6Client()
 
@@ -330,7 +330,7 @@ class TestDB6ClientStub:
     async def test_delete_youth_profile(self):
         """Test deleting a youth profile."""
         # GIVEN a stub DB6 client with an existing profile
-        from app.epic1.db6_youth_database.db6_client import StubDB6Client, YouthProfile
+        from app.database_contracts.db6_youth_database.db6_client import StubDB6Client, YouthProfile
         client = StubDB6Client()
 
         given_profile = YouthProfile(youth_id="youth-123")
@@ -347,7 +347,7 @@ class TestDB6ClientStub:
     async def test_delete_nonexistent_profile(self):
         """Test deleting a profile that doesn't exist."""
         # GIVEN a stub DB6 client
-        from app.epic1.db6_youth_database.db6_client import StubDB6Client
+        from app.database_contracts.db6_youth_database.db6_client import StubDB6Client
         client = StubDB6Client()
 
         # WHEN deleting a non-existent profile
@@ -364,7 +364,7 @@ class TestAgentDB6Integration:
     async def test_get_experiences_from_snapshot_when_db6_disabled(self):
         """Test that agent uses snapshot when DB6 is disabled."""
         # GIVEN an agent with DB6 client
-        from app.epic1.db6_youth_database.db6_client import StubDB6Client
+        from app.database_contracts.db6_youth_database.db6_client import StubDB6Client
         from app.agent.experience import WorkType
         client = StubDB6Client()
         agent = PreferenceElicitationAgent(db6_client=client)
@@ -395,7 +395,7 @@ class TestAgentDB6Integration:
     async def test_get_experiences_from_db6_when_enabled(self):
         """Test that agent fetches from DB6 when enabled."""
         # GIVEN an agent with DB6 client containing a profile
-        from app.epic1.db6_youth_database.db6_client import StubDB6Client, YouthProfile
+        from app.database_contracts.db6_youth_database.db6_client import StubDB6Client, YouthProfile
         from app.agent.experience import WorkType
         client = StubDB6Client()
 
@@ -440,7 +440,7 @@ class TestAgentDB6Integration:
     async def test_fallback_to_snapshot_when_db6_empty(self):
         """Test fallback to snapshot when DB6 has no experiences."""
         # GIVEN an agent with DB6 client containing empty profile
-        from app.epic1.db6_youth_database.db6_client import StubDB6Client, YouthProfile
+        from app.database_contracts.db6_youth_database.db6_client import StubDB6Client, YouthProfile
         from app.agent.experience import WorkType
         client = StubDB6Client()
 
@@ -477,7 +477,7 @@ class TestAgentDB6Integration:
     async def test_fallback_to_snapshot_when_db6_profile_not_found(self):
         """Test fallback to snapshot when DB6 profile doesn't exist."""
         # GIVEN an agent with DB6 client but no profile
-        from app.epic1.db6_youth_database.db6_client import StubDB6Client
+        from app.database_contracts.db6_youth_database.db6_client import StubDB6Client
         from app.agent.experience import WorkType
         client = StubDB6Client()
         agent = PreferenceElicitationAgent(db6_client=client)
@@ -506,7 +506,7 @@ class TestAgentDB6Integration:
     async def test_fallback_to_snapshot_on_db6_error(self):
         """Test graceful fallback when DB6 throws error."""
         # GIVEN an agent with failing DB6 client
-        from app.epic1.db6_youth_database.db6_client import DB6Client
+        from app.database_contracts.db6_youth_database.db6_client import DB6Client
         from app.agent.experience import WorkType
 
         class FailingDB6Client(DB6Client):
@@ -565,7 +565,7 @@ class TestAgentDB6Integration:
     async def test_save_preference_vector_to_db6(self):
         """Test saving preference vector to DB6."""
         # GIVEN an agent with DB6 client
-        from app.epic1.db6_youth_database.db6_client import StubDB6Client
+        from app.database_contracts.db6_youth_database.db6_client import StubDB6Client
         client = StubDB6Client()
         agent = PreferenceElicitationAgent(db6_client=client)
 
@@ -599,7 +599,7 @@ class TestAgentDB6Integration:
     async def test_save_preference_vector_updates_existing_profile(self):
         """Test that saving preferences updates existing profile."""
         # GIVEN an agent with DB6 client containing existing profile
-        from app.epic1.db6_youth_database.db6_client import StubDB6Client, YouthProfile
+        from app.database_contracts.db6_youth_database.db6_client import StubDB6Client, YouthProfile
         client = StubDB6Client()
 
         existing_profile = YouthProfile(
@@ -641,7 +641,7 @@ class TestAgentDB6Integration:
     async def test_save_preference_vector_handles_db6_error(self):
         """Test that DB6 save errors don't crash the agent."""
         # GIVEN an agent with failing DB6 client
-        from app.epic1.db6_youth_database.db6_client import DB6Client
+        from app.database_contracts.db6_youth_database.db6_client import DB6Client
 
         class FailingSaveDB6Client(DB6Client):
             async def get_youth_profile(self, youth_id):
@@ -1020,7 +1020,7 @@ class TestPersonalizedVignettes:
 
     async def test_agent_extracts_context_on_init(self, sample_experiences):
         """Test that agent extracts user context during intro phase."""
-        from app.epic1.db6_youth_database.db6_client import StubDB6Client
+        from app.database_contracts.db6_youth_database.db6_client import StubDB6Client
 
         # Create agent with personalization enabled (default)
         agent = PreferenceElicitationAgent(

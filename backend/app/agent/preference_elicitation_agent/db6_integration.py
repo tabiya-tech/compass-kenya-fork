@@ -14,7 +14,7 @@ from app.agent.preference_elicitation_agent.types import PreferenceVector
 
 if TYPE_CHECKING:
     try:
-        from app.epic1.db6_youth_database.db6_client import DB6Client, YouthProfile
+        from app.database_contracts.db6_youth_database.db6_client import DB6Client, YouthProfile
     except ImportError:
         DB6Client = None
         YouthProfile = None
@@ -102,7 +102,7 @@ class DB6IntegrationManager:
                 )
             else:
                 # Create new profile
-                from app.epic1.db6_youth_database.db6_client import YouthProfile
+                from app.database_contracts.db6_youth_database.db6_client import YouthProfile
 
                 new_profile = YouthProfile(
                     youth_id=youth_id,

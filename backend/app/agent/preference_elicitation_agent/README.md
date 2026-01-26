@@ -245,8 +245,8 @@ agent = PreferenceElicitationAgent(
     vignettes_config_path="/path/to/vignettes.json"
 )
 
-# With DB6 integration (when Epic 1 ready)
-from app.epic1.db6_youth_database import DB6ClientImpl
+# With DB6 integration (when database contract is implemented)
+from app.database_contracts.db6_youth_database import DB6ClientImpl
 db6 = DB6ClientImpl()
 agent = PreferenceElicitationAgent(
     db6_client=db6,
@@ -291,10 +291,10 @@ The agent integrates with Epic 1's DB6 Youth Database using a **hybrid approach*
 
 ### Interface Contract
 
-**Epic 1 provides** (`app/epic1/db6_youth_database/`):
+**Database interface contracts** (`app/database_contracts/db6_youth_database/`):
 - `DB6Client` - Abstract interface for database operations
 - `YouthProfile` - Data model with experiences, skills, preferences, qualifications
-- Implementation TBD by Epic 1 contractor
+- Implementation provided by database layer
 
 **Epic 2 provides** (this agent):
 - `StubDB6Client` - In-memory implementation for development
@@ -346,7 +346,7 @@ state = PreferenceElicitationAgentState(
 
 **With Epic 1** (Production):
 ```python
-from app.epic1.db6_youth_database import DB6ClientImpl
+from app.database_contracts.db6_youth_database import DB6ClientImpl
 
 db6 = DB6ClientImpl()
 agent = PreferenceElicitationAgent(db6_client=db6)
@@ -561,7 +561,7 @@ def update_preference_vector(preference_vector, extraction_result):
 **Current State (Epic 2 Development):**
 ```python
 try:
-    from app.epic1.db6_youth_database.db6_client import DB6Client, YouthProfile
+    from app.database_contracts.db6_youth_database.db6_client import DB6Client, YouthProfile
 except ImportError:
     DB6Client = None  # Agent works without Epic 1
     YouthProfile = None
