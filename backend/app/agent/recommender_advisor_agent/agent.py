@@ -152,12 +152,22 @@ class RecommenderAdvisorAgent(Agent):
             logger=self.logger
         )
 
-        # Initialize concerns handler first (no dependencies)
+        # Initialize action handler first (needed by concerns handler)
+        self._action_handler = ActionPhaseHandler(
+            conversation_llm=self._conversation_llm,
+            conversation_caller=self._conversation_caller,
+            action_caller=self._action_caller,
+            intent_classifier=self._intent_classifier,
+            logger=self.logger
+        )
+
+        # Initialize concerns handler (depends on action_handler)
         self._concerns_handler = ConcernsPhaseHandler(
             conversation_llm=self._conversation_llm,
             conversation_caller=self._conversation_caller,
             resistance_caller=self._resistance_caller,
             intent_classifier=self._intent_classifier,
+            action_handler=self._action_handler,
             occupation_search_service=self._occupation_search_service,
             logger=self.logger
         )
@@ -189,21 +199,13 @@ class RecommenderAdvisorAgent(Agent):
         self._followup_handler = FollowupPhaseHandler(
             conversation_llm=self._conversation_llm,
             conversation_caller=self._conversation_caller,
-            intent_caller=self._intent_caller,
+            intent_classifier=self._intent_classifier,
             logger=self.logger
         )
         
         self._skills_pivot_handler = SkillsPivotPhaseHandler(
             conversation_llm=self._conversation_llm,
             conversation_caller=self._conversation_caller,
-            logger=self.logger
-        )
-        
-        self._action_handler = ActionPhaseHandler(
-            conversation_llm=self._conversation_llm,
-            conversation_caller=self._conversation_caller,
-            action_caller=self._action_caller,
-            intent_classifier=self._intent_classifier,
             logger=self.logger
         )
 
