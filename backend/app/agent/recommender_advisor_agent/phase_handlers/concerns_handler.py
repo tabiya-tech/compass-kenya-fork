@@ -36,20 +36,21 @@ from common_libs.llm.generative_models import GeminiGenerativeLLM
 class ConcernsPhaseHandler(BasePhaseHandler):
     """
     Handles the ADDRESS_CONCERNS phase.
-    
+
     Responsibilities:
     - Classify the type of resistance (belief, salience, effort, etc.)
     - Generate appropriate responses without manipulation
     - Track concerns raised and addressed
     - Know when to transition to action planning or pivot
     """
-    
+
     def __init__(
         self,
         conversation_llm: GeminiGenerativeLLM,
         conversation_caller: LLMCaller[ConversationResponse],
         resistance_caller: LLMCaller[ResistanceClassification],
         intent_classifier=None,
+        action_handler: 'ActionPhaseHandler' = None,
         **kwargs
     ):
         """
@@ -58,11 +59,13 @@ class ConcernsPhaseHandler(BasePhaseHandler):
         Args:
             resistance_caller: LLM caller for resistance classification
             intent_classifier: Optional intent classifier for detecting non-concern intents
+            action_handler: Optional action handler for immediate delegation
         """
         super().__init__(conversation_llm, conversation_caller, **kwargs)
         self._resistance_caller = resistance_caller
         self._intent_classifier = intent_classifier
-    
+        self._action_handler = action_handler
+
     async def handle(
         self,
         user_input: str,
@@ -90,7 +93,10 @@ class ConcernsPhaseHandler(BasePhaseHandler):
             if intent:
                 # GUARDRAIL: Check for off-recommendation requests
                 if intent.intent == "request_outside_recommendations":
-                    self.logger.warning(f"GUARDRAIL TRIGGERED in CONCERNS: User requested occupation outside recommendations: {intent.requested_occupation_name}")
+                    self.logger.warning(
+                        "GUARDRAIL TRIGGERED in CONCERNS: User requested occupation "
+                        "outside recommendations: %s", intent.requested_occupation_name
+                    )
                     return await self._handle_request_outside_recommendations(
                         requested_occupation_name=intent.requested_occupation_name or "that occupation",
                         user_input=user_input,
@@ -126,8 +132,15 @@ class ConcernsPhaseHandler(BasePhaseHandler):
                 if intent.intent == "accept":
                     self.logger.info("User accepted/understood concern discussion, moving to ACTION_PLANNING")
                     state.conversation_phase = ConversationPhase.ACTION_PLANNING
+
+                    # If we have an action handler, immediately invoke it for seamless transition
+                    if self._action_handler:
+                        self.logger.info("Immediately invoking action handler for seamless experience")
+                        return await self._action_handler.handle(user_input, state, context)
+
+                    # Fallback if no action handler available
                     return ConversationResponse(
-                        reasoning="User accepted/understood, transitioning to action planning",
+                        reasoning="User accepted/understood, transitioning to action planning (no handler available)",
                         message="Great! Let's talk about next steps.",
                         finished=False
                     ), all_llm_stats
@@ -154,11 +167,16 @@ class ConcernsPhaseHandler(BasePhaseHandler):
                 finished=False
             ), all_llm_stats
 
-        # If user shows acceptance, offer choices
+        # If user shows acceptance, transition to action planning
         if classification.resistance_type == "acceptance":
             state.conversation_phase = ConversationPhase.ACTION_PLANNING
 
-            # Get the occupation they're interested in
+            # If we have an action handler, immediately invoke it for seamless transition
+            if self._action_handler:
+                self.logger.info("User showed acceptance, immediately invoking action handler")
+                return await self._action_handler.handle(user_input, state, context)
+
+            # Fallback if no action handler available - offer choices
             occupation_name = "this path"
             if state.current_focus_id:
                 rec = state.get_recommendation_by_id(state.current_focus_id)
@@ -166,7 +184,7 @@ class ConcernsPhaseHandler(BasePhaseHandler):
                     occupation_name = rec.occupation
 
             return ConversationResponse(
-                reasoning="User showed acceptance, offering choices to move forward",
+                reasoning="User showed acceptance, transitioning to action planning (no handler available)",
                 message=f"Great! I'm glad that's helpful. What would you like to do next?\n\n"
                         f"1. **Discuss next steps** for {occupation_name} (how to apply, prepare, etc.)\n"
                         f"2. **Explore other career options** from your recommendations\n"
@@ -178,8 +196,15 @@ class ConcernsPhaseHandler(BasePhaseHandler):
         # If no resistance, transition to action planning
         if classification.resistance_type == "none":
             state.conversation_phase = ConversationPhase.ACTION_PLANNING
+
+            # If we have an action handler, immediately invoke it for seamless transition
+            if self._action_handler:
+                self.logger.info("No resistance detected, immediately invoking action handler")
+                return await self._action_handler.handle(user_input, state, context)
+
+            # Fallback if no action handler available
             return ConversationResponse(
-                reasoning="No resistance detected, moving to action planning",
+                reasoning="No resistance detected, transitioning to action planning (no handler available)",
                 message="Great! It sounds like this path interests you. Let's talk about next steps.",
                 finished=False
             ), all_llm_stats
@@ -203,7 +228,7 @@ class ConcernsPhaseHandler(BasePhaseHandler):
         all_llm_stats.extend(llm_stats)
 
         return response, all_llm_stats
-    
+
     async def _classify_resistance(
         self,
         user_input: str,
@@ -237,7 +262,7 @@ Always return a valid JSON object matching this exact schema.
             ),
             logger=self.logger
         )
-    
+
     async def _generate_response(
         self,
         classification: ResistanceClassification,
@@ -260,7 +285,12 @@ Always return a valid JSON object matching this exact schema.
         if state.current_focus_id:
             rec = state.get_recommendation_by_id(state.current_focus_id)
             if rec:
-                current_rec_summary = f"{rec.occupation if hasattr(rec, 'occupation') else rec.opportunity_title if hasattr(rec, 'opportunity_title') else 'Recommendation'}"
+                if hasattr(rec, 'occupation'):
+                    current_rec_summary = rec.occupation
+                elif hasattr(rec, 'opportunity_title'):
+                    current_rec_summary = rec.opportunity_title
+                else:
+                    current_rec_summary = 'Recommendation'
 
         context_block = build_context_block(
             skills=skills_list,
@@ -317,4 +347,4 @@ Always return a valid JSON object matching this exact schema.
             return state.skills_vector
 
         return []
-    
+
