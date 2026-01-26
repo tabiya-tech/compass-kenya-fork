@@ -36,11 +36,15 @@ poetry run python -c "import numpy, scipy; print('✓ Dependencies OK')"
 
 ### Running the Offline Optimization
 
+> **Note**: Generated output files are excluded from version control (see `backend/.gitignore`).
+> You must run this script to generate the vignettes needed by the preference elicitation agent.
+
 ```bash
 # Navigate to offline_optimization directory
 cd app/agent/preference_elicitation_agent/offline_optimization
 
 # Run the optimization pipeline (default config)
+# This generates files in backend/offline_output/
 poetry run python run_offline_optimization.py
 
 # Custom configuration

@@ -8,3 +8,6 @@ logs/
 feedback-reports/
 exports/session_logs/
 session_logs/
+
+# Generated offline optimization outputs
+offline_output/
