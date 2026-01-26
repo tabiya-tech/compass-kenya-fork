@@ -77,7 +77,7 @@ class ConcernsPhaseHandler(BasePhaseHandler):
         """
         all_llm_stats: list[LLMStats] = []
 
-        # FIRST: Check if user is NOT expressing a concern, but rather requesting something else
+        # FIRST: We wanna check if user is NOT expressing a concern, but rather requesting something else
         # (e.g., "what if i want to become a boda guy?" - switching to different recommendation)
         if self._intent_classifier:
             intent, intent_stats = await self._intent_classifier.classify_intent(
