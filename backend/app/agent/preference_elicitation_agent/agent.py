@@ -75,11 +75,11 @@ from common_libs.llm.models_utils import (
     JSON_GENERATION_CONFIG
 )
 
-# DB6 imports (Epic 1 dependency - optional)
+# Youth database imports (optional dependency)
 try:
     from app.database_contracts.db6_youth_database.db6_client import DB6Client, YouthProfile
 except ImportError:
-    # Epic 1 not available yet, 
+    # Youth database not available yet
     DB6Client = None
     YouthProfile = None
 
@@ -159,8 +159,8 @@ class PreferenceElicitationAgent(Agent):
 
         Args:
             vignettes_config_path: Optional path to vignettes config file (for static vignettes)
-            db6_client: Optional DB6 client for Epic 1 Youth Database integration.
-                       If None, agent works without DB6 (uses snapshot only).
+            db6_client: Optional youth database client for accessing youth profiles.
+                       If None, agent works without database integration (uses snapshot only).
                        If provided, agent can fetch fresh experiences and save preferences.
             use_personalized_vignettes: Whether to use personalized vignette generation (default: True)
             use_offline_with_personalization: Whether to use hybrid mode (offline D-optimal + LLM personalization)
@@ -172,7 +172,7 @@ class PreferenceElicitationAgent(Agent):
         )
 
         self._state: Optional[PreferenceElicitationAgentState] = None
-        self._db6_client = db6_client  # Optional Epic 1 dependency
+        self._db6_client = db6_client  # Optional youth database client
         self._user_context: Optional[UserContext] = None
 
         # Personalization logging
@@ -485,17 +485,17 @@ class PreferenceElicitationAgent(Agent):
 
     async def _save_preference_vector_to_db6(self) -> None:
         """
-        Save completed preference vector to DB6 (Epic 1 Youth Database).
+        Save completed preference vector to youth database.
 
         Called at the end of preference elicitation (WRAPUP phase).
-        If DB6 is not available, logs a warning but does not fail the conversation.
+        If youth database is not available, logs a warning but does not fail the conversation.
         """
         if not self._db6_client:
             self.logger.info("DB6 client not available, skipping preference vector save")
             return
 
         if not YouthProfile:
-            self.logger.warning("YouthProfile not available (Epic 1 not integrated), skipping save")
+            self.logger.warning("YouthProfile not available (database not integrated), skipping save")
             return
 
         try:
@@ -1242,7 +1242,7 @@ Keep it conversational, not interrogative.
         finished=True
         )
 
-        # Save preference vector to DB6 (Epic 1)
+        # Save preference vector to youth database
         await self._save_preference_vector_to_db6()
 
         self._state.conversation_phase = "COMPLETE"

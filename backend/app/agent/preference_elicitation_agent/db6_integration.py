@@ -1,10 +1,10 @@
 """
-DB6 (Youth Database) Integration for Preference Elicitation Agent.
+Youth Database Integration for Preference Elicitation Agent.
 
-Handles interactions with Epic 1's Youth Database including:
+Handles interactions with the youth profile database including:
 - Fetching youth profiles and experiences
 - Saving preference vectors
-- Fallback to local snapshot when DB6 unavailable
+- Fallback to local snapshot when database unavailable
 """
 
 import logging
@@ -22,17 +22,17 @@ if TYPE_CHECKING:
 
 class DB6IntegrationManager:
     """
-    Manages interactions with DB6 (Youth Database).
+    Manages interactions with the youth profile database.
 
-    Provides graceful fallback to local snapshot data when DB6 is unavailable.
+    Provides graceful fallback to local snapshot data when database is unavailable.
     """
 
     def __init__(self, db6_client: Optional['DB6Client'] = None):
         """
-        Initialize DB6 integration manager.
+        Initialize youth database integration manager.
 
         Args:
-            db6_client: Optional DB6 client (Epic 1 dependency)
+            db6_client: Optional youth database client
         """
         self.logger = logging.getLogger(self.__class__.__name__)
         self._db6_client = db6_client
@@ -43,24 +43,24 @@ class DB6IntegrationManager:
         snapshot_fallback: Optional[list[ExperienceEntity]] = None
     ) -> Optional[list[ExperienceEntity]]:
         """
-        Fetch experiences for a youth from DB6, with snapshot fallback.
+        Fetch experiences for a youth from database, with snapshot fallback.
 
         Args:
             youth_id: Youth identifier
-            snapshot_fallback: Local snapshot to use if DB6 unavailable
+            snapshot_fallback: Local snapshot to use if database unavailable
 
         Returns:
             List of ExperienceEntity objects or None
         """
-        # Try DB6 first if available
+        # Try database first if available
         if self._db6_client:
             try:
                 profile = await self._db6_client.get_youth_profile(youth_id)
                 if profile and profile.experiences:
-                    self.logger.info(f"Fetched {len(profile.experiences)} experiences from DB6")
+                    self.logger.info(f"Fetched {len(profile.experiences)} experiences from database")
                     return profile.experiences
             except Exception as e:
-                self.logger.warning(f"DB6 fetch failed, using snapshot: {e}")
+                self.logger.warning(f"Database fetch failed, using snapshot: {e}")
 
         # Fallback to snapshot
         if snapshot_fallback:
@@ -75,7 +75,7 @@ class DB6IntegrationManager:
         preference_vector: PreferenceVector
     ) -> bool:
         """
-        Save preference vector to DB6.
+        Save preference vector to youth database.
 
         Args:
             youth_id: Youth identifier
@@ -85,7 +85,7 @@ class DB6IntegrationManager:
             True if saved successfully, False otherwise
         """
         if not self._db6_client:
-            self.logger.debug("DB6 not configured, skipping save")
+            self.logger.debug("Youth database not configured, skipping save")
             return False
 
         try:
@@ -97,7 +97,7 @@ class DB6IntegrationManager:
                 profile.preference_vector = preference_vector
                 await self._db6_client.save_youth_profile(profile)
                 self.logger.info(
-                    f"Updated preference vector in DB6 for youth {youth_id} "
+                    f"Updated preference vector in database for youth {youth_id} "
                     f"(confidence: {preference_vector.confidence_score:.2f})"
                 )
             else:
@@ -115,5 +115,5 @@ class DB6IntegrationManager:
             return True
 
         except Exception as e:
-            self.logger.error(f"Failed to save preference vector to DB6: {e}")
+            self.logger.error(f"Failed to save preference vector to database: {e}")
             return False

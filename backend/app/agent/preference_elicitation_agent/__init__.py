@@ -1,8 +1,8 @@
 """
 Preference Elicitation Agent Package.
 
-This package contains the implementation of the Preference Elicitation Agent
-for Epic 2 of the Compass project.
+This package contains the implementation of the preference elicitation agent
+that gathers user job preferences through conversational vignettes.
 """
 
 from app.agent.preference_elicitation_agent.agent import PreferenceElicitationAgent
@@ -26,11 +26,11 @@ from app.agent.preference_elicitation_agent.preference_extractor import (
     PreferenceExtractionResult
 )
 
-# DB6 exports (Epic 1 dependency - optional)
+# Youth database exports (optional dependency)
 try:
     from app.database_contracts.db6_youth_database import DB6Client, YouthProfile
 except ImportError:
-    # Epic 1 not available - this is expected during development
+    # Youth database not available - this is expected during development
     DB6Client = None
     YouthProfile = None
 
@@ -51,7 +51,7 @@ __all__ = [
     "VignetteEngine",
     "PreferenceExtractor",
     "PreferenceExtractionResult",
-    # Epic 1 dependencies
+    # Youth database dependencies
     "DB6Client",
     "YouthProfile"
 ]

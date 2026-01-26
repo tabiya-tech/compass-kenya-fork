@@ -26,7 +26,7 @@ class PreferenceElicitationAgentState(BaseModel):
     session_id: int
     """Unique session identifier"""
 
-    # DB6 Integration (Hybrid Approach)
+    # Youth Database Integration (Hybrid Approach)
     initial_experiences_snapshot: Optional[list[ExperienceEntity]] = None
     """
     Snapshot of experiences at agent start (IMMUTABLE during conversation).
@@ -34,7 +34,7 @@ class PreferenceElicitationAgentState(BaseModel):
     Sources:
     - CV upload: Parsed experiences from uploaded CV
     - Prior Compass session: Copied from explored_experiences at agent start
-    - DB6: Fetched from youth profile if available
+    - Youth database: Fetched from youth profile if available
     - None: No prior experiences available (will use generic questions)
 
     This snapshot provides consistency during the conversation - it doesn't change
@@ -43,13 +43,13 @@ class PreferenceElicitationAgentState(BaseModel):
 
     use_db6_for_fresh_data: bool = False
     """
-    Enable fetching fresh experiences from DB6 (Epic 1's Youth Database).
+    Enable fetching fresh experiences from youth database.
 
-    Default: False (works without Epic 1 dependency, uses snapshot only)
-    Set to True: Fetch fresh data from DB6 if available, fall back to snapshot if not
+    Default: False (works without database dependency, uses snapshot only)
+    Set to True: Fetch fresh data from database if available, fall back to snapshot if not
 
-    This flag allows smooth transition from Epic 2 development (no Epic 1) to
-    production (with Epic 1 DB6 available).
+    This flag allows smooth transition from development (no database) to
+    production (with youth database available).
     """
 
     conversation_phase: Literal["INTRO", "EXPERIENCE_QUESTIONS", "BWS", "VIGNETTES", "FOLLOW_UP", "WRAPUP", "COMPLETE"] = "INTRO"

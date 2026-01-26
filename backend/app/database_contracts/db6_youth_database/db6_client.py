@@ -1,12 +1,12 @@
 """
 DB6 Youth Database Client Interface.
 
-This module defines the interface contract for Epic 1's DB6 Youth Database.
+This module defines the interface contract for the youth profile database.
 
 **IMPORTANT**: This is an INTERFACE/CONTRACT only.
-The actual implementation will be provided by the Epic 1 contractor.
+The actual implementation is provided by the database implementation layer.
 
-Epic 2 (Preference Elicitation Agent) uses this interface to:
+The preference elicitation agent uses this interface to:
 - Read youth profiles (to access prior experiences)
 - Write preference vectors (after preference elicitation completes)
 
@@ -28,12 +28,12 @@ from app.agent.preference_elicitation_agent.types import PreferenceVector
 
 class YouthProfile(BaseModel):
     """
-    Youth profile schema matching Epic 1 DB6 specification (deliverables PDF page 8).
+    Youth profile schema for the youth database.
 
     This model represents a complete youth profile containing:
-    - Past experiences (from Epic 4 skills elicitation)
-    - Skills vector (from Epic 4)
-    - Preference vector (from Epic 2)
+    - Past experiences (from skills elicitation process)
+    - Skills vector (from skills elicitation process)
+    - Preference vector (from preference elicitation process)
     - Qualifications (certificates, diplomas, degrees)
     - Interaction history (agent sessions, recommendations)
     """
@@ -47,18 +47,18 @@ class YouthProfile(BaseModel):
     past_experiences: list[ExperienceEntity] = Field(default_factory=list)
     """
     Past experiences linked to occupations and tasks.
-    Populated by Epic 4 skills elicitation agent.
+    Populated by skills elicitation agent.
     """
 
     skills_vector: Optional[dict[str, Any]] = None
     """
-    Skills vector from Epic 4.
-    Format TBD by Epic 1 contractor.
+    Skills vector from skills elicitation process.
+    Format defined by database implementation.
     """
 
     preference_vector: Optional[PreferenceVector] = None
     """
-    Preference vector from Epic 2 preference elicitation agent.
+    Preference vector from preference elicitation agent.
     """
 
     qualifications: list[dict[str, Any]] = Field(default_factory=list)
@@ -85,10 +85,10 @@ class YouthProfile(BaseModel):
 
 class DB6Client(ABC):
     """
-    Abstract interface for Epic 1's DB6 Youth Database client.
+    Abstract interface for the youth database client.
 
-    **IMPLEMENTATION**: Epic 1 contractor will provide the concrete implementation.
-    **USAGE**: Epic 2, Epic 3, and Epic 4 agents will use this interface.
+    **IMPLEMENTATION**: The database implementation layer provides the concrete implementation.
+    **USAGE**: Preference elicitation, recommendation, and skills elicitation agents use this interface.
 
     Expected implementation location:
     - compass/backend/app/database_contracts/db6_youth_database/db6_client_impl.py
@@ -100,9 +100,9 @@ class DB6Client(ABC):
     - Log errors appropriately
     - Follow existing error handling patterns
 
-    Example usage (Epic 2):
+    Example usage:
     ```python
-    db6_client = get_db6_client()  # Factory provided by Epic 1
+    db6_client = get_db6_client()  # Factory provided by database layer
 
     # Read profile
     profile = await db6_client.get_youth_profile("youth_123")
@@ -127,7 +127,7 @@ class DB6Client(ABC):
         Raises:
             Exception: If database save fails (implementation-specific)
         """
-        raise NotImplementedError("Epic 1 contractor must implement this method")
+        raise NotImplementedError("Database implementation must provide this method")
 
     @abstractmethod
     async def get_youth_profile(self, youth_id: str) -> Optional[YouthProfile]:
@@ -143,7 +143,7 @@ class DB6Client(ABC):
         Raises:
             Exception: If database query fails (implementation-specific)
         """
-        raise NotImplementedError("Epic 1 contractor must implement this method")
+        raise NotImplementedError("Database implementation must provide this method")
 
     @abstractmethod
     async def delete_youth_profile(self, youth_id: str) -> bool:
@@ -159,20 +159,20 @@ class DB6Client(ABC):
         Raises:
             Exception: If database delete fails (implementation-specific)
         """
-        raise NotImplementedError("Epic 1 contractor must implement this method")
+        raise NotImplementedError("Database implementation must provide this method")
 
 
-# Stub implementation for development/testing without Epic 1
+# Stub implementation for development/testing
 class StubDB6Client(DB6Client):
     """
-    Stub implementation for development and testing when Epic 1 DB6 is not available.
+    Stub implementation for development and testing when youth database is not available.
 
     This is a simple in-memory implementation that:
     - Stores profiles in a dictionary
-    - Provides the same interface as the real DB6 client
-    - Allows Epic 2/3/4 development to proceed without Epic 1 dependency
+    - Provides the same interface as the real youth database client
+    - Allows agent development to proceed without database dependency
 
-    **NOT FOR PRODUCTION USE** - This is replaced by Epic 1's implementation.
+    **NOT FOR PRODUCTION USE** - This is replaced by the actual database implementation.
     """
 
     def __init__(self):
