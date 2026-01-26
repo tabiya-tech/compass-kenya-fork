@@ -74,7 +74,9 @@ from app.vector_search.embeddings_model import GoogleEmbeddingService
 from app.server_dependencies.db_dependencies import CompassDBProvider
 from app.app_config import get_application_config
 from common_libs.environment_settings.constants import EmbeddingConfig
+from evaluation_tests.conversation_libs.search_service_fixtures import get_search_services
 import os
+import argparse
 
 # Install rich traceback handler
 install(show_locals=True)
@@ -84,6 +86,8 @@ console = Console()
 
 # Test configuration
 TEST_COUNTRY = Country.KENYA  # Configure country for localization testing
+STRICT_VECTOR_SEARCH = False # Default to False
+
 
 
 class SessionStats:
@@ -698,42 +702,27 @@ async def initialize_handlers():
     # Initialize IntentClassifier (centralized intent classification)
     intent_classifier = IntentClassifier(intent_caller=intent_caller)
 
-    # Initialize occupation search service for out-of-list occupation handling
-    # (manually create since we're outside FastAPI context)
-    occupation_search_service = None  # Default to None
+    # Initialize occupation search service using shared fixture logic
+    occupation_search_service = None
     try:
         console.print("[dim]Initializing occupation search service...[/]")
-        app_config = get_application_config()
-        embedding_config = EmbeddingConfig()
-
-        # Get database connection
-        taxonomy_db = await CompassDBProvider.get_taxonomy_db()
-
-        # Create embedding service
-        embedding_service = GoogleEmbeddingService(model_name=app_config.embeddings_model_name)
-
-        # Create occupation search config
-        occupation_vector_search_config = VectorSearchConfig(
-            collection_name=embedding_config.occupation_collection_name,
-            index_name=embedding_config.embedding_index,
-            embedding_key=embedding_config.embedding_key,
-        )
-
-        # Create occupation search service
-        occupation_search_service = OccupationSearchService(
-            taxonomy_db,
-            embedding_service,
-            occupation_vector_search_config,
-            app_config.taxonomy_model_id
-        )
+        
+        # Use shared service factory that handles ENV validation and DB connections
+        search_services = await get_search_services()
+        occupation_search_service = search_services.occupation_search_service
+        
         console.print(f"[green]✓ Occupation search service initialized (service={type(occupation_search_service).__name__})[/]")
     except Exception as e:
-        import traceback
-        console.print(f"[red]✗ Failed to initialize occupation search service:[/]")
-        console.print(f"[red]{e}[/]")
-        console.print(f"[dim]{traceback.format_exc()}[/]")
-        console.print("[yellow]  Out-of-list occupation search will be disabled[/]")
-        occupation_search_service = None
+        status_style = "red" if STRICT_VECTOR_SEARCH else "yellow"
+        console.print(f"[{status_style}]✗ Failed to initialize occupation search service:[/]")
+        console.print(f"[{status_style}]{e}[/]")
+        
+        if STRICT_VECTOR_SEARCH:
+             console.print("[bold red]STRICT MODE: Exiting because vector search failed.[/]")
+             sys.exit(1)
+        else:
+             console.print("[dim]Continuing without vector search (use --strict-vector-search to fail instead)[/]")
+             occupation_search_service = None
 
     # Initialize handlers in dependency order (handlers with no dependencies first)
     concerns_handler = ConcernsPhaseHandler(
@@ -807,6 +796,7 @@ async def initialize_handlers():
     action_handler._present_handler = present_handler
     action_handler._concerns_handler = concerns_handler
     action_handler._wrapup_handler = wrapup_handler
+    concerns_handler._action_handler = action_handler
 
     print_success("Phase handlers initialized!")
 
@@ -1839,4 +1829,14 @@ async def main():
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Interactive Recommender Agent Test')
+    parser.add_argument('--strict-vector-search', action='store_true', 
+                        help='Fail if vector search service cannot be initialized (default: False)')
+    args = parser.parse_args()
+    
+    STRICT_VECTOR_SEARCH = args.strict_vector_search
+    
+    if STRICT_VECTOR_SEARCH:
+        print_info("STRICT MODE: Vector search service required.")
+        
     asyncio.run(main())
