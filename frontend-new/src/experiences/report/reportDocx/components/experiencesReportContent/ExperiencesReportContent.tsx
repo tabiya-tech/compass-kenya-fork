@@ -5,10 +5,11 @@ import { ReportContent } from "src/experiences/report/reportContent";
 import { COLORS } from "src/experiences/report/util";
 
 export const generateExperience = (experience: Experience): Paragraph[] => {
+  const displayTitle = experience.normalized_experience_title ?? experience.experience_title;
   const titleParagraph = new Paragraph({
     children: [
       new TextRun({
-        text: experience.experience_title,
+        text: displayTitle,
         color: "#000000",
         bold: true,
         size: 24,

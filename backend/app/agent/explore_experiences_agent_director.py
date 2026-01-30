@@ -12,6 +12,7 @@ from app.agent.experience._experience_summarizer import ExperienceSummarizer
 from app.agent.experience.experience_entity import ExperienceEntity
 from app.agent.experience.upgrade_experience import get_editable_experience
 from app.agent.linking_and_ranking_pipeline import ExperiencePipeline, ExperiencePipelineConfig
+from app.agent.linking_and_ranking_pipeline.experience_pipeline import ClusterPipelineResult
 from app.agent.skill_explorer_agent import SkillsExplorerAgent
 from app.conversation_memory.conversation_memory_manager import ConversationMemoryManager
 from app.conversation_memory.conversation_memory_types import \
@@ -386,6 +387,13 @@ class ExploreExperiencesAgentDirector(Agent):
         )
         current_experience.top_skills = pipline_result.top_skills
         current_experience.remaining_skills = pipline_result.remaining_skills
+        normalized_title = _select_normalized_title(
+            original_title=current_experience.experience_title,
+            cluster_results=pipline_result.cluster_results
+        )
+        if normalized_title:
+            current_experience.normalized_experience_title = normalized_title
+        display_title = current_experience.normalized_experience_title or current_experience.experience_title
 
         # construct a summary of the skills
         skills_summary = "\n"
@@ -398,7 +406,7 @@ class ExploreExperiencesAgentDirector(Agent):
         # construct a summary of the experience
         current_experience.summary = await ExperienceSummarizer().execute(
             country_of_user=country_of_user,
-            experience_title=current_experience.experience_title,
+            experience_title=display_title,
             company=current_experience.company,
             work_type=current_experience.work_type,
             responsibilities=current_experience.responsibilities.responsibilities,
@@ -410,7 +418,7 @@ class ExploreExperiencesAgentDirector(Agent):
             message_for_user=t(
                 "messages",
                 "exploreExperiences.linkAndRank.summaryMessage",
-                experience_title=current_experience.experience_title,
+                experience_title=display_title,
                 summary=current_experience.summary,
                 top_count=len(current_experience.top_skills),
                 skills_summary=skills_summary,
@@ -421,3 +429,29 @@ class ExploreExperiencesAgentDirector(Agent):
             llm_stats=pipline_result.llm_stats
         )
         return agent_output
+
+
+def _select_normalized_title(*,
+                             original_title: str,
+                             cluster_results: list[ClusterPipelineResult]) -> str | None:
+    cleaned_original = (original_title or "").strip().lower()
+    candidates: list[str] = []
+
+    for cluster_result in cluster_results:
+        for title in cluster_result.contextual_titles:
+            cleaned = title.strip()
+            if cleaned:
+                candidates.append(cleaned)
+        for occupation_skill in cluster_result.esco_occupations:
+            label = occupation_skill.occupation.preferredLabel.strip()
+            if label:
+                candidates.append(label)
+
+    if not candidates:
+        return None
+
+    for candidate in candidates:
+        if candidate.lower() != cleaned_original:
+            return candidate
+
+    return candidates[0]

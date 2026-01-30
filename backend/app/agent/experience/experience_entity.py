@@ -65,6 +65,11 @@ class ExperienceEntity(BaseModel, Generic[SkillEntityT]):
     """
     Title of the experience as the user refers to it (e.g. "Crew Member")
     """
+    
+    normalized_experience_title: Optional[str] = None
+    """
+    Professionalized or normalized title for display (e.g. taxonomy-aligned job title).
+    """
 
     company: Optional[str] = None
     """
@@ -148,6 +153,7 @@ class ExperienceEntity(BaseModel, Generic[SkillEntityT]):
 
     def __init__(self, *,
                  experience_title: str,
+                 normalized_experience_title: Optional[str] = None,
                  company: Optional[str] = None,
                  location: Optional[str] = None,
                  timeline: Optional[Timeline] = None,
@@ -163,6 +169,7 @@ class ExperienceEntity(BaseModel, Generic[SkillEntityT]):
         super().__init__(
             uuid=uuid if uuid is not None else str(uuid4()),  # Generate a unique UUID for each instance
             experience_title=experience_title,
+            normalized_experience_title=normalized_experience_title,
             company=company,
             location=location,
             timeline=timeline,

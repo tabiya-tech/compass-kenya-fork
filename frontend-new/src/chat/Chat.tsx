@@ -21,7 +21,7 @@ import ChatMessageField from "./ChatMessageField/ChatMessageField";
 import { useNavigate } from "react-router-dom";
 import { routerPaths } from "src/app/routerPaths";
 import UserPreferencesStateService from "src/userPreferences/UserPreferencesStateService";
-import { ConversationMessage, ConversationMessageSender } from "./ChatService/ChatService.types";
+import { ConversationMessage, ConversationMessageSender, ConversationResponse } from "./ChatService/ChatService.types";
 import { Backdrop } from "src/theme/Backdrop/Backdrop";
 import ExperiencesDrawer from "src/experiences/experiencesDrawer/ExperiencesDrawer";
 import { DiveInPhase, Experience } from "src/experiences/experienceService/experiences.types";
@@ -29,7 +29,7 @@ import ExperienceService from "src/experiences/experienceService/experienceServi
 import InactiveBackdrop from "src/theme/Backdrop/InactiveBackdrop";
 import ConfirmModalDialog from "src/theme/confirmModalDialog/ConfirmModalDialog";
 import AuthenticationServiceFactory from "src/auth/services/Authentication.service.factory";
-import { ChatError } from "src/error/commonErrors";
+import { ChatError, MetricsError } from "src/error/commonErrors";
 import authenticationStateService from "src/auth/services/AuthenticationState.service";
 import { issueNewSession } from "./issueNewSession";
 import { ChatProvider } from "src/chat/ChatContext";
@@ -41,6 +41,9 @@ import { CONVERSATION_CONCLUSION_CHAT_MESSAGE_TYPE } from "./chatMessage/convers
 import { SkillsRankingService } from "src/features/skillsRanking/skillsRankingService/skillsRankingService";
 import { useSkillsRanking } from "src/features/skillsRanking/hooks/useSkillsRanking";
 import cvService from "src/CV/CVService/CVService";
+import MetricsService from "src/metrics/metricsService";
+import { EventType } from "src/metrics/types";
+import { getNetworkInformation } from "src/metrics/utils/getNetworkInformation";
 import {
   getCvUploadDisplayMessage,
   getUploadErrorMessage,
@@ -123,6 +126,7 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
   const [showRefreshConfirmDialog, setShowRefreshConfirmDialog] = React.useState<boolean>(false);
   const [exploredExperiencesNotification, setExploredExperiencesNotification] = useState<boolean>(false);
   const allowRefreshRef = useRef<boolean>(false);
+  const networkInfoSentRef = useRef<boolean>(false);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(
     UserPreferencesStateService.getInstance().getActiveSessionId()
   );
@@ -160,6 +164,24 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
 
   const { showSkillsRanking } = useSkillsRanking(addMessageToChat, removeMessageFromChat);
 
+  useEffect(() => {
+    if (!currentUserId || networkInfoSentRef.current) {
+      return;
+    }
+    try {
+      const networkInfo = getNetworkInformation();
+      MetricsService.getInstance().sendMetricsEvent({
+        event_type: EventType.NETWORK_INFORMATION,
+        user_id: currentUserId,
+        effective_connection_type: networkInfo.effectiveConnectionType,
+        connection_type: networkInfo.connectionType,
+      });
+      networkInfoSentRef.current = true;
+    } catch (error) {
+      console.error(new MetricsError("Failed to send network information metrics", error));
+    }
+  }, [currentUserId]);
+
   // Depending on the typing state, add or remove the typing message from the messages list
   const addOrRemoveTypingMessage = (userIsTyping: boolean) => {
     if (userIsTyping) {
@@ -179,6 +201,58 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
       setMessages((prevMessages) => prevMessages.filter((message) => !message.type.startsWith("typing-message-")));
     }
   };
+
+  const recordChatResponseMetrics = useCallback(
+    ({
+      sessionId,
+      userMessage,
+      response,
+      durationMs,
+      previousExploredExperiences,
+    }: {
+      sessionId: number;
+      userMessage: string;
+      response: ConversationResponse;
+      durationMs: number;
+      previousExploredExperiences: number;
+    }) => {
+      if (!currentUserId) {
+        console.error(new MetricsError("Unable to send chat timing metrics: user id is missing"));
+        return;
+      }
+
+      try {
+        const networkInfo = getNetworkInformation();
+        MetricsService.getInstance().sendMetricsEvent({
+          event_type: EventType.UI_INTERACTION,
+          user_id: currentUserId,
+          actions: ["chat_response_time"],
+          element_id: "chat-send-message",
+          timestamp: new Date().toISOString(),
+          relevant_experiments: {},
+          details: {
+            duration_ms: durationMs,
+            session_id: sessionId,
+            message_length: userMessage.length,
+            response_messages: response.messages.length,
+            conversation_completed: response.conversation_completed,
+            conversation_phase: response.current_phase?.phase,
+            conversation_phase_percent: response.current_phase?.percentage,
+            experiences_explored: response.experiences_explored,
+            experiences_explored_delta: response.experiences_explored - previousExploredExperiences,
+            network_effective_type: networkInfo.effectiveConnectionType,
+            network_connection_type: networkInfo.connectionType,
+            network_rtt_ms: networkInfo.rtt,
+            network_downlink_mbps: networkInfo.downlink,
+            network_save_data: networkInfo.saveData,
+          },
+        });
+      } catch (error) {
+        console.error(new MetricsError("Unable to send chat timing metrics", error));
+      }
+    },
+    [currentUserId]
+  );
 
   const timeUntilFeedbackNotification: number | null = useMemo(() => {
     // If there are no messages, we can't calculate the time
@@ -567,9 +641,21 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
         addMessageToChat(message);
       }
 
+      const startTimeMs = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
+      const previousExploredExperiences = exploredExperiences;
+
       try {
         // Send the user's message
         const response = await ChatService.getInstance().sendMessage(sessionId, userMessage);
+        const endTimeMs = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
+        const durationMs = Math.round(endTimeMs - startTimeMs);
+        recordChatResponseMetrics({
+          sessionId,
+          userMessage,
+          response,
+          durationMs,
+          previousExploredExperiences,
+        });
 
         setExploredExperiences(response.experiences_explored);
 
@@ -631,7 +717,7 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
         setAiIsTyping(false);
       }
     },
-    [addMessageToChat, exploredExperiences, fetchExperiences, activeSessionId, showSkillsRanking]
+    [addMessageToChat, exploredExperiences, fetchExperiences, activeSessionId, showSkillsRanking, recordChatResponseMetrics]
   );
 
   const initializeChat = useCallback(
