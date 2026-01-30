@@ -79,6 +79,11 @@ class ExperienceResponse(BaseModel):
     """
     Title of the experience as the user refers to it (e.g. "Crew Member")
     """
+    
+    normalized_experience_title: Optional[str] = None
+    """
+    Professionalized or normalized title for display.
+    """
 
     company: Optional[str] = None
     """
@@ -148,6 +153,7 @@ class ExperienceResponse(BaseModel):
         return ExperienceResponse(
             UUID=experience_entity.uuid,
             experience_title=experience_entity.experience_title,
+            normalized_experience_title=experience_entity.normalized_experience_title,
             company=experience_entity.company,
             location=experience_entity.location,
             timeline=experience_entity.timeline,

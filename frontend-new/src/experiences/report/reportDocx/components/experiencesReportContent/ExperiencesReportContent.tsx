@@ -9,13 +9,15 @@ export const generateExperience = (experience: Experience, reportConfig: ReportC
   const { experienceDetails } = reportConfig;
   const paragraphs: Paragraph[] = [];
 
+
+  const displayTitle = experience.normalized_experience_title ?? experience.experience_title;
   // Title
   if (experienceDetails.title) {
     paragraphs.push(
       new Paragraph({
         children: [
           new TextRun({
-            text: experience.experience_title,
+            text: displayTitle,
             color: "#000000",
             bold: true,
             size: 24,

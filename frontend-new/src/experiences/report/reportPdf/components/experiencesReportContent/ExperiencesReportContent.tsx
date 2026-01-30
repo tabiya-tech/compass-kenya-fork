@@ -48,8 +48,9 @@ const ExperiencesReportContent: React.FC<ExperienceProps> = ({ experience, repor
 
   // Determine if we should show title
   const showTitle = experienceDetails.title;
+  const displayTitle = experience.normalized_experience_title ?? experience.experience_title;
 
-  return (
+    return (
     <View style={styles.container} data-testid={DATA_TEST_ID.EXPERIENCES_CONTENT_REPORT_CONTAINER}>
       <View style={styles.contentColumn}>
         <View wrap={false}>
@@ -60,7 +61,7 @@ const ExperiencesReportContent: React.FC<ExperienceProps> = ({ experience, repor
               style={styles.experienceTitle}
               data-testid={DATA_TEST_ID.EXPERIENCES_CONTENT_REPORT_EXPERIENCE_TITLE}
             >
-              {experience.experience_title}
+              {displayTitle}
             </Text>
           )}
           {(showDateRange || showCompany || showLocation) && (

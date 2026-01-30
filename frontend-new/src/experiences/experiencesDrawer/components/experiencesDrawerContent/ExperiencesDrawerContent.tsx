@@ -131,6 +131,8 @@ const ExperiencesDrawerContent: React.FC<ExperienceProps> = ({ experience, onEdi
     setSelectedSkill(skill);
   };
 
+  const displayTitle = experience.normalized_experience_title ?? experience.experience_title;
+
   return (
     <Box
       display="flex"
@@ -145,8 +147,8 @@ const ExperiencesDrawerContent: React.FC<ExperienceProps> = ({ experience, onEdi
             fontWeight="bold"
             data-testid={DATA_TEST_ID.EXPERIENCES_DRAWER_CONTENT_OCCUPATION}
           >
-            {experience.experience_title ? (
-              experience.experience_title
+            {displayTitle ? (
+              displayTitle
             ) : (
               <i>{t("experiences.experiencesDrawer.components.experiencesDrawerContent.untitled")}</i>
             )}
