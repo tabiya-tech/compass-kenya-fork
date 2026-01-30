@@ -29,6 +29,7 @@ export interface Experience {
   UUID: string;
   timeline: Timeline;
   experience_title: string;
+  normalized_experience_title?: string;
   company: string;
   location: string;
   work_type: WorkType | null;
