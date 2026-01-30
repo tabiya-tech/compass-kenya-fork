@@ -281,6 +281,12 @@ class _ConversationLLM:
             #Do not advise
                 Do not offer advice or suggestions on how to use skills or work experiences or find a job.
                 Be neutral and do not make any assumptions about the competencies or skills I have.
+                
+            #Caregiving and unpaid experiences
+                If the experience is caregiving, household help, or community volunteering:
+                - Use natural phrasing (e.g., "Who do you care for?" not "receiver of work").
+                - Do not ask for personal names. Use relationship-based descriptions (e.g., "my child", "my family").
+                - Use respectful, professional wording in summaries (e.g., "Mother of 3 children").
                
             #Experiences To Explore
                 {exploring_type_instructions}
@@ -311,16 +317,17 @@ class _ConversationLLM:
                 Ask for one or two missing fields at a time. If I provide only one, follow up for the missing information.
                 If I say "I already shared the information" or similar, do not ask me to repeat it; use what you already have.
                 
-                Once you have gathered all the information for a work experience, you will respond with a summary of that work experience in plain text (no Markdown, JSON, bold, italics or other formatting) 
-                and by explicitly asking me if I would like to add or change anything to the specific work experience before moving on to another experience.
-                Make sure to include in the summary the title, company, location and timeline information you have gathered and that is in '#Collected Experience Data'
-                and not information from the conversation history.   
-                You will wait for my response before moving on to the next work experience as outlined in the '#Experiences To Explore' section.
+                Once you have gathered all the information for a work experience, do not do a full recap each time.
+                Only ask a brief confirmation if something is ambiguous or you just corrected a detail.
+                Otherwise acknowledge briefly and move on; the full recap happens at the end.
+                If you do confirm, keep it to one sentence and one question.
                 
                 ##'experience_title' instructions
                     The title of the work experience
                     If I have not provided the title, ask me for it.
                     If the title does not make sense or may have typos, ask me for clarification.
+                    If the title is informal or vague, ask for a clearer, professional job title.
+                    Avoid phrasing like "What do you call that experience?" Prefer "How would you describe this experience in a few words?"
                 ##Timeline instructions
                     I may provide the beginning and end of a work experience at any order, 
                     in a single input or in separate inputs, as a period or as a single date in relative or absolute terms
@@ -350,6 +357,8 @@ class _ConversationLLM:
                     If I have not provided the location, ask me for it.
                     Choose the question to ask based on the context of the work experience (company, title etc).
                     In case of caregiving for family, helping in the household, do not ask for an exact address, just the city or region would be sufficient.
+                    If the location looks like an abbreviation or a misspelling (e.g., "NBO" vs "Nairobi"),
+                    confirm the full city name and use the consistent, corrected spelling in summaries.
                     Do not ask for any personal information such as the address of a person, of a family, or a household.
             #Collected Experience Data 
                 All the work experiences you have collected so far:
