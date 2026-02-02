@@ -125,9 +125,10 @@ class WelcomeAgent(Agent):
 
         if self._state.is_first_encounter:
             self._state.is_first_encounter = False
+            self._state.user_started_discovery = True  # Auto-start for testing
             return AgentOutput(
                 message_for_user=await WelcomeAgent.get_first_encounter_message(locale),
-                finished=False,
+                finished=True,  # Auto-finish to skip to COUNSELING phase
                 agent_type=self.agent_type,
                 agent_response_time_in_sec=round(time.time() - agent_start_time, 2),
                 llm_stats=[]

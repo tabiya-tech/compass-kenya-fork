@@ -47,6 +47,8 @@ from app.agent.prompt_template.agent_prompt_template import (
     STD_AGENT_CHARACTER,
     STD_LANGUAGE_STYLE
 )
+from app.job_preferences.get_job_preferences_service import get_job_preferences_service
+from app.job_preferences.types import JobPreferences
 
 # Adaptive D-efficiency imports
 try:
@@ -532,6 +534,61 @@ class PreferenceElicitationAgent(Agent):
             # Don't fail the conversation - just log the error
             self.logger.error(f"Failed to save preference vector to DB6: {e}", exc_info=True)
 
+    async def _save_preference_vector_to_job_preferences(self) -> None:
+        """
+        Save completed preference vector to JobPreferences collection.
+
+        Called at the end of preference elicitation (WRAPUP phase).
+        This creates a denormalized copy for quick access by Epic 3 recommender.
+        """
+        try:
+            # Convert PreferenceVector to JobPreferences format
+            job_prefs = JobPreferences(
+                session_id=self._state.session_id,
+                # Core preference dimensions
+                financial_importance=self._state.preference_vector.financial_importance,
+                work_environment_importance=self._state.preference_vector.work_environment_importance,
+                career_advancement_importance=self._state.preference_vector.career_advancement_importance,
+                work_life_balance_importance=self._state.preference_vector.work_life_balance_importance,
+                job_security_importance=self._state.preference_vector.job_security_importance,
+                task_preference_importance=self._state.preference_vector.task_preference_importance,
+                social_impact_importance=self._state.preference_vector.social_impact_importance,
+                # Quality metadata
+                confidence_score=self._state.preference_vector.confidence_score,
+                n_vignettes_completed=self._state.preference_vector.n_vignettes_completed,
+                per_dimension_uncertainty=self._state.preference_vector.per_dimension_uncertainty,
+                # Bayesian metadata
+                posterior_mean=self._state.preference_vector.posterior_mean,
+                posterior_covariance_diagonal=self._state.preference_vector.posterior_covariance_diagonal,
+                fim_determinant=self._state.preference_vector.fim_determinant,
+                # Qualitative insights
+                decision_patterns=self._state.preference_vector.decision_patterns,
+                tradeoff_willingness=self._state.preference_vector.tradeoff_willingness,
+                values_signals=self._state.preference_vector.values_signals,
+                consistency_indicators=self._state.preference_vector.consistency_indicators,
+                extracted_constraints=self._state.preference_vector.extracted_constraints,
+                # Hard constraints (if extracted)
+                concrete_salary_min=self._state.preference_vector.extracted_constraints.get("minimum_salary"),
+                # Timestamp
+                last_updated=datetime.now(timezone.utc)
+            )
+
+            # Save to job_preferences collection
+            job_prefs_service = await get_job_preferences_service()
+            await job_prefs_service.create_or_update(
+                session_id=self._state.session_id,
+                preferences=job_prefs
+            )
+
+            self.logger.info(
+                f"Saved preference vector to JobPreferences for session {self._state.session_id} "
+                f"(confidence: {self._state.preference_vector.confidence_score:.2f})"
+            )
+
+        except Exception as e:
+            # Don't fail the conversation - just log the error
+            self.logger.error(f"Failed to save preference vector to JobPreferences: {e}", exc_info=True)
+
     async def _handle_bws_phase(
         self,
         user_input: str,
@@ -695,14 +752,14 @@ class PreferenceElicitationAgent(Agent):
             # This reduces perceived latency when transitioning to VIGNETTES phase
             asyncio.create_task(self._prewarm_next_vignette())
 
-            # Move to experience questions phase
-            self._state.conversation_phase = "EXPERIENCE_QUESTIONS"
+            # TEMPORARY FOR TESTING: Skip experience questions, go straight to vignettes
+            self._state.conversation_phase = "VIGNETTES"
 
             return response, []
 
-        # If user has responded, move to experience questions
-        self._state.conversation_phase = "EXPERIENCE_QUESTIONS"
-        return await self._handle_experience_questions_phase(user_input, context)
+        # TEMPORARY FOR TESTING: Skip experience questions, go straight to vignettes
+        self._state.conversation_phase = "VIGNETTES"
+        return await self._handle_vignettes_phase(user_input, context)
 
     async def _handle_experience_questions_phase(
         self,
@@ -1242,8 +1299,11 @@ Keep it conversational, not interrogative.
         finished=True
         )
 
-        # Save preference vector to youth database
+        # Save preference vector to youth database (DB6)
         await self._save_preference_vector_to_db6()
+
+        # Save preference vector to JobPreferences collection (denormalized copy)
+        await self._save_preference_vector_to_job_preferences()
 
         self._state.conversation_phase = "COMPLETE"
 
