@@ -16,7 +16,7 @@ class StoppingCriterion:
         self,
         min_vignettes: int = 4,
         max_vignettes: int = 12,
-        det_threshold: float = 1e2,
+        det_threshold: float = 1e4,  # Increased from 1e2 to allow more adaptive vignettes with information-rich offline D-optimal vignettes
         max_variance_threshold: float = 0.65  # Relaxed from 0.5: work_environment dimension converges slowly due to attribute aggregation
     ):
         """
@@ -25,7 +25,7 @@ class StoppingCriterion:
         Args:
             min_vignettes: Minimum number to show (safety)
             max_vignettes: Maximum number to show
-            det_threshold: Stop if det(FIM) > this
+            det_threshold: Stop if det(FIM) > this (1e4 allows ~8-10 adaptive vignettes)
             max_variance_threshold: Stop if max variance < this (relaxed to 0.65 to reduce average vignette count from 14+ to ~8-10)
         """
         self.min_vignettes = min_vignettes

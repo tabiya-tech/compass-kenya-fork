@@ -44,7 +44,7 @@ class AdaptiveConfig(BaseModel):
     )
 
     fim_det_threshold: float = Field(
-        default=1e2,
+        default=2000,  # Calibrated for D-optimal vignettes (allows 8-9 vignettes, balances info gain + UX)
         description="Stop if FIM determinant exceeds this"
     )
 
