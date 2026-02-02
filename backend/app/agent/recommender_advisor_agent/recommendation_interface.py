@@ -4,6 +4,7 @@ Recommendation Interface for the Recommender/Advisor Agent.
 Handles generating or loading recommendations from:
 1. Node2Vec algorithm (Jasmin's implementation)
 2. Stub recommendations for development
+3. Conversion from Jasmin's format to agent format
 
 Epic 3: Recommender Agent Implementation
 """
@@ -20,6 +21,165 @@ from app.agent.recommender_advisor_agent.types import (
 from app.agent.preference_elicitation_agent.types import PreferenceVector
 
 logger = logging.getLogger(__name__)
+
+
+# ========== SKILL GAP TO TRAINING MAPPING ==========
+# Maps skill labels from Node2Vec to concrete training courses
+# This bridges the gap between "learn skill X" and "take course Y at provider Z"
+
+SKILL_TO_TRAINING_MAP = {
+    # Electrical/Technical skills
+    "supervise correctional procedures": {
+        "training_title": "Law Enforcement and Corrections Training",
+        "provider": "Kenya Prisons Training College",
+        "cost": "KES 50,000-80,000",
+        "estimated_hours": 240,
+        "delivery_mode": "in_person",
+        "location": "Nairobi",
+    },
+    "teach housekeeping skills": {
+        "training_title": "Hospitality and Housekeeping Management",
+        "provider": "Utalii College / Kenya Coast Hotel Training Institute",
+        "cost": "KES 30,000-50,000",
+        "estimated_hours": 160,
+        "delivery_mode": "in_person",
+        "location": "Nairobi / Mombasa",
+    },
+    "enterprise risk management": {
+        "training_title": "Enterprise Risk Management Certification",
+        "provider": "Institute of Certified Public Accountants of Kenya (ICPAK)",
+        "cost": "KES 80,000-120,000",
+        "estimated_hours": 120,
+        "delivery_mode": "hybrid",
+        "location": "Nairobi / Online",
+    },
+    "control compliance of railway vehicles regulations": {
+        "training_title": "Transport Safety and Compliance Training",
+        "provider": "Kenya School of Government / NTSA",
+        "cost": "KES 25,000-40,000",
+        "estimated_hours": 80,
+        "delivery_mode": "in_person",
+        "location": "Nairobi",
+    },
+    "handle equipment while suspended": {
+        "training_title": "Industrial Rigging and Safety Certification",
+        "provider": "Directorate of Occupational Safety and Health Services (DOSHS)",
+        "cost": "KES 15,000-25,000",
+        "estimated_hours": 40,
+        "delivery_mode": "in_person",
+        "location": "Nairobi / Mombasa / Kisumu",
+    },
+    "lead police investigations": {
+        "training_title": "Criminal Investigation and Forensics",
+        "provider": "Kenya Police College",
+        "cost": "KES 60,000-100,000",
+        "estimated_hours": 200,
+        "delivery_mode": "in_person",
+        "location": "Nairobi",
+    },
+    # Programming/Tech skills
+    "python": {
+        "training_title": "Python for Data Science and Development",
+        "provider": "Moringa School / ALX Africa / Coursera",
+        "cost": "Free - KES 120,000 (depending on provider)",
+        "estimated_hours": 200,
+        "delivery_mode": "online",
+        "location": "Online / Nairobi / Mombasa",
+    },
+    "haskell": {
+        "training_title": "Functional Programming with Haskell",
+        "provider": "Online platforms (Coursera, edX)",
+        "cost": "Free - KES 15,000",
+        "estimated_hours": 80,
+        "delivery_mode": "online",
+        "location": "Online",
+    },
+    "git / version control": {
+        "training_title": "Git and Version Control for Developers",
+        "provider": "freeCodeCamp / Udemy / Moringa School",
+        "cost": "Free - KES 5,000",
+        "estimated_hours": 20,
+        "delivery_mode": "online",
+        "location": "Online",
+    },
+    "sql / database management": {
+        "training_title": "SQL and Database Management",
+        "provider": "Coursera / Udemy / Moringa School",
+        "cost": "Free - KES 30,000",
+        "estimated_hours": 60,
+        "delivery_mode": "online",
+        "location": "Online / Nairobi",
+    },
+    # Add more as needed...
+}
+
+
+def convert_skill_gaps_to_trainings(
+    skill_gaps: list[dict[str, Any]]
+) -> list[SkillsTrainingRecommendation]:
+    """
+    Convert Jasmin's skill gap recommendations to training course recommendations.
+
+    Jasmin provides: "learn skill X" with proximity scores and job unlock counts.
+    Agent wants: "take course Y at provider Z for $W".
+
+    This function bridges the gap by mapping skills to curated training courses.
+    For unmapped skills, it creates a generic training recommendation.
+
+    Args:
+        skill_gaps: List of skill gap dicts from Node2Vec output
+            Format: {skill_id, skill_label, proximity_score, job_unlock_count, combined_score, reasoning}
+
+    Returns:
+        List of SkillsTrainingRecommendation objects for agent use
+    """
+    trainings = []
+
+    for idx, gap in enumerate(skill_gaps):
+        skill_label = gap.get("skill_label", "").lower()
+        skill_id = gap.get("skill_id", "")
+        reasoning = gap.get("reasoning", f"Learning this skill would help unlock {gap.get('job_unlock_count', 0)} jobs.")
+
+        # Look up training data from map
+        training_data = SKILL_TO_TRAINING_MAP.get(skill_label)
+
+        if training_data:
+            # Create training recommendation from map
+            trainings.append(SkillsTrainingRecommendation(
+                uuid=f"training_{skill_id}",
+                originUuid=skill_id,
+                rank=idx + 1,
+                skill=gap.get("skill_label", "Unknown Skill"),
+                training_title=training_data["training_title"],
+                provider=training_data["provider"],
+                cost=training_data["cost"],
+                estimated_hours=training_data["estimated_hours"],
+                delivery_mode=training_data["delivery_mode"],
+                location=training_data.get("location"),
+                justification=reasoning,
+                target_occupations=[],  # Could be extracted from job_unlock_count
+                fills_gap_for=[]
+            ))
+        else:
+            # Fallback: Create generic training recommendation for unmapped skills
+            logger.debug(f"No training mapping for skill: {skill_label}")
+            trainings.append(SkillsTrainingRecommendation(
+                uuid=f"training_{skill_id}",
+                originUuid=skill_id,
+                rank=idx + 1,
+                skill=gap.get("skill_label", "Unknown Skill"),
+                training_title=f"Training in {gap.get('skill_label', 'this skill')}",
+                provider="Various training providers",
+                cost="Contact training providers for pricing",
+                estimated_hours=None,
+                delivery_mode=None,
+                location="Various locations",
+                justification=reasoning,
+                target_occupations=[],
+                fills_gap_for=[]
+            ))
+
+    return trainings
 
 # Node2Vec import (Jasmin's algorithm - optional)
 try:
@@ -57,31 +217,36 @@ class RecommendationInterface:
     ) -> Node2VecRecommendations:
         """
         Generate recommendations for a user.
-        
+
         Tries Node2Vec first, falls back to stubs if unavailable.
-        
+
         Args:
             youth_id: User/youth identifier
             preference_vector: Preference vector from Epic 2
             skills_vector: Skills vector from Epic 4
             bws_occupation_scores: BWS occupation ranking from Epic 2
-            
+
         Returns:
-            Node2VecRecommendations object
+            Node2VecRecommendations object (in agent format)
         """
         # Try Node2Vec client first
         if self._node2vec_client and NODE2VEC_AVAILABLE:
             try:
                 logger.info(f"Generating recommendations for {youth_id} via Node2Vec")
-                return await self._node2vec_client.generate_recommendations(
+                raw_output = await self._node2vec_client.generate_recommendations(
                     youth_id=youth_id,
                     preference_vector=preference_vector,
                     skills_vector=skills_vector,
                     bws_scores=bws_occupation_scores
                 )
+
+                # Convert Jasmin's format to agent format
+                logger.debug("Converting Node2Vec output to agent format")
+                return Node2VecRecommendations.from_jasmin_output(raw_output)
+
             except Exception as e:
                 logger.warning(f"Node2Vec failed, using stubs: {e}")
-        
+
         # Return stub recommendations for development
         logger.info(f"Using stub recommendations for {youth_id}")
         return self.get_stub_recommendations(youth_id)
