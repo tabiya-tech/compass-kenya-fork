@@ -277,18 +277,9 @@ class PreferenceElicitationAgentState(BaseModel):
         Args:
             response: VignetteResponse to add
         """
-        print(f"\n🔴 ADD_VIGNETTE_RESPONSE CALLED!")
-        print(f"   Adding: {response.vignette_id}")
-        print(f"   Before: completed_vignettes = {self.completed_vignettes}")
-
         self.vignette_responses.append(response)
         if response.vignette_id not in self.completed_vignettes:
             self.completed_vignettes.append(response.vignette_id)
-            print(f"   ✅ ADDED to list")
-        else:
-            print(f"   ⚠️  ALREADY IN LIST, skipped")
-
-        print(f"   After: completed_vignettes = {self.completed_vignettes}\n")
         self.current_vignette_id = None
 
     def increment_turn_count(self) -> None:

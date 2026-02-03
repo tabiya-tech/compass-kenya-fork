@@ -752,14 +752,14 @@ class PreferenceElicitationAgent(Agent):
             # This reduces perceived latency when transitioning to VIGNETTES phase
             asyncio.create_task(self._prewarm_next_vignette())
 
-            # TEMPORARY FOR TESTING: Skip experience questions, go straight to vignettes
-            self._state.conversation_phase = "VIGNETTES"
+            # Transition to experience questions phase
+            self._state.conversation_phase = "EXPERIENCE_QUESTIONS"
 
             return response, []
 
-        # TEMPORARY FOR TESTING: Skip experience questions, go straight to vignettes
-        self._state.conversation_phase = "VIGNETTES"
-        return await self._handle_vignettes_phase(user_input, context)
+        # Continue with experience questions
+        self._state.conversation_phase = "EXPERIENCE_QUESTIONS"
+        return await self._handle_experience_questions_phase(user_input, context)
 
     async def _handle_experience_questions_phase(
         self,
@@ -905,18 +905,12 @@ class PreferenceElicitationAgent(Agent):
         all_llm_stats: list[LLMStats] = []
 
         # If there's a current vignette, extract preferences from response
-        print(f"\n🔵 VIGNETTES PHASE - Checking for previous vignette")
-        print(f"   current_vignette_id: {self._state.current_vignette_id}")
-
         if self._state.current_vignette_id:
-            print(f"   ✅ current_vignette_id is set, fetching vignette...")
             vignette = self._vignette_engine.get_vignette_by_id(
                 self._state.current_vignette_id
             )
-            print(f"   Fetched vignette: {vignette.vignette_id if vignette else 'None'}")
 
             if vignette:
-                print(f"   🎯 EXTRACTING PREFERENCES for {vignette.vignette_id}")
                 # Build conversation history context for extraction
                 conversation_history = self._build_conversation_history_for_extraction(context)
 
@@ -1067,7 +1061,6 @@ class PreferenceElicitationAgent(Agent):
             return await self._handle_wrapup_phase(user_input, context)
 
         # Update state with new vignette
-        print(f"\n🟢 SETTING current_vignette_id = {next_vignette.vignette_id}\n")
         self._state.current_vignette_id = next_vignette.vignette_id
 
         # Log selected vignette details

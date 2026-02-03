@@ -106,7 +106,7 @@ class LLMRouter:
         # or if the model returns the "default agent" because it cannot classify the user input.
         self._default_agent_for_phase = {
             ConversationPhase.INTRO: AgentType.WELCOME_AGENT,
-            ConversationPhase.COUNSELING: AgentType.PREFERENCE_ELICITATION_AGENT,  # Changed for testing
+            ConversationPhase.COUNSELING: AgentType.EXPLORE_EXPERIENCES_AGENT,
             ConversationPhase.CHECKOUT: AgentType.FAREWELL_AGENT
         }
 
