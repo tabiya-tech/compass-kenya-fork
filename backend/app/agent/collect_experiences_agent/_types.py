@@ -23,6 +23,10 @@ class CollectedData(BaseModel):
     To Be Clarified if it should be used when comparing experiences. 
     """
     experience_title: Optional[str]
+    normalized_experience_title: Optional[str] = None
+    """
+    Professionalized or normalized title for display (e.g. taxonomy-aligned job title).
+    """
     company: Optional[str]
     location: Optional[str]
     start_date: Optional[str]
