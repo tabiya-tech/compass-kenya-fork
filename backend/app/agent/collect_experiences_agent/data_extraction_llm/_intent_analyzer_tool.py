@@ -229,7 +229,8 @@ _SYSTEM_INSTRUCTIONS = """
     - If '<User's Last Input>' mentions multiple new experiences, you will add ALL of them 
       to the 'collected_operations' field as separate entries with data_operation set to 'ADD'. 
     - Experiences that are in the '<Conversation History>' but not in the '<User's Last Input>' 
-      must be ignored and not added to the 'collected_operations' field.
+      should be ignored and not added to the 'collected_operations' field,
+      unless the user explicitly refers back to them (e.g., "the freelance work I mentioned earlier").
     - You can only capture experiences that the user has and not experiences they don't have, or they plan to have, 
       or they would like to have. Review the '<User's Last Input>' and use the '<Conversation History>' to understand 
       if the '<User's Last Input>' refers to an experience that the user has or not, or if it refers to something else. 
