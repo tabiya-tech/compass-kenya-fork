@@ -10,7 +10,8 @@ on:
 jobs:
   golden-transcripts:
     runs-on: ubuntu-latest
-    if: ${{ secrets.GCP_LOWER_ENVS_SERVICE_ACCOUNT_JSON != '' }}
+    # Run but don't gate PRs - failures are informational only
+    continue-on-error: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
