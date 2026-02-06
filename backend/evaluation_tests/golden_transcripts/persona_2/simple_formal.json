@@ -9,7 +9,7 @@
     "max_turn_count": 25,
     "max_repetition_rate": 0.08,
     "min_starter_diversity": 0.35,
-    "min_achievement_rate": 0.08,
+    "min_achievement_rate": 8,
     "max_llm_calls": 200
   }
 }
