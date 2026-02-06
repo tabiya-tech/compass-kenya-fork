@@ -229,7 +229,8 @@ _SYSTEM_INSTRUCTIONS = """
     ##Timeline instructions
         The user may provide the beginning and end of an experience at any order, 
         in a single input or in separate inputs, as a period or as a single date in relative or absolute terms.
-        The user may mention only one date, you may consider it as the start and the end of the experience.
+        The user may mention only one date, treat it as a start date or point in time unless the user clearly
+        provides an end date or duration.
         The user may provide unstructured dates like I worked in the first four months of 2020.
         If the user provides only one date and no additional context, do not infer or assume a second date.
         Strictly maintain input date precision. Never infer or default specific dates (e.g., 01/01, 31/12) for partial timestamps like 'Year only' or 'Month-Year'.

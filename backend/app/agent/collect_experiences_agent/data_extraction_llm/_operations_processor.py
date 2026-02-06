@@ -97,6 +97,9 @@ class OperationsProcessor:
 
             # Update fields if they are not None
             if _data.experience_title is not None:
+                if _data.experience_title != to_update.experience_title:
+                    # Reset normalized title to allow re-normalization on title changes.
+                    to_update.normalized_experience_title = None
                 to_update.experience_title = _data.experience_title
             if _data.paid_work is not None:
                 to_update.paid_work = _data.paid_work
@@ -179,6 +182,7 @@ class OperationsProcessor:
                 index=next_available_index + appended_add_count,
                 defined_at_turn_number=current_turn_index,
                 experience_title=add_payload.experience_title,
+                normalized_experience_title=add_payload.normalized_experience_title,
                 paid_work=add_payload.paid_work,
                 work_type=work_type_str,
                 start_date=add_payload.start_date,

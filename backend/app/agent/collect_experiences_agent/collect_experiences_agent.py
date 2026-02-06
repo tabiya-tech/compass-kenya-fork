@@ -1,3 +1,4 @@
+import asyncio
 from typing import Optional, Mapping, Any
 
 from pydantic import BaseModel, Field, field_serializer, field_validator
@@ -14,9 +15,13 @@ from app.agent.collect_experiences_agent._types import CollectedData
 from app.agent.experience.experience_entity import ExperienceEntity
 from app.agent.experience.timeline import Timeline
 from app.agent.experience.work_type import WorkType
+from app.agent.linking_and_ranking_pipeline import ExperiencePipelineConfig
+from app.agent.linking_and_ranking_pipeline.infer_occupation_tool import InferOccupationTool
 from app.conversation_memory.conversation_memory_types import ConversationContext
 from app.countries import Country
 from app.i18n.translation_service import t
+from app.vector_search.esco_entities import OccupationSkillEntity
+from app.vector_search.vector_search_dependencies import SearchServices
 
 
 def _deserialize_work_types(value: list[str] | list[WorkType]) -> list[WorkType]:
@@ -25,6 +30,32 @@ def _deserialize_work_types(value: list[str] | list[WorkType]) -> list[WorkType]
         # Otherwise, we return the value as is
         return [WorkType[x] if isinstance(x, str) else x for x in value]
     return value
+
+
+def _select_normalized_title(*,
+                             original_title: str,
+                             contextual_titles: list[str],
+                             esco_occupations: list[OccupationSkillEntity]) -> Optional[str]:
+    cleaned_original = (original_title or "").strip().lower()
+    candidates: list[str] = []
+
+    for title in contextual_titles:
+        cleaned = (title or "").strip()
+        if cleaned:
+            candidates.append(cleaned)
+    for occupation_skill in esco_occupations:
+        label = occupation_skill.occupation.preferredLabel.strip()
+        if label:
+            candidates.append(label)
+
+    if not candidates:
+        return None
+
+    for candidate in candidates:
+        if candidate.lower() != cleaned_original:
+            return candidate
+
+    return candidates[0]
 
 
 class CollectExperiencesAgentState(BaseModel):
@@ -137,11 +168,60 @@ class CollectExperiencesAgent(Agent):
     This agent converses with user and collects basic information about their work experiences.
     """
 
-    def __init__(self):
+    def __init__(self,
+                 *,
+                 search_services: SearchServices | None = None,
+                 experience_pipeline_config: ExperiencePipelineConfig | None = None):
         super().__init__(agent_type=AgentType.COLLECT_EXPERIENCES_AGENT,
                          is_responsible_for_conversation_history=False)
         self._experiences: list[ExperienceEntity] = []
         self._state: Optional[CollectExperiencesAgentState] = None
+        self._search_services = search_services
+        self._experience_pipeline_config = experience_pipeline_config
+
+    async def _normalize_experience_titles(self, *, collected_data: list[CollectedData]):
+        if not self._search_services or self._state is None:
+            return
+
+        config = self._experience_pipeline_config or ExperiencePipelineConfig()
+        infer_tool = InferOccupationTool(
+            occupation_skill_search_service=self._search_services.occupation_skill_search_service,
+            occupation_search_service=self._search_services.occupation_search_service
+        )
+
+        targets: list[CollectedData] = []
+        tasks = []
+        for elem in collected_data:
+            if not elem.experience_title or elem.normalized_experience_title:
+                continue
+            targets.append(elem)
+            tasks.append(infer_tool.execute(
+                experience_title=elem.experience_title,
+                company=elem.company,
+                work_type=WorkType.from_string_key(elem.work_type),
+                responsibilities=[],
+                country_of_interest=self._state.country_of_user,
+                number_of_titles=config.number_of_occupation_alt_titles,
+                top_k=config.number_of_occupations_per_cluster,
+                top_p=config.number_of_occupations_candidates_per_title
+            ))
+
+        if not tasks:
+            return
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for elem, result in zip(targets, results):
+            if isinstance(result, Exception):
+                self.logger.warning("Failed to infer normalized title for '%s': %s",
+                                    elem.experience_title, result)
+                continue
+            normalized_title = _select_normalized_title(
+                original_title=elem.experience_title,
+                contextual_titles=result.contextual_titles,
+                esco_occupations=result.esco_occupations
+            )
+            if normalized_title:
+                elem.normalized_experience_title = normalized_title
 
     def set_state(self, state: CollectExperiencesAgentState):
         """
@@ -170,6 +250,11 @@ class CollectExperiencesAgent(Agent):
             last_referenced_experience_index, data_extraction_llm_stats = await data_extraction_llm.execute(user_input=user_input,
                                                                                                             context=context,
                                                                                                             collected_experience_data_so_far=collected_data)
+        await self._normalize_experience_titles(collected_data=collected_data)
+        # TODO: Keep track of the last_referenced_experience_index and if it has changed it means that the user has
+        #   provided a new experience, we need to handle this as
+        #   a) if the user has not finished with the previous one we should ask them to complete it first
+        #   b) the model may have made a mistake interpreting the user input as we need to clarify
         conversation_llm = _ConversationLLM()
         exploring_type = self._state.unexplored_types[0] if len(self._state.unexplored_types) > 0 else None
 
@@ -283,6 +368,7 @@ class CollectExperiencesAgent(Agent):
                 entity = ExperienceEntity(
                     uuid=elem.uuid if elem.uuid else None,
                     experience_title=elem.experience_title if elem.experience_title else '',
+                    normalized_experience_title=elem.normalized_experience_title,
                     company=elem.company,
                     location=elem.location,
                     timeline=Timeline(start=elem.start_date, end=elem.end_date),
