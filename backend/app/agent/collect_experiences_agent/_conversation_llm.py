@@ -50,7 +50,10 @@ def _get_incomplete_experiences_instructions(collected_data: list[CollectedData]
     incomplete_experiences_list = []
     for i, (index, experience, missing_fields) in enumerate(incomplete_experiences, 1):
         missing_fields_str = ", ".join(missing_fields)
-        incomplete_experiences_list.append(f"{i}. Experience #{index + 1}: \"{experience.experience_title}\" - Missing: {missing_fields_str}")
+        display_title = experience.normalized_experience_title or experience.experience_title
+        incomplete_experiences_list.append(
+            f"{i}. Experience #{index + 1}: \"{display_title}\" - Missing: {missing_fields_str}"
+        )
     
     incomplete_experiences_text = "\n".join(incomplete_experiences_list)
     
@@ -260,14 +263,22 @@ class _ConversationLLM:
         if llm_response.text.find("<END_OF_CONVERSATION>") != -1:
             if llm_response.text != "<END_OF_CONVERSATION>":
                 logger.warning("The response contains '<END_OF_CONVERSATION>' and additional text: %s", llm_response.text)
+
+            pre_token_text, _, _ = llm_response.text.partition("<END_OF_CONVERSATION>")
+            pre_token_text = pre_token_text.strip()
+            if pre_token_text:
+                llm_response.text = pre_token_text
+            else:
+                llm_response.text = t("messages", "collectExperiences.finalMessage")
+
+            exploring_type_finished = False
             if len(unexplored_types) > 0:
                 penalty = get_penalty(conversation_prematurely_ended_penalty_level)
                 error = ValueError(f"LLM response contains '<END_OF_CONVERSATION>' but there are unexplored types: {unexplored_types}")
                 logger.error(error)
-            
-            llm_response.text = t("messages", "collectExperiences.finalMessage")
-            exploring_type_finished = False
-            finished = True
+                finished = False
+            else:
+                finished = True
 
         return ConversationLLMAgentOutput(
             message_for_user=llm_response.text,
@@ -763,8 +774,9 @@ def _get_summary_of_experiences(collected_data: list[CollectedData]) -> str:
     if len(collected_data) == 0:
         return "• No work experiences identified so far"
     for experience in collected_data:
+        display_title = experience.normalized_experience_title or experience.experience_title
         summary += "• " + ExperienceEntity.get_structured_summary(
-            experience_title=experience.experience_title or "",
+            experience_title=display_title or "",
             location=experience.location,
             work_type=experience.work_type,
             start_date=experience.start_date,

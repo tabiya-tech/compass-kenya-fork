@@ -356,7 +356,10 @@ class ExploreExperiencesAgentDirector(Agent):
         self._search_services = search_services
         self._conversation_manager = conversation_manager
         self._state: ExploreExperiencesAgentDirectorState | None = None
-        self._collect_experiences_agent = CollectExperiencesAgent()
+        self._collect_experiences_agent = CollectExperiencesAgent(
+            search_services=search_services,
+            experience_pipeline_config=experience_pipeline_config
+        )
         self._exploring_skills_agent = SkillsExplorerAgent()
         self._experience_pipeline_config = experience_pipeline_config
 
