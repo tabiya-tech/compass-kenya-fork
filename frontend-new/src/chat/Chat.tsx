@@ -717,7 +717,14 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
         setAiIsTyping(false);
       }
     },
-    [addMessageToChat, exploredExperiences, fetchExperiences, activeSessionId, showSkillsRanking, recordChatResponseMetrics]
+    [
+      addMessageToChat,
+      exploredExperiences,
+      fetchExperiences,
+      activeSessionId,
+      showSkillsRanking,
+      recordChatResponseMetrics,
+    ]
   );
 
   const initializeChat = useCallback(
