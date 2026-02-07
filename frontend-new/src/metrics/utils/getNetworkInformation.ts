@@ -42,9 +42,7 @@ export const getNetworkInformation = (): NetworkInformation => {
     return { effectiveConnectionType: "UNKNOWN", connectionType: 0 };
   }
 
-  const effectiveConnectionType = connection.effectiveType
-    ? connection.effectiveType.toUpperCase()
-    : "UNKNOWN";
+  const effectiveConnectionType = connection.effectiveType ? connection.effectiveType.toUpperCase() : "UNKNOWN";
   const typeValue = connection.type ? connection.type.toLowerCase() : "unknown";
   const connectionType = CONNECTION_TYPE_MAP[typeValue] ?? 0;
 
