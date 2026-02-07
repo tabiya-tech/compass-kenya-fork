@@ -99,12 +99,12 @@ class LLMCaller(Generic[RESPONSE_T]):
             # Set LLM duration in context for observability logging
             duration_ms = round((llm_end_time - llm_start_time) * 1000, 2)
             llm_call_duration_ms_ctx_var.set(duration_ms)
-            logger.info("LLM call completed")
-            
+
             response_text = llm_response.text
             try:
                 model_response = extract_json(response_text, self._model_response_type)
                 success = True
+                logger.info("LLM call completed")
             except ExtractJSONError as e:
                 log_message = f"Attempt {attempt_count} failed to extract JSON caused by: {e}"
                 llm_stats.error = log_message

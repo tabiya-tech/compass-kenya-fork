@@ -213,13 +213,16 @@ class _ConversationLLM:
             TURN FLOW:
                 1. Typical day and key responsibilities
                 2. Achievements or challenges (REQUIRED before ending)
-                3. Tasks NOT part of my role, or: {get_question_c}
+                3. Ask ONE of the following (do not combine them):
+                   - Tasks NOT part of my role
+                   - {get_question_c}
                 4. Follow-up clarification if needed, then end
             If the target is 3 turns, you may skip step 4 unless it is needed for clarification.
             
             RULES:
             - Skip topics I've already covered in detail
             - Combine related questions when natural
+            - Do not ask two separate questions in the same sentence
             - End when categories 1-3 are covered or I have nothing more to share
             
             Questions asked so far:

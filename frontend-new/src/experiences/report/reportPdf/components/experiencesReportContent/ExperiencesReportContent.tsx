@@ -26,6 +26,7 @@ export const capitalizeFirstLetter = (string: string): string => {
 };
 
 const ExperiencesReportContent: React.FC<ExperienceProps> = ({ experience }) => {
+  const displayTitle = experience.normalized_experience_title ?? experience.experience_title;
   return (
     <View style={styles.container} data-testid={DATA_TEST_ID.EXPERIENCES_CONTENT_REPORT_CONTAINER}>
       <View style={styles.contentColumn}>
@@ -36,7 +37,7 @@ const ExperiencesReportContent: React.FC<ExperienceProps> = ({ experience }) => 
             style={styles.experienceTitle}
             data-testid={DATA_TEST_ID.EXPERIENCES_CONTENT_REPORT_EXPERIENCE_TITLE}
           >
-            {experience.experience_title}
+            {displayTitle}
           </Text>
           <View style={styles.experienceInfo} data-testid={DATA_TEST_ID.EXPERIENCES_CONTENT_REPORT_EXPERIENCE_INFO}>
             <Text x={0} y={0} data-testid={DATA_TEST_ID.EXPERIENCES_CONTENT_REPORT_DATE}>

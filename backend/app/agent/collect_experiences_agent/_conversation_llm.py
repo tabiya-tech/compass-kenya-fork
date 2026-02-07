@@ -51,7 +51,10 @@ def _get_incomplete_experiences_instructions(collected_data: list[CollectedData]
     incomplete_experiences_list = []
     for i, (index, experience, missing_fields) in enumerate(incomplete_experiences, 1):
         missing_fields_str = ", ".join(missing_fields)
-        incomplete_experiences_list.append(f"{i}. Experience #{index + 1}: \"{experience.experience_title}\" - Missing: {missing_fields_str}")
+        display_title = experience.normalized_experience_title or experience.experience_title
+        incomplete_experiences_list.append(
+            f"{i}. Experience #{index + 1}: \"{display_title}\" - Missing: {missing_fields_str}"
+        )
     
     incomplete_experiences_text = "\n".join(incomplete_experiences_list)
     
@@ -244,12 +247,45 @@ class _ConversationLLM:
                 agent_response_time_in_sec=round(llm_end_time - llm_start_time, 2),
                 llm_stats=[llm_stats]), get_penalty(llm_output_empty_penalty_level), ValueError("Conversation LLM response is empty")
 
+        penalty: float = 0
+        error: BaseException | None = None
+
+        # Test if the response is the same as the previous two
+        if llm_response.text.find("<END_OF_WORKTYPE>") != -1:
+            # We finished a work type (and it is not the last one) we need to move to the next one
+            if llm_response.text != "<END_OF_WORKTYPE>":
+                logger.warning("The response contains '<END_OF_WORKTYPE>' and additional text: %s", llm_response.text)
+            exploring_type_finished = True
+            finished = False
+            llm_response.text = t("messages", "collectExperiences.moveToOtherExperiences")
+
+        if llm_response.text.find("<END_OF_CONVERSATION>") != -1:
+            if llm_response.text != "<END_OF_CONVERSATION>":
+                logger.warning("The response contains '<END_OF_CONVERSATION>' and additional text: %s", llm_response.text)
+
+            pre_token_text, _, _ = llm_response.text.partition("<END_OF_CONVERSATION>")
+            pre_token_text = pre_token_text.strip()
+            if pre_token_text:
+                llm_response.text = pre_token_text
+            else:
+                llm_response.text = t("messages", "collectExperiences.finalMessage")
+
+            exploring_type_finished = False
+            if len(unexplored_types) > 0:
+                penalty = get_penalty(conversation_prematurely_ended_penalty_level)
+                error = ValueError(f"LLM response contains '<END_OF_CONVERSATION>' but there are unexplored types: {unexplored_types}")
+                logger.error(error)
+                finished = False
+            else:
+                finished = True
+
         return ConversationLLMAgentOutput(
             message_for_user=llm_response.text,
-            finished=False,
+            exploring_type_finished=exploring_type_finished,
+            finished=finished,
             agent_type=AgentType.COLLECT_EXPERIENCES_AGENT,
             agent_response_time_in_sec=round(llm_end_time - llm_start_time, 2),
-            llm_stats=[llm_stats]), 0, None
+            llm_stats=[llm_stats]), penalty, error
 
     @staticmethod
     def _get_system_instructions(*,
@@ -281,6 +317,12 @@ class _ConversationLLM:
             #Do not advise
                 Do not offer advice or suggestions on how to use skills or work experiences or find a job.
                 Be neutral and do not make any assumptions about the competencies or skills I have.
+                
+            #Caregiving and unpaid experiences
+                If the experience is caregiving, household help, or community volunteering:
+                - Use natural phrasing (e.g., "Who do you care for?" not "receiver of work").
+                - Do not ask for personal names. Use relationship-based descriptions (e.g., "my child", "my family").
+                - Use respectful, professional wording in summaries (e.g., "Mother of 3 children").
                
             #Experiences To Explore
                 {exploring_type_instructions}
@@ -311,16 +353,17 @@ class _ConversationLLM:
                 Ask for one or two missing fields at a time. If I provide only one, follow up for the missing information.
                 If I say "I already shared the information" or similar, do not ask me to repeat it; use what you already have.
                 
-                Once you have gathered all the information for a work experience, you will respond with a summary of that work experience in plain text (no Markdown, JSON, bold, italics or other formatting) 
-                and by explicitly asking me if I would like to add or change anything to the specific work experience before moving on to another experience.
-                Make sure to include in the summary the title, company, location and timeline information you have gathered and that is in '#Collected Experience Data'
-                and not information from the conversation history.   
-                You will wait for my response before moving on to the next work experience as outlined in the '#Experiences To Explore' section.
+                Once you have gathered all the information for a work experience, do not do a full recap each time.
+                Only ask a brief confirmation if something is ambiguous or you just corrected a detail.
+                Otherwise acknowledge briefly and move on; the full recap happens at the end.
+                If you do confirm, keep it to one sentence and one question.
                 
                 ##'experience_title' instructions
                     The title of the work experience
                     If I have not provided the title, ask me for it.
                     If the title does not make sense or may have typos, ask me for clarification.
+                    If the title is informal or vague, ask for a clearer, professional job title.
+                    Avoid phrasing like "What do you call that experience?" Prefer "How would you describe this experience in a few words?"
                 ##Timeline instructions
                     I may provide the beginning and end of a work experience at any order, 
                     in a single input or in separate inputs, as a period or as a single date in relative or absolute terms
@@ -350,6 +393,8 @@ class _ConversationLLM:
                     If I have not provided the location, ask me for it.
                     Choose the question to ask based on the context of the work experience (company, title etc).
                     In case of caregiving for family, helping in the household, do not ask for an exact address, just the city or region would be sufficient.
+                    If the location looks like an abbreviation or a misspelling (e.g., "NBO" vs "Nairobi"),
+                    confirm the full city name and use the consistent, corrected spelling in summaries.
                     Do not ask for any personal information such as the address of a person, of a family, or a household.
             #Collected Experience Data 
                 All the work experiences you have collected so far:
@@ -722,8 +767,9 @@ def _get_summary_of_experiences(collected_data: list[CollectedData]) -> str:
     if len(collected_data) == 0:
         return "• No work experiences identified so far"
     for experience in collected_data:
+        display_title = experience.normalized_experience_title or experience.experience_title
         summary += "• " + ExperienceEntity.get_structured_summary(
-            experience_title=experience.experience_title or "",
+            experience_title=display_title or "",
             location=experience.location,
             work_type=experience.work_type,
             start_date=experience.start_date,

@@ -78,8 +78,16 @@ const RestoreExperiencesDrawer: React.FC<RestoreExperiencesDrawerProps> = ({
   // Sort all experiences by title
   const sortedExperiences = useMemo(
     () =>
-      deletedExperiences.toSorted?.((a, b) => (a.experience_title || "").localeCompare(b.experience_title || "")) ??
-      [...deletedExperiences].sort((a, b) => (a.experience_title || "").localeCompare(b.experience_title || "")),
+      deletedExperiences.toSorted?.((a, b) =>
+        (a.normalized_experience_title || a.experience_title || "").localeCompare(
+          b.normalized_experience_title || b.experience_title || ""
+        )
+      ) ??
+      [...deletedExperiences].sort((a, b) =>
+        (a.normalized_experience_title || a.experience_title || "").localeCompare(
+          b.normalized_experience_title || b.experience_title || ""
+        )
+      ),
     [deletedExperiences]
   );
 
@@ -136,7 +144,7 @@ const RestoreExperiencesDrawer: React.FC<RestoreExperiencesDrawerProps> = ({
                     color={theme.palette.text.secondary}
                     data-testid={DATA_TEST_ID.RESTORE_EXPERIENCE_TITLE}
                   >
-                    {experience.experience_title ?? (
+                    {experience.normalized_experience_title ?? experience.experience_title ?? (
                       <i>{t("experiences.experiencesDrawer.components.experiencesDrawerContent.untitled")}</i>
                     )}
                   </Typography>
