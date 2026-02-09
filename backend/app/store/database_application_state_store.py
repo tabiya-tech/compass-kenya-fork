@@ -216,7 +216,12 @@ class DatabaseApplicationStateStore(ApplicationStateStore):
             # This ensures the preference agent can reference existing experiences
             if (state.preference_elicitation_agent_state.initial_experiences_snapshot is None and
                 state.explore_experiences_director_state.explored_experiences):
-                self._logger.info("upgrading state: populating preference agent initial_experiences_snapshot")
+                explored_count = len(state.explore_experiences_director_state.explored_experiences)
+                explored_titles = [exp.experience_title for exp in state.explore_experiences_director_state.explored_experiences]
+                self._logger.info(
+                    f"upgrading state: populating preference agent initial_experiences_snapshot "
+                    f"with {explored_count} experiences: {explored_titles}"
+                )
                 # Copy explored experiences to preference agent snapshot
                 # Note: explored_experiences has tuple-format skills [(score, skill), ...]
                 # but initial_experiences_snapshot needs plain ExperienceEntity with skills as dicts
@@ -231,6 +236,20 @@ class DatabaseApplicationStateStore(ApplicationStateStore):
                     for exp in state.explore_experiences_director_state.explored_experiences
                 ]
                 _changes = True
+                self._logger.info(
+                    f"✅ Successfully populated initial_experiences_snapshot with {explored_count} experiences"
+                )
+            elif state.preference_elicitation_agent_state.initial_experiences_snapshot is None:
+                self._logger.warning(
+                    "⚠️  Cannot populate initial_experiences_snapshot: explored_experiences is empty or None"
+                )
+            else:
+                # Already populated, log for debugging
+                snapshot_count = len(state.preference_elicitation_agent_state.initial_experiences_snapshot)
+                snapshot_titles = [exp.experience_title for exp in state.preference_elicitation_agent_state.initial_experiences_snapshot]
+                self._logger.debug(
+                    f"initial_experiences_snapshot already populated with {snapshot_count} experiences: {snapshot_titles}"
+                )
 
             # after the upgrade, we save the state
             if _changes:

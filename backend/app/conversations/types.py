@@ -86,6 +86,7 @@ class CurrentConversationPhaseResponse(Enum):
     INTRO = "INTRO"
     COLLECT_EXPERIENCES = "COLLECT_EXPERIENCES"
     DIVE_IN = "DIVE_IN"
+    PREFERENCE_ELICITATION = "PREFERENCE_ELICITATION"
     ENDED = "ENDED"
 
     # An unknown phase, used for error handling and fallbacks.
