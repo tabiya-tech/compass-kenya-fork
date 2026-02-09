@@ -224,7 +224,7 @@ class CollectExperiencesAgent(Agent):
                     f"{user_input.message}\n"
                     f"{t('messages', 'collectExperiences.recapPrompt')}"
                 )
-            conversation_llm_output = await conversion_llm.execute(first_time_visit=self._state.first_time_visit,
+            conversation_llm_output = await conversation_llm.execute(first_time_visit=self._state.first_time_visit,
                                                                    context=context,
                                                                    user_input=AgentInput(message=transition_message, is_artificial=True),
                                                                    country_of_user=self._state.country_of_user,

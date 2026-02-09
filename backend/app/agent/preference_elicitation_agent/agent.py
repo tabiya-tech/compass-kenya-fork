@@ -675,21 +675,6 @@ class PreferenceElicitationAgent(Agent):
         """
         # Check if this is the first turn
         if self._state.conversation_turn_count <= 1:
-            # Provide introduction
-            intro_message = """Let me help you understand what kind of work would be a good fit for you!
-
-            I'm going to ask you about different job scenarios - there are no right or wrong answers. I just want to understand what matters most to YOU in a job.
-
-            We'll look at things like salary, work environment, job security, career growth, and work-life balance. This will help me suggest opportunities that match what you're really looking for.
-
-            Ready to start? I'll begin by asking about any work experience you've had."""
-
-            response = ConversationResponse(
-                reasoning="Introducing the preference elicitation process",
-                message=intro_message,
-                finished=False
-            )
-
             # Extract user context for personalization
             await self._extract_user_context()
 
@@ -697,10 +682,11 @@ class PreferenceElicitationAgent(Agent):
             # This reduces perceived latency when transitioning to VIGNETTES phase
             asyncio.create_task(self._prewarm_next_vignette())
 
-            # Transition to experience questions phase
+            # Transition to experience questions phase and ask first question immediately
             self._state.conversation_phase = "EXPERIENCE_QUESTIONS"
 
-            return response, []
+            # Get first experience question
+            return await self._handle_experience_questions_phase("", context)
 
         # Continue with experience questions
         self._state.conversation_phase = "EXPERIENCE_QUESTIONS"
@@ -719,7 +705,7 @@ class PreferenceElicitationAgent(Agent):
         not what they DID.
 
         Args:
-            user_input: User's message
+            user_input: User's message (can be empty on first call from intro)
             context: Conversation context
 
         Returns:
@@ -727,6 +713,7 @@ class PreferenceElicitationAgent(Agent):
         """
         all_llm_stats: list[LLMStats] = []
         previous_experience_question = self._state.last_experience_question_asked
+        is_first_question = not previous_experience_question
 
         # If there was a previous experience question, extract preferences from the response
         if previous_experience_question and user_input.strip():
@@ -766,7 +753,17 @@ class PreferenceElicitationAgent(Agent):
                 </previous_experience_question>
                 """ if previous_experience_question else ""
 
-            prompt = f"""The user previously shared these work experiences:
+            # Add intro context on first question
+            intro_prefix = ""
+            if not previous_experience_question:
+                intro_prefix = """First, provide a brief intro explaining we're shifting focus to their PREFERENCES:
+                "Now I'd like to understand what matters most to you in a job - things like salary, work-life balance, job security, and career growth."
+
+                Then immediately ask the first question."""
+
+            prompt = f"""{intro_prefix}
+
+                The user previously shared these work experiences:
                 {chr(10).join(f'- {s}' for s in exp_summaries)}
 
                 # GUIDELINES
@@ -791,21 +788,26 @@ class PreferenceElicitationAgent(Agent):
 
                 Keep it conversational and natural. One question at a time."""
 
-        # Combine the experience-based prompt with JSON instructions
-        combined_instructions = f"""{prompt}
-            {get_json_response_instructions()}
-        """
+        # Skip LLM call if this is the first question (empty user input from intro)
+        # Go straight to fallback question generation
+        if not user_input.strip() and is_first_question:
+            response = None
+        else:
+            # Combine the experience-based prompt with JSON instructions
+            combined_instructions = f"""{prompt}
+                {get_json_response_instructions()}
+            """
 
-        response, llm_stats = await self._conversation_caller.call_llm(
-            llm=self._conversation_llm,
-            llm_input=ConversationHistoryFormatter.format_for_agent_generative_prompt(
-                model_response_instructions=combined_instructions,
-                context=context,
-                user_input=user_input
-            ),
-            logger=self.logger
-        )
-        all_llm_stats.extend(llm_stats)
+            response, llm_stats = await self._conversation_caller.call_llm(
+                llm=self._conversation_llm,
+                llm_input=ConversationHistoryFormatter.format_for_agent_generative_prompt(
+                    model_response_instructions=combined_instructions,
+                    context=context,
+                    user_input=user_input
+                ),
+                logger=self.logger
+            )
+            all_llm_stats.extend(llm_stats)
 
         # Pre-warm next vignette after 2nd experience question
         # User will answer ~2-3 more questions before seeing vignettes
@@ -813,8 +815,12 @@ class PreferenceElicitationAgent(Agent):
             asyncio.create_task(self._prewarm_next_vignette())
 
         if response is None:
-            # Fallback question
-            fallback_msg = (
+            # Fallback question with intro if first question
+            intro_text = ""
+            if not previous_experience_question:
+                intro_text = "Now I'd like to understand what matters most to you in a job - things like salary, work-life balance, job security, and career growth.\n\n"
+
+            fallback_msg = intro_text + (
                 "Tell me about a work task you really enjoyed - what made it satisfying?"
                 if not experiences
                 else f"You mentioned working as {experiences[0].experience_title}. What did you enjoy most about that work?"

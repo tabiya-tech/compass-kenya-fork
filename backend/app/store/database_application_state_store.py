@@ -224,8 +224,9 @@ class DatabaseApplicationStateStore(ApplicationStateStore):
                 from app.agent.experience.experience_entity import ExperienceEntity
                 state.preference_elicitation_agent_state.initial_experiences_snapshot = [
                     ExperienceEntity(
-                        **exp.model_dump(exclude={'top_skills'}),
-                        top_skills=[skill for _, skill in exp.top_skills] if exp.top_skills else []
+                        **exp.model_dump(exclude={'top_skills', 'remaining_skills'}),
+                        top_skills=[skill for _, skill in exp.top_skills] if exp.top_skills else [],
+                        remaining_skills=[skill for _, skill in exp.remaining_skills] if exp.remaining_skills else []
                     )
                     for exp in state.explore_experiences_director_state.explored_experiences
                 ]
