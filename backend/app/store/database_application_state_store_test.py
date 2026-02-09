@@ -159,6 +159,19 @@ def update_explore_experiences_director_state(application_state: ApplicationStat
     ]
     application_state.explore_experiences_director_state.explored_experiences = processed_experiences
 
+    # Mimic the upgrade logic that runs during get_state
+    # When explored_experiences exist, initial_experiences_snapshot should be populated
+    if processed_experiences and application_state.preference_elicitation_agent_state.initial_experiences_snapshot is None:
+        from app.agent.experience.experience_entity import ExperienceEntity
+        application_state.preference_elicitation_agent_state.initial_experiences_snapshot = [
+            ExperienceEntity(
+                **exp.model_dump(exclude={'top_skills', 'remaining_skills'}),
+                top_skills=[skill for _, skill in exp.top_skills] if exp.top_skills else [],
+                remaining_skills=[skill for _, skill in exp.remaining_skills] if exp.remaining_skills else []
+            )
+            for exp in processed_experiences
+        ]
+
 
 def generate_history(index) -> ConversationHistory:
     return ConversationHistory(turns=[
