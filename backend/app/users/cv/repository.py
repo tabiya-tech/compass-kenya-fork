@@ -128,11 +128,20 @@ class UserCVRepository(IUserCVRepository):
         except DuplicateKeyError as e:
             # Check if this is specifically a duplicate CV upload by examining the error details
             # PyMongo DuplicateKeyError includes details about which fields caused the violation
+            # The error can be in different formats depending on PyMongo version
             error_details = getattr(e, 'details', {})
             key_value = error_details.get('keyValue', {})
 
-            # If both user_id and md5_hash are in the keyValue, it's our compound index violation
-            if 'user_id' in key_value and 'md5_hash' in key_value:
+            # Check if it's the user_id + md5_hash compound index
+            # Method 1: Check keyValue field (newer PyMongo)
+            is_compound_index = 'user_id' in key_value and 'md5_hash' in key_value
+
+            # Method 2: Check index name in error message (fallback for older PyMongo)
+            if not is_compound_index:
+                error_msg = str(e)
+                is_compound_index = 'user_id_1_md5_hash_1' in error_msg
+
+            if is_compound_index:
                 # Allow re-upload if the previous record is in a terminal state (FAILED or CANCELLED)
                 existing = await self._collection.find_one({
                     "user_id": upload.user_id,
