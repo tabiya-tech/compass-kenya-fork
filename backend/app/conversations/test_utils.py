@@ -7,7 +7,7 @@ from app.agent.experience import WorkType, ExperienceEntity
 from app.agent.explore_experiences_agent_director import ExperienceState, DiveInPhase
 from app.application_state import ApplicationState
 from app.conversations.constants import BEGINNING_CONVERSATION_PERCENTAGE, FINISHED_CONVERSATION_PERCENTAGE, \
-    COLLECT_EXPERIENCES_PERCENTAGE, DIVE_IN_EXPERIENCES_PERCENTAGE
+    COLLECT_EXPERIENCES_PERCENTAGE, DIVE_IN_EXPERIENCES_PERCENTAGE, PREFERENCE_ELICITATION_PERCENTAGE
 from app.conversations.types import ConversationPhaseResponse, CurrentConversationPhaseResponse
 from app.conversations.utils import get_current_conversation_phase_response
 from app.agent.explore_experiences_agent_director import ConversationPhase as CounselingConversationPhase
@@ -102,11 +102,11 @@ class TestConversationPhase:
 
     @pytest.mark.parametrize("explored, total, expected_percentage", [
         (0, 10, DIVE_IN_EXPERIENCES_PERCENTAGE),
-        (1, 10, DIVE_IN_EXPERIENCES_PERCENTAGE + 6),  # (1/10) * (100 - 40)
-        (3, 10, DIVE_IN_EXPERIENCES_PERCENTAGE + 18),  # (3/10) * (100 - 40)
-        (5, 10, DIVE_IN_EXPERIENCES_PERCENTAGE + 30),  # (5/10) * (100 - 40)
-        (7, 10, DIVE_IN_EXPERIENCES_PERCENTAGE + 42),  # (7/10) * (100 - 40)
-        (10, 10, FINISHED_CONVERSATION_PERCENTAGE)
+        (1, 10, DIVE_IN_EXPERIENCES_PERCENTAGE + 3),  # (1/10) * (70 - 40)
+        (3, 10, DIVE_IN_EXPERIENCES_PERCENTAGE + 9),  # (3/10) * (70 - 40)
+        (5, 10, DIVE_IN_EXPERIENCES_PERCENTAGE + 15),  # (5/10) * (70 - 40)
+        (7, 10, DIVE_IN_EXPERIENCES_PERCENTAGE + 21),  # (7/10) * (70 - 40)
+        (10, 10, PREFERENCE_ELICITATION_PERCENTAGE)  # Dive-in ends at preference elicitation phase
     ])
     def test_n_explored_experiences(self, explored: int, total: int, expected_percentage: int):
         # GIVEN a random session id
@@ -137,9 +137,14 @@ class TestConversationPhase:
         conversation_phase = get_current_conversation_phase_response(application_state, logger)
 
         # THEN the conversation phase is the collect experiences phase, and changed based on the explored work types.
+        # Current is capped at total to prevent showing "11/10 experiences"
+        expected_current = explored + 1
+        if expected_current > total:
+            expected_current = total
+
         assert conversation_phase == ConversationPhaseResponse(
             phase=CurrentConversationPhaseResponse.DIVE_IN,
             percentage=expected_percentage,
-            current=explored + 1,
+            current=expected_current,
             total=total
         )
