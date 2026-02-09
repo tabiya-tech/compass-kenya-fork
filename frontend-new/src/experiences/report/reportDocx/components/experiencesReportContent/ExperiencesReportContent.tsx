@@ -9,7 +9,6 @@ export const generateExperience = (experience: Experience, reportConfig: ReportC
   const { experienceDetails } = reportConfig;
   const paragraphs: Paragraph[] = [];
 
-
   const displayTitle = experience.normalized_experience_title ?? experience.experience_title;
   // Title
   if (experienceDetails.title) {
