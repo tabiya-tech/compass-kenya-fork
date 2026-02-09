@@ -206,13 +206,17 @@
     "chatProgressbar": {
       "labels": {
         "workTypes": "work types",
-        "experiences": "experiences"
+        "experiences": "experiences",
+        "questions": "questions",
+        "tasks": "tasks"
       },
       "phases": {
         "initializing": "Initializing...",
         "intro": "Introduction",
         "collecting": "Collecting",
         "exploring": "Exploring",
+        "discoveringPreferences": "Discovering preferences",
+        "rankingOccupations": "Ranking occupations",
         "finished": "Conversation finished",
         "unknown": "Unknown phase"
       }
