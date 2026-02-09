@@ -32,6 +32,7 @@
     "skippedExperienceMissingDetails": "Omití tu experiencia \"{experience_title}\" porque no compartiste suficientes detalles",
     "finishedAll": "Terminé de explorar todas tus experiencias.",
     "noSkillsIdentified": "No se identificaron habilidades",
+    "transitionToPreferences": "¡Excelente trabajo! Capturé todas tus habilidades y experiencias.\n\nAhora, voy a ayudarte a descubrir qué es lo más importante para vos en un trabajo. Esto me ayudará a recomendarte las mejores oportunidades.",
     "linkAndRank": {
       "summaryMessage": "Según la información que brindaste sobre tu experiencia como '{experience_title}', acá va un resumen breve:\n\n{summary}\n\nPrincipales {top_count} habilidades demostradas:{skills_summary}"
     }
