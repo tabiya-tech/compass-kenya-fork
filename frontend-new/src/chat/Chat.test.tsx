@@ -191,6 +191,15 @@ jest.mock("src/chat/ChatContext", () => {
   };
 });
 
+jest.mock("src/metrics/metricsService", () => ({
+  __esModule: true,
+  default: {
+    getInstance: jest.fn(() => ({
+      sendMetricsEvent: jest.fn(),
+    })),
+  },
+}));
+
 describe("Chat", () => {
   // ExperienceService methods to be mocked
   const mockGetExperiences = jest.fn();
