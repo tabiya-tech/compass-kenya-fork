@@ -190,9 +190,10 @@ class ExploreExperiencesAgentDirector(Agent):
             current_experience = state.experiences_state.get(state.current_experience_uuid, None)
 
         if not current_experience:
+            # No current experience to process - transition to preference elicitation
             message = AgentOutput(
-                message_for_user=t("messages", "exploreExperiences.noMoreExperiences"),
-                finished=True,
+                message_for_user=t("messages", "exploreExperiences.transitionToPreferences"),
+                finished=False,  # Keep conversation flowing to preference agent
                 agent_type=self._agent_type,
                 agent_response_time_in_sec=0,
                 llm_stats=[]
@@ -276,10 +277,10 @@ class ExploreExperiencesAgentDirector(Agent):
             # then we are done
             _next_experience = _pick_next_experience_to_process(state.experiences_state)
             if not _next_experience:
-                # No more experiences to process, we are done
+                # No more experiences to process - transition to preference elicitation
                 return AgentOutput(
-                    message_for_user=t("messages", "exploreExperiences.finishedAll"),
-                    finished=True,
+                    message_for_user=t("messages", "exploreExperiences.transitionToPreferences"),
+                    finished=False,  # Keep conversation flowing to preference agent
                     agent_type=self._agent_type,
                     agent_response_time_in_sec=0,
                     llm_stats=[]
