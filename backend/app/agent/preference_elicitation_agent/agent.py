@@ -373,12 +373,33 @@ class PreferenceElicitationAgent(Agent):
         Called at the start of the conversation to personalize vignettes.
         """
         if self._state is None:
+            self.logger.warning("Cannot extract user context: state is None")
             return
 
         experiences = self._state.initial_experiences_snapshot
+
+        # Enhanced logging to diagnose personalization issues
+        if experiences is None:
+            self.logger.warning(
+                "Cannot extract user context: initial_experiences_snapshot is None. "
+                "Vignettes will use generic default context instead of personalized context."
+            )
+            return
+        elif len(experiences) == 0:
+            self.logger.warning(
+                "Cannot extract user context: initial_experiences_snapshot is empty. "
+                "Vignettes will use generic default context instead of personalized context."
+            )
+            return
+
+        self.logger.info(
+            f"Extracting user context from {len(experiences)} experiences: "
+            f"{[exp.experience_title for exp in experiences]}"
+        )
+
         self._user_context = await self._context_extractor.extract_context(experiences)
         self.logger.info(
-            f"Extracted user context: role={self._user_context.current_role}, "
+            f"Successfully extracted user context: role={self._user_context.current_role}, "
             f"industry={self._user_context.industry}, level={self._user_context.experience_level}"
         )
 
@@ -405,6 +426,10 @@ class PreferenceElicitationAgent(Agent):
 
         # Increment turn count
         self._state.increment_turn_count()
+
+        # Re-extract user context if not available (agent is re-instantiated per request)
+        if self._user_context is None and self._state.initial_experiences_snapshot:
+            await self._extract_user_context()
 
         # Handle empty input
         if user_input.message == "":
@@ -999,6 +1024,22 @@ class PreferenceElicitationAgent(Agent):
         # The engine internally routes based on mode (adaptive, hybrid, personalization, or static)
         # Pass personalization callback if using hybrid mode
         personalization_callback = self._log_personalization if self._use_offline_with_personalization else None
+
+        # Log user context state before selecting vignette
+        if self._user_context is None:
+            self.logger.warning(
+                "⚠️  AGENT: user_context is None when selecting vignette! "
+                "This will cause generic (non-personalized) vignettes. "
+                f"Initial experiences snapshot exists: {self._state.initial_experiences_snapshot is not None}, "
+                f"Snapshot length: {len(self._state.initial_experiences_snapshot) if self._state.initial_experiences_snapshot else 0}"
+            )
+        else:
+            self.logger.info(
+                f"✅ AGENT: Passing user_context to vignette engine: "
+                f"role={self._user_context.current_role}, "
+                f"industry={self._user_context.industry}, "
+                f"level={self._user_context.experience_level}"
+            )
 
         next_vignette = await self._vignette_engine.select_next_vignette(
             self._state,
