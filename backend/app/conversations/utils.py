@@ -11,7 +11,7 @@ from app.conversations.types import ConversationMessage, ConversationMessageSend
     ConversationPhaseResponse, CurrentConversationPhaseResponse
 from app.conversations.reactions.types import Reaction
 from app.conversations.constants import BEGINNING_CONVERSATION_PERCENTAGE, FINISHED_CONVERSATION_PERCENTAGE, \
-    DIVE_IN_EXPERIENCES_PERCENTAGE, COLLECT_EXPERIENCES_PERCENTAGE
+    DIVE_IN_EXPERIENCES_PERCENTAGE, COLLECT_EXPERIENCES_PERCENTAGE, PREFERENCE_ELICITATION_PERCENTAGE
 
 
 def _convert_to_message_reaction(reaction: Reaction | None) -> MessageReaction | None:
@@ -169,30 +169,124 @@ def get_current_conversation_phase_response(state: ApplicationState, logger: Log
             ##############################
             #    2.2 Diving into experiences phase, for each discovered experience.
             ##############################
-            current_phase = CurrentConversationPhaseResponse.DIVE_IN
 
-            # The percentage of the dive in experience will be calculated based on the total number of experiences
-            # explored divided by the total number of experiences to explore, and then scope it to the dive in
-            # experiences progress percentage.
-            total_experiences_to_explore = len(state.explore_experiences_director_state.experiences_state.keys())
-            total_explored_experiences = 0
-            if total_experiences_to_explore == 0:
-                # If no experiences to explore, we set the percentage to 0.
-                current_phase_percentage = 0
+            # Check if preference elicitation has started
+            pref_elicitation_phase = state.preference_elicitation_agent_state.conversation_phase
+            pref_elicitation_active = pref_elicitation_phase not in ("INTRO", "COMPLETE")
+
+            if pref_elicitation_active:
+                ##############################
+                #    2.3 Preference Elicitation phase
+                ##############################
+                current_phase = CurrentConversationPhaseResponse.PREFERENCE_ELICITATION
+
+                # Calculate progress based on vignettes/questions completed
+                # We use multiple indicators to show progress:
+                # - BWS tasks completed (if BWS phase active)
+                # - Vignettes completed
+                # - Categories covered
+                total_indicators = 0
+                completed_indicators = 0
+
+                # BWS contribution (if used)
+                if pref_elicitation_phase == "BWS":
+                    total_indicators += 12  # Total BWS tasks
+                    completed_indicators += state.preference_elicitation_agent_state.bws_tasks_completed
+                elif state.preference_elicitation_agent_state.bws_phase_complete:
+                    # BWS is complete, count it as fully done
+                    total_indicators += 12
+                    completed_indicators += 12
+
+                # Vignettes contribution
+                min_vignettes = state.preference_elicitation_agent_state.minimum_vignettes_completed
+                total_indicators += min_vignettes
+                completed_indicators += min(
+                    len(state.preference_elicitation_agent_state.completed_vignettes),
+                    min_vignettes
+                )
+
+                # Categories contribution
+                total_categories = 6  # Total preference categories to explore
+                total_indicators += total_categories
+                completed_indicators += len(state.preference_elicitation_agent_state.categories_covered)
+
+                # Calculate percentage
+                if total_indicators == 0:
+                    current_phase_percentage = PREFERENCE_ELICITATION_PERCENTAGE
+                else:
+                    pref_gap = FINISHED_CONVERSATION_PERCENTAGE - PREFERENCE_ELICITATION_PERCENTAGE
+                    progress_ratio = completed_indicators / total_indicators
+                    current_phase_percentage = round(
+                        PREFERENCE_ELICITATION_PERCENTAGE + (progress_ratio * pref_gap)
+                    )
+
+                # For display: show progress based on current sub-phase
+                # Different phases track progress differently
+                if pref_elicitation_phase == "EXPERIENCE_QUESTIONS":
+                    # During experience questions: show categories being explored
+                    total = total_categories
+                    current = len(state.preference_elicitation_agent_state.categories_covered) + 1
+                    if current > total:
+                        current = total
+
+                elif pref_elicitation_phase == "BWS":
+                    # During BWS: show occupation ranking tasks
+                    total = 12  # Total BWS tasks
+                    # BWS agent increments counter AFTER showing question, so don't add +1
+                    # (counter is already "pre-incremented" to match the current task)
+                    current = state.preference_elicitation_agent_state.bws_tasks_completed
+                    if current > total:
+                        current = total
+
+                elif pref_elicitation_phase in ("VIGNETTES", "FOLLOW_UP"):
+                    # During vignettes/follow-ups: show vignettes completed
+                    total = min_vignettes
+                    current = len(state.preference_elicitation_agent_state.completed_vignettes) + 1
+                    if current > total:
+                        current = total
+
+                else:
+                    # Default/fallback: show combined progress
+                    total = min_vignettes + total_categories
+                    current = (
+                        len(state.preference_elicitation_agent_state.completed_vignettes) +
+                        len(state.preference_elicitation_agent_state.categories_covered) + 1
+                    )
+                    if current > total:
+                        current = total
             else:
-                total_explored_experiences = get_total_explored_experiences(state, with_skills=False)
-                dive_in_experiences_gap = FINISHED_CONVERSATION_PERCENTAGE - DIVE_IN_EXPERIENCES_PERCENTAGE
-                current_phase_percentage = ((total_explored_experiences / total_experiences_to_explore)
-                                            * dive_in_experiences_gap)
+                ##############################
+                #    2.2 Diving into experiences (before preference elicitation)
+                ##############################
+                current_phase = CurrentConversationPhaseResponse.DIVE_IN
 
-            # Round to the nearest integer and add the dive in phase percentage.
-            current_phase_percentage = round(current_phase_percentage + DIVE_IN_EXPERIENCES_PERCENTAGE)
+                # The percentage of the dive in experience will be calculated based on the total number of experiences
+                # explored divided by the total number of experiences to explore, and then scope it to the dive in
+                # experiences progress percentage.
+                total_experiences_to_explore = len(state.explore_experiences_director_state.experiences_state.keys())
+                total_explored_experiences = 0
+                if total_experiences_to_explore == 0:
+                    # If no experiences to explore, we set the percentage to 0.
+                    current_phase_percentage = 0
+                else:
+                    total_explored_experiences = get_total_explored_experiences(state, with_skills=False)
+                    # Update gap to end at PREFERENCE_ELICITATION instead of FINISHED
+                    dive_in_experiences_gap = PREFERENCE_ELICITATION_PERCENTAGE - DIVE_IN_EXPERIENCES_PERCENTAGE
+                    current_phase_percentage = ((total_explored_experiences / total_experiences_to_explore)
+                                                * dive_in_experiences_gap)
 
-            # set the current experience number to the number of experiences explored.
-            total = total_experiences_to_explore
+                # Round to the nearest integer and add the dive in phase percentage.
+                current_phase_percentage = round(current_phase_percentage + DIVE_IN_EXPERIENCES_PERCENTAGE)
 
-            # add one because we start from 0, and 0 is not user-friendly.
-            current = total_explored_experiences + 1
+                # set the current experience number to the number of experiences explored.
+                total = total_experiences_to_explore
+
+                # add one because we start from 0, and 0 is not user-friendly.
+                current = total_explored_experiences + 1
+
+                # FIX: Cap current to not exceed total (prevents "2/1 experiences" bug)
+                if current > total_experiences_to_explore:
+                    current = total_experiences_to_explore
     elif current_conversation_phase in (ConversationPhase.ENDED, ConversationPhase.CHECKOUT):
         ##############################
         #    3. Farewell phase.

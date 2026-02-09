@@ -97,7 +97,9 @@ def format_bws_question(task: Dict, task_number: int, total_tasks: int = 12) -> 
     Returns:
         Formatted question string
     """
-    occupation_labels = load_occupation_labels()
+    # Load full occupation data including descriptions
+    occupation_groups = load_occupation_groups()
+    occupation_map = {occ["code"]: occ for occ in occupation_groups}
     occupations = task["occupations"]
 
     # Build question
@@ -115,12 +117,20 @@ def format_bws_question(task: Dict, task_number: int, total_tasks: int = 12) -> 
     question += "Here are 5 job types:\n\n"
 
     for i, occ_code in enumerate(occupations, 1):
-        label = occupation_labels.get(occ_code, f"Occupation {occ_code}")
-        # Format nicely
-        label_display = label.title() if label.isupper() else label
-        question += f"{chr(64+i)}. **{label_display}**\n"
+        occ_data = occupation_map.get(occ_code)
+        if occ_data:
+            label = occ_data["label"]
+            description = occ_data.get("description", "")
+            # Format nicely
+            label_display = label.title() if label.isupper() else label
+            # Include description to help user understand the occupation
+            question += f"{chr(64+i)}. **{label_display}**  \n"
+            question += f"   _{description}_\n\n"
+        else:
+            # Fallback if occupation not found
+            question += f"{chr(64+i)}. **Occupation {occ_code}**\n\n"
 
-    question += "\nWhich would you **most** like to do? And which would you **least** like to do?\n"
+    question += "Which would you **most** like to do? And which would you **least** like to do?\n"
     question += "\n_Example: \"Most: B, Least: D\" or \"I prefer C and dislike A\"_"
 
     return question
