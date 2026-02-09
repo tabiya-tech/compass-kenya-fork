@@ -94,6 +94,10 @@ class UserIntentClassification(BaseModel):
         default=None,
         description="Index (1-based) of occupation if they said a number like '1' or 'first'"
     )
-    
+    requested_occupation_name: Optional[str] = Field(
+        default=None,
+        description="Name of occupation if user mentioned it explicitly (e.g., 'electrician', 'teacher')"
+    )
+
     class Config:
         extra = "forbid"
