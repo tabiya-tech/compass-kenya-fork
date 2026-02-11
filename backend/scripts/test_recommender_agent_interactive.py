@@ -43,7 +43,9 @@ from app.agent.recommender_advisor_agent.types import (
     OpportunityRecommendation,
     SkillsTrainingRecommendation,
     ActionType,
-    CommitmentLevel
+    CommitmentLevel,
+    ScoreBreakdown,
+    SkillComponent
 )
 from app.agent.preference_elicitation_agent.types import PreferenceVector
 from app.agent.recommender_advisor_agent.phase_handlers.intro_handler import IntroPhaseHandler
@@ -235,21 +237,17 @@ def create_sample_recommendations() -> Node2VecRecommendations:
                 occupation_id="KESCO_7411",
                 occupation_code="7411",
                 occupation="Fundi wa Stima (Electrician)",
-                confidence_score=0.88,
-                skills_match_score=0.82,
-                preference_match_score=0.85,
-                labor_demand_score=0.92,
-                graph_proximity_score=0.88,
-                labor_demand_category="high",
+                final_score=0.88,
+                score_breakdown=ScoreBreakdown(
+                    total_skill_utility=0.82,
+                    skill_components=SkillComponent(loc=0.85, ess=0.80, opt=0.82, grp=0.83),
+                    skill_penalty_applied=0.0,
+                    preference_score=0.85,
+                    demand_score=0.92,
+                    demand_label="High Expected Demand"  # This maps to "high"
+                ),
                 salary_range="KES 800-2,000/day (job-based) or KES 25,000-45,000/month",
                 justification="Your hands-on experience helping your uncle with electrical work gives you a strong foundation. High demand in Mombasa's growing construction and hotel sector.",
-                essential_skills=[
-                    "Basic wiring and installation",
-                    "Reading electrical diagrams",
-                    "Safety procedures",
-                    "Using multimeter and tools",
-                    "Customer communication"
-                ],
                 description="Electricians install, maintain, and repair electrical wiring and systems in homes, hotels, and businesses.",
                 typical_tasks=[
                     "Install and repair electrical wiring in buildings",
@@ -263,9 +261,7 @@ def create_sample_recommendations() -> Node2VecRecommendations:
                     "Fundi → Certified Electrician (Grade Test)",
                     "Certified → Contractor/Own business",
                     "Specialize in solar installation (growing demand)"
-                ],
-                skill_gaps=["Formal certification (Grade Test)", "Industrial wiring"],
-                user_skill_coverage=0.55
+                ]
             ),
             OccupationRecommendation(
                 uuid="occ_002_uuid",
@@ -274,21 +270,17 @@ def create_sample_recommendations() -> Node2VecRecommendations:
                 occupation_id="KESCO_8322",
                 occupation_code="8322",
                 occupation="Boda-Boda Rider / Delivery Driver",
-                confidence_score=0.79,
-                skills_match_score=0.70,
-                preference_match_score=0.88,
-                labor_demand_score=0.85,
-                graph_proximity_score=0.72,
-                labor_demand_category="high",
+                final_score=0.79,
+                score_breakdown=ScoreBreakdown(
+                    total_skill_utility=0.70,
+                    skill_components=SkillComponent(loc=0.90, ess=0.65, opt=0.68, grp=0.72),
+                    skill_penalty_applied=0.0,
+                    preference_score=0.88,
+                    demand_score=0.85,
+                    demand_label="High Expected Demand"  # This maps to "high"
+                ),
                 salary_range="KES 500-1,500/day depending on hustle",
                 justification="Offers immediate income and flexibility you value. Your knowledge of Mombasa streets is an asset. Can start quickly while building other skills.",
-                essential_skills=[
-                    "Motorcycle riding (valid license)",
-                    "Knowledge of local routes",
-                    "Basic phone/M-Pesa skills",
-                    "Customer service",
-                    "Time management"
-                ],
                 description="Boda-boda riders provide passenger transport and delivery services using motorcycles.",
                 typical_tasks=[
                     "Transport passengers around the city",
@@ -302,9 +294,7 @@ def create_sample_recommendations() -> Node2VecRecommendations:
                     "Join delivery apps (Glovo, Uber Eats)",
                     "Build regular customer base",
                     "Grow to 2-3 bikes with riders (fleet owner)"
-                ],
-                skill_gaps=["Motorcycle license (if not yet obtained)"],
-                user_skill_coverage=0.75
+                ]
             ),
             OccupationRecommendation(
                 uuid="occ_003_uuid",
@@ -313,21 +303,17 @@ def create_sample_recommendations() -> Node2VecRecommendations:
                 occupation_id="KESCO_9329",
                 occupation_code="9329",
                 occupation="Port Cargo Handler / Stevedore",
-                confidence_score=0.74,
-                skills_match_score=0.78,
-                preference_match_score=0.65,
-                labor_demand_score=0.80,
-                graph_proximity_score=0.75,
-                labor_demand_category="medium",
+                final_score=0.74,
+                score_breakdown=ScoreBreakdown(
+                    total_skill_utility=0.78,
+                    skill_components=SkillComponent(loc=0.95, ess=0.75, opt=0.70, grp=0.80),
+                    skill_penalty_applied=0.0,
+                    preference_score=0.65,
+                    demand_score=0.60,  # Lower demand score for medium category
+                    demand_label="Moderate Expected Demand"  # This maps to "medium"
+                ),
                 salary_range="KES 600-1,200/day (casual) or KES 20,000-35,000/month",
                 justification="Your experience with casual port work is valuable. More organized positions offer better pay and some job security.",
-                essential_skills=[
-                    "Physical fitness and stamina",
-                    "Following safety protocols",
-                    "Basic cargo handling",
-                    "Teamwork",
-                    "Punctuality and reliability"
-                ],
                 description="Cargo handlers load, unload, and move goods at the port, warehouses, and shipping yards.",
                 typical_tasks=[
                     "Load and unload cargo from ships/trucks",
@@ -341,9 +327,7 @@ def create_sample_recommendations() -> Node2VecRecommendations:
                     "Get forklift/equipment certification",
                     "Handler → Supervisor/Tally clerk",
                     "Move to logistics/clearing agent roles"
-                ],
-                skill_gaps=["Forklift certification", "Container handling training"],
-                user_skill_coverage=0.70
+                ]
             ),
             OccupationRecommendation(
                 uuid="occ_004_uuid",
@@ -352,21 +336,17 @@ def create_sample_recommendations() -> Node2VecRecommendations:
                 occupation_id="KESCO_7233",
                 occupation_code="7233",
                 occupation="Boat/Marine Equipment Fundi",
-                confidence_score=0.71,
-                skills_match_score=0.68,
-                preference_match_score=0.75,
-                labor_demand_score=0.70,
-                graph_proximity_score=0.72,
-                labor_demand_category="medium",
+                final_score=0.71,
+                score_breakdown=ScoreBreakdown(
+                    total_skill_utility=0.68,
+                    skill_components=SkillComponent(loc=0.80, ess=0.65, opt=0.68, grp=0.70),
+                    skill_penalty_applied=0.0,
+                    preference_score=0.75,
+                    demand_score=0.55,  # Lower demand score for medium category
+                    demand_label="Moderate Expected Demand"  # This maps to "medium"
+                ),
                 salary_range="KES 1,000-3,000/job or KES 20,000-40,000/month (busy season)",
                 justification="Mombasa's fishing and tourism boat industry needs repair skills. Combines your electrical knowledge with marine work.",
-                essential_skills=[
-                    "Outboard motor repair",
-                    "Basic electrical troubleshooting",
-                    "Fiberglass patching",
-                    "Engine maintenance",
-                    "Customer negotiation"
-                ],
                 description="Marine fundis repair and maintain boats, outboard motors, and marine electrical systems.",
                 typical_tasks=[
                     "Repair outboard motors for fishermen",
@@ -380,9 +360,7 @@ def create_sample_recommendations() -> Node2VecRecommendations:
                     "Specialize in outboard motors (Yamaha, etc.)",
                     "Build reputation at fish landing sites",
                     "Open marine repair shop"
-                ],
-                skill_gaps=["Marine engine training", "Fiberglass work"],
-                user_skill_coverage=0.45
+                ]
             ),
             OccupationRecommendation(
                 uuid="occ_005_uuid",
@@ -391,21 +369,17 @@ def create_sample_recommendations() -> Node2VecRecommendations:
                 occupation_id="KESCO_5221",
                 occupation_code="5221",
                 occupation="Market Vendor / Trader",
-                confidence_score=0.68,
-                skills_match_score=0.60,
-                preference_match_score=0.80,
-                labor_demand_score=0.75,
-                graph_proximity_score=0.65,
-                labor_demand_category="medium",
+                final_score=0.68,
+                score_breakdown=ScoreBreakdown(
+                    total_skill_utility=0.60,
+                    skill_components=SkillComponent(loc=0.88, ess=0.55, opt=0.60, grp=0.62),
+                    skill_penalty_applied=0.0,
+                    preference_score=0.80,
+                    demand_score=0.58,  # Lower demand score for medium category
+                    demand_label="Moderate Expected Demand"  # This maps to "medium"
+                ),
                 salary_range="KES 300-1,000/day profit (depends on product and location)",
                 justification="Low startup cost, flexible hours, and potential to grow. Your M-Pesa skills help with transactions.",
-                essential_skills=[
-                    "Basic math and pricing",
-                    "Customer service",
-                    "M-Pesa transactions",
-                    "Negotiation",
-                    "Stock management"
-                ],
                 description="Market vendors sell goods (food, household items, phone accessories, etc.) at markets, streets, or small stalls.",
                 typical_tasks=[
                     "Source and buy goods for resale",
@@ -747,7 +721,8 @@ async def initialize_handlers():
 
     skills_pivot_handler = SkillsPivotPhaseHandler(
         conversation_llm=llm,
-        conversation_caller=conversation_caller
+        conversation_caller=conversation_caller,
+        intent_classifier=intent_classifier
     )
 
     wrapup_handler = WrapupPhaseHandler(
@@ -793,10 +768,17 @@ async def initialize_handlers():
     # Set up delegation chains after all handlers are initialized
     exploration_handler._action_handler = action_handler
     exploration_handler._tradeoffs_handler = tradeoffs_handler
+    exploration_handler._skills_pivot_handler = skills_pivot_handler
+    present_handler._skills_pivot_handler = skills_pivot_handler
     action_handler._present_handler = present_handler
     action_handler._concerns_handler = concerns_handler
     action_handler._wrapup_handler = wrapup_handler
     concerns_handler._action_handler = action_handler
+    # Skills pivot handler can delegate to exploration, concerns, action, and present handlers
+    skills_pivot_handler._exploration_handler = exploration_handler
+    skills_pivot_handler._concerns_handler = concerns_handler
+    skills_pivot_handler._action_planning_handler = action_handler
+    skills_pivot_handler._present_handler = present_handler
 
     print_success("Phase handlers initialized!")
 
