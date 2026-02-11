@@ -206,6 +206,11 @@ class RecommenderAdvisorAgent(Agent):
         self._skills_pivot_handler = SkillsPivotPhaseHandler(
             conversation_llm=self._conversation_llm,
             conversation_caller=self._conversation_caller,
+            intent_classifier=self._intent_classifier,
+            exploration_handler=self._exploration_handler,
+            concerns_handler=self._concerns_handler,
+            action_planning_handler=self._action_handler,
+            present_handler=self._present_handler,
             logger=self.logger
         )
 
@@ -222,10 +227,14 @@ class RecommenderAdvisorAgent(Agent):
         self._exploration_handler._action_handler = self._action_handler
         self._exploration_handler._tradeoffs_handler = self._tradeoffs_handler
 
-        # PresentHandler can delegate to ExplorationHandler, ConcernsHandler, and TradeoffsHandler
+        # PresentHandler can delegate to ExplorationHandler, ConcernsHandler, TradeoffsHandler, and SkillsPivotHandler
         self._present_handler._exploration_handler = self._exploration_handler
         self._present_handler._concerns_handler = self._concerns_handler
         self._present_handler._tradeoffs_handler = self._tradeoffs_handler
+        self._present_handler._skills_pivot_handler = self._skills_pivot_handler
+
+        # ExplorationHandler can also delegate to SkillsPivotHandler for out-of-list requests
+        self._exploration_handler._skills_pivot_handler = self._skills_pivot_handler
 
         # ActionHandler can delegate to PresentHandler, ConcernsHandler, and WrapupHandler
         self._action_handler._present_handler = self._present_handler

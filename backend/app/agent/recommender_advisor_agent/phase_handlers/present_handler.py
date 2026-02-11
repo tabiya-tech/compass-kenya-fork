@@ -145,8 +145,33 @@ class PresentPhaseHandler(BasePhaseHandler):
                     all_llm_stats.extend(phase_transition[1])
                     return phase_transition[0], all_llm_stats
 
+        # Check if there's a pending out-of-list occupation that user might be persisting on
+        # This handles cases where intent classification failed but user is still talking about the pending occupation
+        if state.pending_out_of_list_occupation:
+            # Check if user might be persisting using LLM
+            is_persistence = await self._is_user_persisting_on_pending_occupation(
+                user_input=user_input,
+                pending_occupation=state.pending_out_of_list_occupation,
+                context=context
+            )
+
+            if is_persistence:
+                # User is persisting on out-of-list occupation → Handle it
+                self.logger.info(
+                    f"User persisting on pending out-of-list occupation '{state.pending_out_of_list_occupation}' "
+                    f"(intent classification didn't catch it)"
+                )
+                response, llm_stats = await self._handle_request_outside_recommendations(
+                    requested_occupation_name=state.pending_out_of_list_occupation,
+                    user_input=user_input,
+                    state=state,
+                    context=context
+                )
+                all_llm_stats.extend(llm_stats)
+                return response, all_llm_stats
+
         # Build recommendations summary for LLM context
-        recs_summary = self._build_recommendations_summary(occupations)
+        recs_summary = self._build_detailed_recommendations_summary(occupations)
 
         # Build full context for LLM
         skills_list = self._extract_skills_list(state)
@@ -192,8 +217,8 @@ class PresentPhaseHandler(BasePhaseHandler):
 
         return response, all_llm_stats
 
-    def _build_recommendations_summary(self, occupations: list) -> str:
-        """Build a summary of recommendations for LLM context."""
+    def _build_detailed_recommendations_summary(self, occupations: list) -> str:
+        """Build a detailed summary of occupation recommendations for LLM context."""
         lines = []
         for i, occ in enumerate(occupations, 1):
             lines.append(f"{i}. **{occ.occupation}** (Rank: {occ.rank}, Confidence: {occ.confidence_score:.0%})")

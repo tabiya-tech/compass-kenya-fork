@@ -67,6 +67,8 @@ class IntentClassifier:
             prompt = self._build_followup_phase_prompt(user_input, state)
         elif phase == ConversationPhase.ADDRESS_CONCERNS:
             prompt = self._build_concerns_phase_prompt(user_input, state)
+        elif phase == ConversationPhase.SKILLS_UPGRADE_PIVOT:
+            prompt = self._build_skills_pivot_phase_prompt(user_input, state)
         else:
             # Generic prompt for other phases
             prompt = self._build_generic_prompt(user_input, state)
@@ -400,6 +402,104 @@ Your response must be a JSON object with the following schema:
     "target_recommendation_id": "The UUID of a different occupation if mentioned, or null",
     "target_occupation_index": "The 1-based index of a different occupation if mentioned, or null",
     "requested_occupation_name": "The occupation name if they requested something outside recommendations, or null"
+}}
+
+Always return a valid JSON object matching this exact schema.
+"""
+
+    def _build_skills_pivot_phase_prompt(self, user_input: str, state: RecommenderAdvisorAgentState) -> str:
+        """
+        Build intent classification prompt for SKILLS_UPGRADE_PIVOT phase.
+
+        In this phase, user is viewing training recommendations after rejecting occupations
+        or persisting on an out-of-list occupation. We detect if they want to:
+        - Accept a training and move forward
+        - Return to original occupation recommendations
+        - Express concerns about trainings
+        - Ask questions about trainings
+        """
+        # Build training list
+        trainings_list = ""
+        if state.recommendations and state.recommendations.skillstraining_recommendations:
+            for i, trn in enumerate(state.recommendations.skillstraining_recommendations[:5], 1):
+                trainings_list += f"{i}. {trn.training_title} - {trn.skill} (uuid: {trn.uuid})\n"
+
+        # Build occupations list for going back
+        occs_list = ""
+        if state.recommendations and state.recommendations.occupation_recommendations:
+            for i, occ in enumerate(state.recommendations.occupation_recommendations[:5], 1):
+                occs_list += f"{i}. {occ.occupation} (uuid: {occ.uuid})\n"
+
+        return f"""
+Classify what the user wants to do based on their message.
+
+User said: "{user_input}"
+
+Currently in SKILLS_UPGRADE_PIVOT phase showing training recommendations.
+
+Available trainings:
+{trainings_list if trainings_list else "No trainings shown"}
+
+Original occupation recommendations (user can go back to these):
+{occs_list if occs_list else "No occupations available"}
+
+Possible intents:
+- "accept": User wants to commit to a training and take action
+  Examples: "I want to do that", "let's go with the electrician training", "I'm interested in this", "yes let's do it", "I'll take this course"
+  Key: User is showing commitment/acceptance of a training path
+  CRITICAL: Extract target_recommendation_id (training UUID) if they mention a specific training
+
+- "return_to_recommendations": User wants to go back to original occupation recommendations
+  Examples: "show me the careers again", "I want to see the original options", "let's look at what you recommended first", "go back to the occupations"
+  Key: They're asking to revisit the occupation recommendations they saw before training pivot
+
+- "explore_occupation": User wants to explore one of the original occupation recommendations
+  Examples: "tell me more about electrician", "what about the boda role?", "I'm interested in option 2"
+  Key: They mention a specific occupation FROM THE ORIGINAL RECOMMENDATIONS LIST
+  CRITICAL: Extract both target_occupation_index AND target_recommendation_id from the occupation list
+
+- "explore_training": User wants more details about a specific training
+  Examples: "tell me more about that course", "what does the solar training involve?", "how long is training #2?"
+  Key: They're asking for more information about a training
+  CRITICAL: Extract target_recommendation_id (training UUID) if identifiable
+
+- "express_concern": User has worries or objections about the trainings
+  Examples: "I don't think I can afford this", "this takes too long", "I'm worried about the cost", "seems difficult"
+  Key: They're raising concerns, barriers, or objections
+
+- "ask_question": Factual questions about trainings
+  Examples: "how much does it cost?", "where is the provider located?", "what's the duration?"
+  Key: Neutral information requests without expressing concern
+
+- "request_outside_recommendations": User wants to pursue something not in training or occupation lists
+  Examples: "I want to be a DJ", "what about nursing?"
+  Key: They mention a NEW occupation/career not in either list
+  IMPORTANT: Set requested_occupation_name
+
+- "other": Unclear or off-topic
+
+CRITICAL MATCHING RULES:
+- CASE-INSENSITIVE matching for trainings and occupations
+- PARTIAL NAME matching: "solar" matches "Solar PV Installation", "electrician" matches "Electrician Grade III"
+- When user mentions a training or occupation, EXTRACT the UUID
+- For training acceptance or exploration: extract target_recommendation_id from TRAINING list
+- For occupation exploration: extract target_recommendation_id from OCCUPATION list
+
+CRITICAL DISTINCTIONS:
+- "I want to do the solar course" = ACCEPT (commitment to training)
+- "tell me more about solar" = EXPLORE_TRAINING (wants more info)
+- "show me the careers again" = RETURN_TO_RECOMMENDATIONS (go back to occupations)
+- "what about electrician?" = EXPLORE_OCCUPATION (wants to explore original recommendation)
+- "this is too expensive" = EXPRESS_CONCERN (raising a barrier)
+- "how much is it?" = ASK_QUESTION (neutral info request)
+
+Your response must be a JSON object with the following schema:
+{{
+    "reasoning": "A step by step explanation of why you classified this intent",
+    "intent": "One of: accept, return_to_recommendations, explore_occupation, explore_training, express_concern, ask_question, request_outside_recommendations, other",
+    "target_recommendation_id": "UUID of training (for accept/explore_training) or occupation (for explore_occupation), or null",
+    "target_occupation_index": "1-based index if user mentioned an occupation by number, or null",
+    "requested_occupation_name": "Occupation name if request_outside_recommendations, or null"
 }}
 
 Always return a valid JSON object matching this exact schema.

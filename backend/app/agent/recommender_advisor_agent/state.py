@@ -148,7 +148,20 @@ class RecommenderAdvisorAgentState(BaseModel):
         description="IDs of occupations for which tradeoffs have been discussed"
     )
 
-    
+    # === OUT-OF-LIST OCCUPATION TRACKING ===
+    pending_out_of_list_occupation: Optional[str] = Field(
+        default=None,
+        description="Name of out-of-list occupation user inquired about (e.g., 'DJ'). Set when we ask if they want to explore it."
+    )
+    pending_out_of_list_occupation_entity: Optional[dict] = Field(
+        default=None,
+        description="Stored occupation entity data for pending out-of-list occupation (if found in taxonomy)"
+    )
+    educational_guidance_shown: bool = Field(
+        default=False,
+        description="True if we've shown educational career path guidance for the pending out-of-list occupation. Reset when pending occupation is cleared."
+    )
+
     # === ACTION COMMITMENT ===
     action_commitment: Optional[ActionCommitment] = Field(
         default=None,
