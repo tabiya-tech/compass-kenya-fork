@@ -12,6 +12,7 @@ from app.agent.explore_experiences_agent_director import ExploreExperiencesAgent
 from app.agent.skill_explorer_agent import SkillsExplorerAgentState
 from app.agent.welcome_agent import WelcomeAgentState
 from app.agent.preference_elicitation_agent import PreferenceElicitationAgentState
+from app.agent.recommender_advisor_agent import RecommenderAdvisorAgentState
 from app.application_state import ApplicationStateStore, ApplicationState
 from app.server_dependencies.database_collections import Collections
 from app.conversation_memory.conversation_memory_types import ConversationMemoryManagerState
@@ -30,6 +31,7 @@ class DatabaseApplicationStateStore(ApplicationStateStore):
         self._collect_experience_state_collection = db.get_collection(Collections.COLLECT_EXPERIENCE_STATE)
         self._skills_explorer_agent_state_collection = db.get_collection(Collections.SKILLS_EXPLORER_AGENT_STATE)
         self._preference_elicitation_agent_state_collection = db.get_collection(Collections.PREFERENCE_ELICITATION_AGENT_STATE)
+        self._recommender_advisor_agent_state_collection = db.get_collection(Collections.RECOMMENDER_ADVISOR_AGENT_STATE)
         self._logger = logging.getLogger(self.__class__.__name__)
 
     async def get_state(self, session_id: int) -> ApplicationState | None:
@@ -47,7 +49,8 @@ class DatabaseApplicationStateStore(ApplicationStateStore):
                 self._conversation_memory_manager_state_collection.find_one({"session_id": {"$eq": session_id}}, {'_id': False}),
                 self._collect_experience_state_collection.find_one({"session_id": {"$eq": session_id}}, {'_id': False}),
                 self._skills_explorer_agent_state_collection.find_one({"session_id": {"$eq": session_id}}, {'_id': False}),
-                self._preference_elicitation_agent_state_collection.find_one({"session_id": {"$eq": session_id}}, {'_id': False})
+                self._preference_elicitation_agent_state_collection.find_one({"session_id": {"$eq": session_id}}, {'_id': False}),
+                self._recommender_advisor_agent_state_collection.find_one({"session_id": {"$eq": session_id}}, {'_id': False})
             )
             if all(_state_part is None for _state_part in results):
                 # If all the states are None, return None
@@ -61,7 +64,8 @@ class DatabaseApplicationStateStore(ApplicationStateStore):
                 Collections.CONVERSATION_MEMORY_MANAGER_STATE,
                 Collections.COLLECT_EXPERIENCE_STATE,
                 Collections.SKILLS_EXPLORER_AGENT_STATE,
-                Collections.PREFERENCE_ELICITATION_AGENT_STATE
+                Collections.PREFERENCE_ELICITATION_AGENT_STATE,
+                Collections.RECOMMENDER_ADVISOR_AGENT_STATE
             ]
 
             if len(collection_names) != len(results):
@@ -75,11 +79,13 @@ class DatabaseApplicationStateStore(ApplicationStateStore):
                 return None
 
             missing_parts = [name for name, result in zip(collection_names, results) if result is None]
-            if missing_parts:
+            # Allow recommender_advisor_agent_state to be missing for backward compatibility
+            critical_missing_parts = [name for name in missing_parts if name != Collections.RECOMMENDER_ADVISOR_AGENT_STATE]
+            if critical_missing_parts:
                 self._logger.error(
-                    "Missing application state part(s) for session ID %s. Missing part(s): %s",
+                    "Missing critical application state part(s) for session ID %s. Missing part(s): %s",
                     session_id,
-                    missing_parts
+                    critical_missing_parts
                 )
                 return None
 
@@ -90,7 +96,15 @@ class DatabaseApplicationStateStore(ApplicationStateStore):
              conversation_memory_manager_state,
              collect_experience_state,
              skills_explorer_agent_state,
-             preference_elicitation_agent_state) = results
+             preference_elicitation_agent_state,
+             recommender_advisor_agent_state) = results
+
+            # Backward compatibility: Create default recommender state if missing
+            if recommender_advisor_agent_state is None:
+                self._logger.info("Creating default RecommenderAdvisorAgentState for session ID %s (backward compatibility)", session_id)
+                recommender_advisor_agent_state_obj = RecommenderAdvisorAgentState(session_id=session_id)
+            else:
+                recommender_advisor_agent_state_obj = RecommenderAdvisorAgentState.from_document(recommender_advisor_agent_state)
 
             state = ApplicationState(session_id=session_id,
                                      agent_director_state=AgentDirectorState.from_document(agent_director_state),
@@ -99,7 +113,8 @@ class DatabaseApplicationStateStore(ApplicationStateStore):
                                      conversation_memory_manager_state=ConversationMemoryManagerState.from_document(conversation_memory_manager_state),
                                      collect_experience_state=CollectExperiencesAgentState.from_document(collect_experience_state),
                                      skills_explorer_agent_state=SkillsExplorerAgentState.from_document(skills_explorer_agent_state),
-                                     preference_elicitation_agent_state=PreferenceElicitationAgentState.from_document(preference_elicitation_agent_state))
+                                     preference_elicitation_agent_state=PreferenceElicitationAgentState.from_document(preference_elicitation_agent_state),
+                                     recommender_advisor_agent_state=recommender_advisor_agent_state_obj)
 
             # Upgrade the state if necessary
             state = await self._upgrade_state(state)
@@ -124,7 +139,8 @@ class DatabaseApplicationStateStore(ApplicationStateStore):
                         state.conversation_memory_manager_state.session_id == session_id,
                         state.collect_experience_state.session_id == session_id,
                         state.skills_explorer_agent_state.session_id == session_id,
-                        state.preference_elicitation_agent_state.session_id == session_id]):
+                        state.preference_elicitation_agent_state.session_id == session_id,
+                        state.recommender_advisor_agent_state.session_id == session_id]):
                 raise ValueError("All states must have the same session_id")
             # Write the component states to the database
             # Using $eq to prevent NoSQL injection
@@ -140,7 +156,9 @@ class DatabaseApplicationStateStore(ApplicationStateStore):
                 self._skills_explorer_agent_state_collection.update_one({"session_id": {"$eq": session_id}},
                                                                         {"$set": state.skills_explorer_agent_state.model_dump()}, upsert=True),
                 self._preference_elicitation_agent_state_collection.update_one({"session_id": {"$eq": session_id}},
-                                                                               {"$set": state.preference_elicitation_agent_state.model_dump()}, upsert=True)
+                                                                               {"$set": state.preference_elicitation_agent_state.model_dump()}, upsert=True),
+                self._recommender_advisor_agent_state_collection.update_one({"session_id": {"$eq": session_id}},
+                                                                            {"$set": state.recommender_advisor_agent_state.model_dump()}, upsert=True)
             )
 
         except Exception as e:  # pylint: disable=broad-except
@@ -162,7 +180,8 @@ class DatabaseApplicationStateStore(ApplicationStateStore):
                 self._conversation_memory_manager_state_collection.delete_one({"session_id": {"$eq": session_id}}),
                 self._collect_experience_state_collection.delete_one({"session_id": {"$eq": session_id}}),
                 self._skills_explorer_agent_state_collection.delete_one({"session_id": {"$eq": session_id}}),
-                self._preference_elicitation_agent_state_collection.delete_one({"session_id": {"$eq": session_id}})
+                self._preference_elicitation_agent_state_collection.delete_one({"session_id": {"$eq": session_id}}),
+                self._recommender_advisor_agent_state_collection.delete_one({"session_id": {"$eq": session_id}})
             )
 
         except Exception as e:  # pylint: disable=broad-except
@@ -251,6 +270,31 @@ class DatabaseApplicationStateStore(ApplicationStateStore):
                     f"initial_experiences_snapshot already populated with {snapshot_count} experiences: {snapshot_titles}"
                 )
 
+            # ========== Recommender Agent Data Transfer ==========
+            # Copy preference data from preference agent to recommender agent if needed
+            # This ensures seamless handoff from preference elicitation to recommendations
+            if (state.recommender_advisor_agent_state.preference_vector is None
+                    and state.preference_elicitation_agent_state.preference_vector is not None):
+
+                self._logger.info("Transferring preference data to recommender agent")
+
+                # Transfer preference vector
+                state.recommender_advisor_agent_state.preference_vector = state.preference_elicitation_agent_state.preference_vector
+
+                # Transfer BWS occupation scores
+                state.recommender_advisor_agent_state.bws_occupation_scores = state.preference_elicitation_agent_state.occupation_scores
+
+                # Extract and transfer skills vector
+                state.recommender_advisor_agent_state.skills_vector = self._extract_skills_from_experiences(
+                    state.preference_elicitation_agent_state.initial_experiences_snapshot
+                )
+
+                # Set youth_id based on session_id
+                state.recommender_advisor_agent_state.youth_id = f"youth_{state.session_id}"
+
+                _changes = True
+                self._logger.info("✅ Successfully transferred preference data to recommender agent")
+
             # after the upgrade, we save the state
             if _changes:
                 await self.save_state(state)
@@ -260,3 +304,26 @@ class DatabaseApplicationStateStore(ApplicationStateStore):
         except Exception as e:  # pylint: disable=broad-except
             self._logger.error("Failed to upgrade application state: %s", e, exc_info=True)
             return state
+
+    def _extract_skills_from_experiences(self, experiences):
+        """
+        Extract skills vector from experiences snapshot.
+
+        Args:
+            experiences: List of ExperienceEntity objects or None
+
+        Returns:
+            Dictionary with skills vector data compatible with Node2Vec
+        """
+        if not experiences:
+            return {"skills": [], "total_experiences": 0}
+
+        try:
+            # Use SkillsExtractor to aggregate skills
+            from app.agent.recommender_advisor_agent.skills_extractor import SkillsExtractor
+            extractor = SkillsExtractor()
+            return extractor.extract_skills_vector(experiences)
+        except Exception as e:  # pylint: disable=broad-except
+            self._logger.error("Failed to extract skills from experiences: %s", e, exc_info=True)
+            # Return empty skills vector on error
+            return {"skills": [], "total_experiences": 0}

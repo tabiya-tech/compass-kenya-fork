@@ -9,6 +9,7 @@ class Collections:
     COLLECT_EXPERIENCE_STATE = "collect_experience_state"
     SKILLS_EXPLORER_AGENT_STATE = "skills_explorer_agent_state"
     PREFERENCE_ELICITATION_AGENT_STATE = "preference_elicitation_agent_state"
+    RECOMMENDER_ADVISOR_AGENT_STATE = "recommender_advisor_agent_state"
     USER_FEEDBACK = "user_feedback"
     REACTIONS = "reactions"
     COMPASS_METRICS = "metric_events"
