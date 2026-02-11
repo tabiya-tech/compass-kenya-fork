@@ -8,6 +8,7 @@ from app.agent.explore_experiences_agent_director import ExploreExperiencesAgent
 from app.agent.farewell_agent import FarewellAgent
 from app.agent.linking_and_ranking_pipeline import ExperiencePipelineConfig
 from app.agent.preference_elicitation_agent.agent import PreferenceElicitationAgent
+from app.agent.recommender_advisor_agent.agent import RecommenderAdvisorAgent
 from app.agent.welcome_agent import WelcomeAgent
 from app.conversation_memory.conversation_memory_manager import ConversationMemoryManager
 from app.conversation_memory.conversation_memory_types import ConversationContext
@@ -40,6 +41,11 @@ class LLMAgentDirector(AbstractAgentDirector):
                 use_offline_with_personalization=True,  # Enable hybrid mode (offline D-optimal vignettes + LLM personalization)
                 offline_output_dir=str(Path(__file__).parent.parent.parent.parent / "offline_output")
             ),
+            AgentType.RECOMMENDER_ADVISOR_AGENT: RecommenderAdvisorAgent(
+                db6_client=None,  # Optional: Youth database integration
+                node2vec_client=None,  # Optional: Node2Vec recommendation service
+                occupation_search_service=search_services.occupation_search_service
+            ),
             AgentType.FAREWELL_AGENT: FarewellAgent()
         }
         self._llm_router = LLMRouter(self._logger)
@@ -63,6 +69,13 @@ class LLMAgentDirector(AbstractAgentDirector):
         agent = self._agents[AgentType.PREFERENCE_ELICITATION_AGENT]
         if not isinstance(agent, PreferenceElicitationAgent):
             raise ValueError("The agent is not an instance of PreferenceElicitationAgent")
+        return agent
+
+    def get_recommender_advisor_agent(self) -> RecommenderAdvisorAgent:
+        # cast the agent to the RecommenderAdvisorAgent
+        agent = self._agents[AgentType.RECOMMENDER_ADVISOR_AGENT]
+        if not isinstance(agent, RecommenderAdvisorAgent):
+            raise ValueError("The agent is not an instance of RecommenderAdvisorAgent")
         return agent
 
     async def get_suitable_agent_type(self, *,
@@ -106,9 +119,15 @@ class LLMAgentDirector(AbstractAgentDirector):
                 and agent_output.finished):
             return ConversationPhase.COUNSELING
 
-        # In the consulting phase, only the Explore Experiences agent can end the phase
+        # In the consulting phase, Explore Experiences or Recommender Advisor agents can end the phase
         if (current_phase == ConversationPhase.COUNSELING
                 and agent_output.agent_type == AgentType.EXPLORE_EXPERIENCES_AGENT
+                and agent_output.finished):
+            return ConversationPhase.CHECKOUT
+
+        # When RecommenderAdvisorAgent finishes, go to CHECKOUT
+        if (current_phase == ConversationPhase.COUNSELING
+                and agent_output.agent_type == AgentType.RECOMMENDER_ADVISOR_AGENT
                 and agent_output.finished):
             return ConversationPhase.CHECKOUT
 
