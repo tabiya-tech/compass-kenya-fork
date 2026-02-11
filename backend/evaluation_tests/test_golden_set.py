@@ -45,6 +45,7 @@ async def test_golden_set(
     test_case: GoldenTestCase,
     max_iterations: int,
     setup_search_services: Awaitable[SearchServices],
+    in_memory_application_database,
     setup_multi_locale_app_config,
     common_folder_path: str
 ):
@@ -67,7 +68,7 @@ async def test_golden_set(
     session_id = get_random_session_id()
     get_i18n_manager().set_locale(test_case.locale)
     search_services = await setup_search_services
-    
+    application_db = await in_memory_application_database
     experience_pipeline_config = ExperiencePipelineConfig.model_validate(
         {"number_of_clusters": test_case.given_number_of_clusters,
          "number_of_top_skills_to_pick_per_cluster": test_case.given_number_of_top_skills_to_pick_per_cluster})
@@ -83,6 +84,7 @@ async def test_golden_set(
         default_country_of_user=test_case.country_of_user,
         search_services=search_services,
         experience_pipeline_config=experience_pipeline_config,
+        application_db=application_db,
         metrics_collector=metrics_collector
     )
 

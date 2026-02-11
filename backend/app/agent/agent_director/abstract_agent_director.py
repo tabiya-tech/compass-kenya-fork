@@ -29,6 +29,7 @@ class AgentDirectorState(BaseModel):
     current_phase: ConversationPhase = Field(default=ConversationPhase.INTRO)
     conversation_conducted_at: Optional[datetime] = None
     persona_type: PersonaType = Field(default=PersonaType.INFORMAL)
+    skip_to_recommendation: bool = Field(default=False)
 
     class Config:
         extra = "forbid"
@@ -74,11 +75,9 @@ class AgentDirectorState(BaseModel):
     def from_document(_doc: Mapping[str, Any]) -> "AgentDirectorState":
         return AgentDirectorState(session_id=_doc["session_id"],
                                   current_phase=_doc["current_phase"],
-                                  # The conversation_conducted_at field was introduced later, so it may not exist in all documents
-                                  # For the documents that don't have this field, we'll default to None,
-                                  # The implication being that the client will have to handle this case.
                                   conversation_conducted_at=_doc.get("conversation_conducted_at", None),
-                                  persona_type=_doc.get("persona_type", PersonaType.INFORMAL))
+                                  persona_type=_doc.get("persona_type", PersonaType.INFORMAL),
+                                  skip_to_recommendation=_doc.get("skip_to_recommendation", False))
 
 
 def _parse_data(value: Optional[datetime | str]) -> Optional[datetime]:

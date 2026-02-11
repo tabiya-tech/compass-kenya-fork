@@ -22,6 +22,8 @@ from app.conversations.service import ConversationAlreadyConcludedError, IConver
 from app.conversations.types import ConversationResponse, ConversationInput
 from app.job_preferences.get_job_preferences_service import get_job_preferences_service
 from app.job_preferences.service import IJobPreferencesService
+from app.user_recommendations.services.get_user_recommendations_service import get_user_recommendations_service
+from app.user_recommendations.services.service import IUserRecommendationsService
 from app.errors.constants import NO_PERMISSION_FOR_SESSION
 from app.errors.errors import UnauthorizedSessionAccessError
 from app.metrics.application_state_metrics_recorder.recorder import ApplicationStateMetricsRecorder
@@ -44,14 +46,17 @@ async def get_conversation_service(agent_director: LLMAgentDirector = Depends(ge
                                    metrics_service: IMetricsService = Depends(
                                        get_metrics_service),
                                    job_preferences_service: IJobPreferencesService = Depends(
-                                       get_job_preferences_service)) -> IConversationService:
+                                       get_job_preferences_service),
+                                   user_recommendations_service: IUserRecommendationsService = Depends(
+                                       get_user_recommendations_service)) -> IConversationService:
     return ConversationService(agent_director=agent_director,
                                application_state_metrics_recorder=ApplicationStateMetricsRecorder(
                                    application_state_manager=application_state_manager,
                                    metrics_service=metrics_service),
                                conversation_memory_manager=conversation_memory_manager,
                                reaction_repository=ReactionRepository(db),
-                               job_preferences_service=job_preferences_service)
+                               job_preferences_service=job_preferences_service,
+                               user_recommendations_service=user_recommendations_service)
 
 
 def add_conversation_routes(app: FastAPI, authentication: Authentication):

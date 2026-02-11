@@ -15,6 +15,7 @@ from app.app_config import get_application_config
 from app.conversation_memory.conversation_memory_manager import ConversationMemoryManager
 from app.conversation_memory.conversation_memory_types import ConversationContext
 from app.vector_search.vector_search_dependencies import SearchServices
+from motor.motor_asyncio import AsyncIOMotorDatabase
 from app.i18n.translation_service import t
 from app.context_vars import phase_ctx_var, agent_type_ctx_var # for observability logging
 
@@ -27,7 +28,8 @@ class LLMAgentDirector(AbstractAgentDirector):
     def __init__(self, *,
                  conversation_manager: ConversationMemoryManager,
                  search_services: SearchServices,
-                 experience_pipeline_config: ExperiencePipelineConfig
+                 experience_pipeline_config: ExperiencePipelineConfig,
+                 application_db: AsyncIOMotorDatabase,
                  ):
         super().__init__(conversation_manager)
 
@@ -119,6 +121,8 @@ class LLMAgentDirector(AbstractAgentDirector):
 
         # In the consulting phase, the agent type is determined by the user's intent.
         if phase == ConversationPhase.COUNSELING:
+            if self._state.skip_to_recommendation:
+                return AgentType.RECOMMENDER_ADVISOR_AGENT
             return await self._llm_router.execute(
                 user_input=user_input,
                 phase=phase,
@@ -148,8 +152,11 @@ class LLMAgentDirector(AbstractAgentDirector):
 
         # In the consulting phase, Explore Experiences or Recommender Advisor agents can end the phase
         if (current_phase == ConversationPhase.COUNSELING
-                and agent_output.agent_type == AgentType.EXPLORE_EXPERIENCES_AGENT
-                and agent_output.finished):
+                and agent_output.finished
+                and agent_output.agent_type in (
+                    AgentType.EXPLORE_EXPERIENCES_AGENT,
+                    AgentType.RECOMMENDER_ADVISOR_AGENT,
+                )):
             return ConversationPhase.CHECKOUT
 
         # When RecommenderAdvisorAgent finishes, go to CHECKOUT

@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from app.agent.agent_director.abstract_agent_director import ConversationPhase
 from app.agent.agent_director.llm_agent_director import LLMAgentDirector
+from app.conversations.phase_state_machine import JourneyPhase, PhaseDataStatus, determine_start_phase
 from app.agent.agent_types import AgentInput
 from app.agent.explore_experiences_agent_director import DiveInPhase
 from app.application_state import ApplicationState
@@ -18,6 +19,7 @@ from app.conversations.utils import get_messages_from_conversation_manager, filt
 from app.sensitive_filter import sensitive_filter
 from app.metrics.application_state_metrics_recorder.recorder import IApplicationStateMetricsRecorder
 from app.job_preferences.service import IJobPreferencesService
+from app.user_recommendations.services.service import IUserRecommendationsService
 from app.job_preferences.types import JobPreferences
 
 from app.app_config import get_application_config
@@ -76,13 +78,15 @@ class ConversationService(IConversationService):
                  agent_director: LLMAgentDirector,
                  conversation_memory_manager: IConversationMemoryManager,
                  reaction_repository: IReactionRepository,
-                 job_preferences_service: IJobPreferencesService):
+                 job_preferences_service: IJobPreferencesService,
+                 user_recommendations_service: IUserRecommendationsService):
         self._logger = logging.getLogger(ConversationService.__name__)
         self._agent_director = agent_director
         self._application_state_metrics_recorder = application_state_metrics_recorder
         self._conversation_memory_manager = conversation_memory_manager
         self._reaction_repository = reaction_repository
         self._job_preferences_service = job_preferences_service
+        self._user_recommendations_service = user_recommendations_service
 
     async def send(self, user_id: str, session_id: int, user_input: str, clear_memory: bool,
                    filter_pii: bool) -> ConversationResponse:
@@ -94,10 +98,20 @@ class ConversationService(IConversationService):
         # set the sent_at for the user input
         user_input = AgentInput(message=user_input, sent_at=datetime.now(timezone.utc))
 
-        # set the state of the agent director, the conversation memory manager and all the agents
         state = await self._application_state_metrics_recorder.get_state(session_id)
 
-        # Check if the conversation has ended
+        if state.agent_director_state.current_phase == ConversationPhase.INTRO:
+            data = PhaseDataStatus(
+                has_recommendation=await self._user_recommendations_service.has_recommendations(user_id)
+            )
+            entry_phase = determine_start_phase(data)
+            if entry_phase == JourneyPhase.RECOMMENDATION:
+                state.agent_director_state.skip_to_recommendation = True
+                self._logger.info(
+                    "User %s has recommendations, skipping to RECOMMENDATION phase",
+                    user_id,
+                )
+
         if state.agent_director_state.current_phase == ConversationPhase.ENDED:
             raise ConversationAlreadyConcludedError(session_id)
 

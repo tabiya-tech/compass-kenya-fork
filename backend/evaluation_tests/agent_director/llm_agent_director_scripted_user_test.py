@@ -28,7 +28,8 @@ from evaluation_tests.conversation_libs.conversation_test_function import conver
 
 
 @pytest.fixture(scope="function")
-async def setup_agent_director(setup_search_services: Awaitable[SearchServices]) -> tuple[
+async def setup_agent_director(setup_search_services: Awaitable[SearchServices],
+                              in_memory_application_database) -> tuple[
     ConversationMemoryManager,
     Callable[
         [LogCaptureFixture, ScriptedUserEvaluationTestCase],
@@ -36,14 +37,17 @@ async def setup_agent_director(setup_search_services: Awaitable[SearchServices])
     ]
 ]:
     session_id = get_random_session_id()
-    # The conversation manager for this test
     conversation_manager = ConversationMemoryManager(UNSUMMARIZED_WINDOW_SIZE, TO_BE_SUMMARIZED_WINDOW_SIZE)
     conversation_manager.set_state(state=ConversationMemoryManagerState(session_id=session_id))
-    # The Search Services for this test
     search_services = await setup_search_services
-    agent_director = LLMAgentDirector(conversation_manager=conversation_manager,
-                                      search_services=search_services,
-                                      experience_pipeline_config=ExperiencePipelineConfig())
+    application_db = await in_memory_application_database
+
+    agent_director = LLMAgentDirector(
+        conversation_manager=conversation_manager,
+        search_services=search_services,
+        experience_pipeline_config=ExperiencePipelineConfig(),
+        application_db=application_db,
+    )
     agent_director.set_state(AgentDirectorState(session_id=session_id))
     agent_director.get_welcome_agent().set_state(WelcomeAgentState(session_id=session_id))
     explore_experiences_agent = agent_director.get_explore_experiences_agent()

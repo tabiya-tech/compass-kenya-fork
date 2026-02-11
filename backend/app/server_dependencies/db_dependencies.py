@@ -236,6 +236,10 @@ class CompassDBProvider:
                 ("id", 1)
             ])
 
+            await application_db.get_collection(Collections.USER_RECOMMENDATIONS).create_index([
+                ("user_id", 1)
+            ], unique=True)
+
             logger.info("Finished creating indexes for the application database")
         except Exception as e:
             logger.exception(e)
