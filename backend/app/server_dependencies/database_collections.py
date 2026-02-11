@@ -17,3 +17,4 @@ class Collections:
     JOBS: str = "jobs"
     JOB_PREFERENCES: str = "job_preferences"
     CAREER_PATH: str = "career_path"
+    USER_RECOMMENDATIONS: str = "user_recommendations"

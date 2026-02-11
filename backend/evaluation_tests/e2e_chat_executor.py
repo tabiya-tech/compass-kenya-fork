@@ -28,15 +28,19 @@ class E2EChatExecutor:
                  default_country_of_user: Country,
                  search_services: SearchServices,
                  experience_pipeline_config: ExperiencePipelineConfig,
+                 application_db,
                  metrics_collector: Optional[BaselineMetricsCollector] = None
                  ):
         self._state = ApplicationState.new_state(session_id=session_id, country_of_user=default_country_of_user)
         self._conversation_memory_manager = ConversationMemoryManager(UNSUMMARIZED_WINDOW_SIZE, TO_BE_SUMMARIZED_WINDOW_SIZE)
         self._conversation_memory_manager.set_state(self._state.conversation_memory_manager_state)
 
-        self._agent_director = LLMAgentDirector(conversation_manager=self._conversation_memory_manager,
-                                                experience_pipeline_config=experience_pipeline_config,
-                                                search_services=search_services)
+        self._agent_director = LLMAgentDirector(
+            conversation_manager=self._conversation_memory_manager,
+            experience_pipeline_config=experience_pipeline_config,
+            search_services=search_services,
+            application_db=application_db,
+        )
         self._agent_director.set_state(self._state.agent_director_state)
         self._agent_director.get_welcome_agent().set_state(self._state.welcome_agent_state)
         self._agent_director.get_explore_experiences_agent().set_state(self._state.explore_experiences_director_state)
@@ -210,6 +214,7 @@ class E2EChatExecutor:
             "COLLECT_EXPERIENCES_AGENT": "COUNSELING",
             "EXPLORE_SKILLS_AGENT": "COUNSELING",
             "INFER_OCCUPATIONS_AGENT": "COUNSELING",
+            "RECOMMENDER_ADVISOR_AGENT": "COUNSELING",
             "FAREWELL_AGENT": "CHECKOUT",
         }
         return phase_mapping.get(agent_type, "COUNSELING")

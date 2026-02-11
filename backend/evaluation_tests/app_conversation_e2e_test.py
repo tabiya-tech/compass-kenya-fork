@@ -36,6 +36,7 @@ async def test_main_app_chat(
         current_test_case: E2ETestCase | E2ESpecificTestCase,
         common_folder_path: str,
         setup_search_services: Awaitable[SearchServices],
+        in_memory_application_database,
         setup_multi_locale_app_config
 ):
     """
@@ -48,6 +49,7 @@ async def test_main_app_chat(
     locales_manager = get_i18n_manager()
     locales_manager.set_locale(current_test_case.locale)
     search_services = await setup_search_services
+    application_db = await in_memory_application_database
     experience_pipeline_config = ExperiencePipelineConfig.model_validate(
         {"number_of_clusters": current_test_case.given_number_of_clusters,
          "number_of_top_skills_to_pick_per_cluster": current_test_case.given_number_of_top_skills_to_pick_per_cluster})
@@ -63,6 +65,7 @@ async def test_main_app_chat(
                                     default_country_of_user=current_test_case.country_of_user,
                                     search_services=search_services,
                                     experience_pipeline_config=experience_pipeline_config,
+                                    application_db=application_db,
                                     metrics_collector=metrics_collector)
 
     evaluation_result = ConversationEvaluationRecord(simulated_user_prompt=current_test_case.simulated_user_prompt,
