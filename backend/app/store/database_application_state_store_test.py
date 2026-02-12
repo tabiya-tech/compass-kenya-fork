@@ -411,4 +411,4 @@ class TestDatabaseApplicationStateStore:
             assert len(caplog.records) == 1
             assert caplog.records[0].levelname == "ERROR"
             assert caplog.records[
-                       0].message == f"Missing application state part(s) for session ID {given_session_id}. Missing part(s): ['{collection_name}']"
+                       0].message == f"Missing critical application state part(s) for session ID {given_session_id}. Missing part(s): ['{collection_name}']"

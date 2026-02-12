@@ -10,6 +10,7 @@ from app.agent.explore_experiences_agent_director import ExploreExperiencesAgent
 from app.agent.skill_explorer_agent import SkillsExplorerAgentState
 from app.agent.welcome_agent import WelcomeAgentState
 from app.agent.preference_elicitation_agent import PreferenceElicitationAgentState
+from app.agent.recommender_advisor_agent import RecommenderAdvisorAgentState
 from app.application_state import ApplicationState, ApplicationStateStore
 from app.conversation_memory.conversation_memory_types import ConversationMemoryManagerState
 
@@ -64,7 +65,11 @@ class JSONApplicationStateStore(ApplicationStateStore):
                     skills_explorer_agent_state=SkillsExplorerAgentState.from_document(
                         state_dict['skills_explorer_agent_state']),
                     preference_elicitation_agent_state=PreferenceElicitationAgentState.from_document(
-                        state_dict['preference_elicitation_agent_state'])
+                        state_dict['preference_elicitation_agent_state']),
+                    recommender_advisor_agent_state=RecommenderAdvisorAgentState.from_document(
+                        state_dict['recommender_advisor_agent_state']
+                    ) if 'recommender_advisor_agent_state' in state_dict
+                    else RecommenderAdvisorAgentState(session_id=session_id)
                 )
         except (json.JSONDecodeError, FileNotFoundError) as e:
             self._logger.error(f"Error reading state file for session {session_id}: {e}")
