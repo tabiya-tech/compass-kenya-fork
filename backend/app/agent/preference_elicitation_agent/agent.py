@@ -280,11 +280,17 @@ class PreferenceElicitationAgent(Agent):
             )
 
         if self._stopping_criterion is None:
+            # Compute prior FIM determinant for ratio-based stopping criterion.
+            # The FIM is initialized as I/prior_variance, so its determinant is
+            # (1/prior_variance)^7. This baseline lets us measure relative info gain.
+            prior_fim_det = (1.0 / self._adaptive_config.prior_variance) ** 7
+
             self._stopping_criterion = StoppingCriterion(
                 min_vignettes=self._adaptive_config.min_vignettes,
                 max_vignettes=self._adaptive_config.max_vignettes,
                 det_threshold=self._adaptive_config.fim_det_threshold,
-                max_variance_threshold=self._adaptive_config.max_variance_threshold
+                max_variance_threshold=self._adaptive_config.max_variance_threshold,
+                prior_fim_determinant=prior_fim_det
             )
 
     async def _prewarm_next_vignette(self) -> None:
@@ -1681,8 +1687,11 @@ Vignettes Completed: {pv.n_vignettes_completed}
                 uncertainty_dict[dim] = updated_posterior.get_variance(dim)
             self._state.uncertainty_per_dimension = uncertainty_dict
 
+            prior_fim_det = (1.0 / self._adaptive_config.prior_variance) ** 7
+            det_ratio = self._state.fim_determinant / prior_fim_det if prior_fim_det > 0 else 0
             self.logger.info(
                 f"Updated Bayesian posterior: FIM det = {self._state.fim_determinant:.2e}, "
+                f"det ratio = {det_ratio:.2f} (prior_det={prior_fim_det:.2e}), "
                 f"max variance = {max(uncertainty_dict.values()):.3f}"
             )
 

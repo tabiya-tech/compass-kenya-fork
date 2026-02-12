@@ -1,6 +1,6 @@
 # Offline Vignette Optimization System - Complete Documentation
 
-**Last Updated**: 2025-12-30
+**Last Updated**: 2026-02-11
 **Purpose**: Generate statistically optimal job preference vignettes using information theory and Bayesian inference
 
 ---
@@ -245,24 +245,68 @@ We balance two goals:
 1. **Minimum questions**: Don't annoy the user
 2. **Sufficient confidence**: Learn preferences accurately
 
-**Stopping Rule**:
+**Stopping Rule** (ratio-based):
 ```python
 should_stop = (
     n_vignettes >= 4  # Safety minimum
     AND
-    (det(FIM) > 100  # Information threshold
-     OR max_variance < 0.65)  # Uncertainty threshold
+    (det(FIM) / det(prior_FIM) > 10.0  # Relative information gain threshold
+     OR max_variance < 0.25)            # Uncertainty threshold
 )
 OR n_vignettes >= 12  # Safety maximum
 ```
 
-**Thresholds Explained**:
-- `det(FIM) > 100`: Total information exceeds baseline
-- `max_variance < 0.65`: Most uncertain dimension has variance < 0.65
-  - **Lower variance = more confidence**
-  - **0.65 is relaxed** (was 0.5, but work_environment dimension converges slowly)
+**Why Ratio-Based (not absolute)?**
 
-**Typical Outcome**: Users see 8-10 vignettes on average (down from 15+ without optimization).
+The FIM is initialized with the prior: `FIM_init = I / prior_variance = 2 * I_7`, giving
+`det(FIM_init) = 2^7 = 128`. An absolute threshold like `det(FIM) > 100` would be
+satisfied *before any data is collected* — a bug that killed the adaptive phase entirely.
+
+The fix normalizes by the prior: `det(FIM) / det(prior_FIM)`. This ratio starts at 1.0
+and grows only as vignettes add new information beyond the prior.
+
+**Thresholds Explained**:
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `det_threshold` | 10.0 | Stop when FIM has 10x more info than prior alone |
+| `max_variance_threshold` | 0.25 | Stop when max posterior variance drops below this |
+| `min_vignettes` | 4 | Always show at least 4 (safety floor) |
+| `max_vignettes` | 12 | Never exceed 12 (safety ceiling) |
+
+**Variance threshold calibration**: Must be less than `prior_variance` (0.5) to be
+meaningful. A threshold of 0.25 means "stop when uncertainty is halved from the prior."
+Setting it above the prior variance (e.g., 0.65) would make it vacuously true at
+initialization — another miscalibration that was fixed.
+
+**FIM Ratio Growth Curve** (from real test data):
+
+| Vignette # | Type | FIM Det | Ratio | Notes |
+|---|---|---|---|---|
+| 0 | prior | 128 | 1.00 | Baseline (no data) |
+| 1 | static_begin | 205 | 1.60 | +0.60 |
+| 2 | static_begin | 357 | 2.79 | +1.19 |
+| 3 | static_begin | 570 | 4.45 | +1.67 |
+| 4 | static_begin | 860 | 6.72 | +2.27 |
+| 5 | adaptive | 1218 | 9.52 | +2.80 |
+| 6 | adaptive | 1662 | **12.99** | STOP (>10.0) |
+| 7 | static_end | 2441 | 19.07 | (post-stop) |
+| 8 | static_end | 3672 | 28.69 | (post-stop) |
+
+Growth is **superlinear** because `det = product of eigenvalues`, and each rank-1 FIM
+update compounds multiplicatively. Each vignette adds roughly 2-3 to the ratio.
+
+**Tuning the Threshold** (how many adaptive vignettes you get):
+
+| Threshold | Expected adaptive vignettes | Total vignettes |
+|---|---|---|
+| 10 | 1-2 | 7-8 |
+| 25 | 3-4 | 9-10 |
+| 50 | 5-6 | 11-12 |
+| 100 | 7-8 (near max) | 12+ (capped) |
+
+**Typical Outcome**: With threshold=10.0, users see 7-8 vignettes total
+(4 static begin + 1-2 adaptive + 2 static end).
 
 ---
 
@@ -1150,76 +1194,114 @@ def select_next_vignette(
     available_vignettes: list[Vignette],
     posterior: PosteriorDistribution,
     current_fim: np.ndarray,
-    vignettes_shown: list[str]
+    vignettes_shown: list[str],
+    use_bayesian: bool = True
 ) -> Vignette:
     """
     Select vignette that maximizes expected information gain.
 
     Algorithm:
     1. Filter out already-shown vignettes
-    2. For each candidate, compute: det(FIM + FIM_candidate)
+    2. For each candidate, compute expected det increase using Bayesian D-optimal
     3. Return vignette with highest determinant increase
+
+    Uses Bayesian mode by default: accounts for posterior uncertainty,
+    not just the point estimate. This means the selector adapts to the
+    user's specific response pattern.
     """
-    best_vignette = None
-    best_score = -np.inf
-
     for vignette in available_vignettes:
-        # Skip if already shown
-        if vignette.vignette_id in vignettes_shown:
-            continue
-
-        # Compute FIM for this vignette
-        vignette_fim = fisher_calc.compute_fim(vignette, posterior.mean)
-
-        # Expected determinant after showing this vignette
-        expected_fim = current_fim + vignette_fim
-        expected_det = np.linalg.det(expected_fim)
-
-        # Score = determinant increase
-        score = expected_det - np.linalg.det(current_fim)
-
-        if score > best_score:
-            best_score = score
-            best_vignette = vignette
-
+        if use_bayesian:
+            # Bayesian D-optimal: uses posterior mean AND covariance
+            _, det_increase = fisher_calc.compute_bayesian_expected_fim(
+                vignette, posterior.mean, posterior.covariance, current_fim
+            )
+        else:
+            # Standard D-optimal: uses posterior mean only
+            _, det_increase = fisher_calc.compute_expected_fim(
+                vignette, posterior.mean, current_fim
+            )
+        # Track best...
     return best_vignette
 ```
 
-**Stopping Criterion Check**:
+**Different responses → different adaptive vignettes** (verified empirically):
+
+The adaptive selector is genuinely posterior-driven. Because `compute_bayesian_expected_fim()`
+evaluates each candidate at the *current* posterior (which shifts after each user choice),
+users with different response patterns get different adaptive vignettes selected.
+
+Test results comparing "always picks A" vs "always picks B" users:
+
+| | User A (flexibility-focused) | User B (salary-focused) |
+|---|---|---|
+| Adaptive vignettes | `adaptive_008`, `adaptive_033` | `adaptive_008` only |
+| Financial posterior | -0.57 | +1.34 |
+| Work-life balance | +0.66 | +0.31 |
+| Career growth | +0.56 | +0.34 |
+
+User A's posterior had different uncertainty gaps (high financial uncertainty because they
+consistently traded salary for flexibility), so the selector picked `adaptive_033` to
+probe that dimension — a vignette that User B never saw.
+
+**Why this works**: The FIM for a candidate vignette depends on `P(A) * P(B)` at the
+current posterior mean. When the posterior shifts, these probabilities change, which
+changes which vignette would add the most new information.
+
+**Stopping Criterion Check** (ratio-based):
 ```python
-async def _check_adaptive_stopping_criterion(self) -> tuple[bool, str]:
-    """
-    Check if we should stop showing vignettes.
+class StoppingCriterion:
+    def __init__(
+        self,
+        min_vignettes: int = 4,
+        max_vignettes: int = 12,
+        det_threshold: float = 10.0,       # Ratio: det(FIM) / det(prior_FIM)
+        max_variance_threshold: float = 0.25,  # Must be < prior_variance (0.5)
+        prior_fim_determinant: float = 0.0  # det(I/prior_variance) = (1/0.5)^7 = 128
+    ):
+        ...
 
-    Returns:
-        (should_continue, reason)
-    """
-    n_vignettes = len(self._state.completed_vignettes)
-    fim = np.array(self._state.fisher_information_matrix)
-    posterior_cov = np.array(self._state.posterior_covariance)
+    def should_continue(self, posterior, fim, n_vignettes_shown) -> tuple[bool, str]:
+        # Safety: always show minimum
+        if n_vignettes_shown < self.min_vignettes:
+            return True, f"Not yet reached minimum ({self.min_vignettes})"
 
-    # Safety minimum
-    if n_vignettes < 4:
-        return True, "Below minimum vignettes (4)"
+        # Safety: never exceed maximum
+        if n_vignettes_shown >= self.max_vignettes:
+            return False, f"Reached maximum ({self.max_vignettes})"
 
-    # Safety maximum
-    if n_vignettes >= 12:
-        return False, "Reached maximum vignettes (12)"
+        # Information threshold (RATIO-BASED, not absolute)
+        det = np.linalg.det(fim + np.eye(7) * 1e-8)
+        det_ratio = det / self.prior_fim_determinant  # Starts at 1.0, grows with data
+        if det_ratio >= self.det_threshold:
+            return False, f"FIM det ratio {det_ratio:.2e} exceeds {self.det_threshold}"
 
-    # Information threshold (det(FIM) > 100)
-    fim_det = np.linalg.det(fim)
-    if fim_det > 100:
-        return False, f"FIM determinant sufficient ({fim_det:.2f} > 100)"
+        # Uncertainty threshold (max variance across all 7 dimensions)
+        variances = [posterior.get_variance(dim) for dim in posterior.dimensions]
+        if max(variances) < self.max_variance_threshold:
+            return False, f"Max variance {max(variances):.3f} below {self.max_variance_threshold}"
 
-    # Uncertainty threshold (max variance < 0.65)
-    variances = np.diag(posterior_cov)
-    max_variance = np.max(variances)
-    if max_variance < 0.65:
-        return False, f"Uncertainty low enough ({max_variance:.3f} < 0.65)"
-
-    # Continue if no stopping criterion met
-    return True, "Continuing adaptive selection"
+        return True, "Continuing — uncertainty still high"
 ```
+
+**Initialization in agent.py**:
+```python
+# The prior FIM determinant is computed from the prior variance:
+# FIM_init = I / prior_variance = 2 * I_7, det = 2^7 = 128
+prior_fim_det = (1.0 / adaptive_config.prior_variance) ** 7
+
+self._stopping_criterion = StoppingCriterion(
+    min_vignettes=adaptive_config.min_vignettes,
+    max_vignettes=adaptive_config.max_vignettes,
+    det_threshold=adaptive_config.fim_det_threshold,
+    max_variance_threshold=adaptive_config.max_variance_threshold,
+    prior_fim_determinant=prior_fim_det  # 128.0 for prior_variance=0.5
+)
+```
+
+**Important calibration constraints**:
+- `det_threshold` is a *ratio* (not an absolute value). 10.0 = "10x more info than prior"
+- `max_variance_threshold` must be < `prior_variance` (0.5), otherwise it triggers immediately
+- `prior_fim_determinant` must be computed and passed in, or the fallback uses absolute comparison
 
 **PHASE 3: End Vignettes (Validation)**
 
@@ -1458,9 +1540,16 @@ After running optimization, check these metrics in `optimization.log`:
 - Ratio of max/min eigenvalues
 - Lower = more balanced information across dimensions
 
-**FIM Determinant** (target: > 100):
-- Total information volume
-- Higher = more confident parameter estimates
+**FIM Determinant Ratio** (online, target: grows to 10-50 over the session):
+- Ratio of `det(FIM_current) / det(FIM_prior)`, where `det(FIM_prior) = 128`
+- Starts at 1.0 (no data), reaches ~7 after 4 static vignettes, ~13 after 6
+- Note: Do NOT use absolute `det(FIM)` as a threshold — the prior FIM alone has `det = 128`,
+  so absolute thresholds like 100 would trigger before any data is collected
+
+**Max Posterior Variance** (online, target: drops below 0.25):
+- Maximum variance across all 7 preference dimensions
+- Starts at `prior_variance` (0.5), decreases as data is collected
+- Threshold must be set BELOW `prior_variance` to be meaningful
 
 **Attribute Coverage** (target: all values appear at least 3 times):
 - Ensures vignette diversity
@@ -1498,6 +1587,39 @@ After running optimization, check these metrics in `optimization.log`:
 1. Adjust attribute-to-dimension mapping (balance contributions)
 2. Increase diversity weight: `--diversity-weight 0.5`
 3. Add more attributes to underrepresented dimensions
+
+#### Issue: "Adaptive phase skipped — 0 adaptive vignettes shown"
+
+**Cause**: Stopping criterion triggers immediately after static beginning vignettes.
+
+**Root cause (fixed Feb 2026)**: Two miscalibrations in the stopping criterion:
+1. FIM determinant was compared as an **absolute** value. The prior FIM alone has
+   `det(I/0.5) = 2^7 = 128`, which exceeded the old threshold of 100 *before any data*.
+2. `max_variance_threshold` was set to 0.65, which is *above* `prior_variance` (0.5),
+   making the variance check vacuously true from initialization.
+
+**Fix**: Use ratio-based FIM comparison (`det(FIM)/det(prior_FIM) > threshold`) and
+ensure `max_variance_threshold < prior_variance`. See `stopping_criterion.py` and
+`adaptive_config.py`.
+
+**Verify**: Run the regression test:
+```bash
+poetry run pytest app/agent/preference_elicitation_agent/test_fim_stopping_regression.py -v
+```
+
+#### Issue: "Only 1-2 adaptive vignettes before stopping"
+
+**Cause**: The FIM ratio grows superlinearly (~2-3 per vignette). With threshold=10.0,
+it takes only 1-2 adaptive vignettes after 4 static to cross the threshold.
+
+**Solution**: Raise `ADAPTIVE_FIM_THRESHOLD` env var (or `fim_det_threshold` in config):
+- 10.0 → 1-2 adaptive vignettes
+- 25.0 → 3-4 adaptive vignettes
+- 50.0 → 5-6 adaptive vignettes
+
+```bash
+export ADAPTIVE_FIM_THRESHOLD=25.0
+```
 
 #### Issue: "ImportError: No module named 'numpy'"
 

@@ -59,8 +59,8 @@ class TestStoppingCriterion:
 
         assert criterion.min_vignettes == 4
         assert criterion.max_vignettes == 12
-        assert criterion.det_threshold == 1e4  # Updated to match new default
-        assert criterion.max_variance_threshold == 0.65  # Updated to match new default
+        assert criterion.det_threshold == 10.0  # Ratio-based: 10x info gain over prior
+        assert criterion.max_variance_threshold == 0.25  # Must be < prior_variance (0.5)
 
     def test_init_custom(self):
         """Test initialization with custom parameters."""
