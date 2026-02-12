@@ -8,7 +8,7 @@ Epic 3: Recommender Agent Implementation
 """
 
 from typing import Any, Mapping, Optional
-from pydantic import BaseModel, Field, field_serializer, field_validator
+from pydantic import BaseModel, Field, field_serializer, field_validator, model_validator
 
 from app.agent.recommender_advisor_agent.types import (
     ConversationPhase,
@@ -39,7 +39,7 @@ class RecommenderAdvisorAgentState(BaseModel):
     """
     
     # === SESSION IDENTIFICATION ===
-    session_id: str = Field(description="Unique session identifier")
+    session_id: int = Field(description="Unique session identifier")
     conversation_phase: ConversationPhase = Field(
         default=ConversationPhase.INTRO,
         description="Current phase of the conversation"
@@ -48,9 +48,12 @@ class RecommenderAdvisorAgentState(BaseModel):
         default=0, ge=0,
         description="Number of conversation turns"
     )
-    
+
     # === INPUT DATA ===
-    youth_id: str = Field(description="User/youth identifier")
+    youth_id: Optional[str] = Field(
+        default=None,
+        description="User/youth identifier (auto-generated from session_id if not provided)"
+    )
 
     country_of_user: Country = Field(
         default=Country.UNSPECIFIED,
@@ -185,7 +188,14 @@ class RecommenderAdvisorAgentState(BaseModel):
         default=None,
         description="Snapshot of user profile from DB6 at session start"
     )
-    
+
+    @model_validator(mode='after')
+    def auto_generate_youth_id(self) -> 'RecommenderAdvisorAgentState':
+        """Auto-generate youth_id from session_id if not provided."""
+        if self.youth_id is None:
+            self.youth_id = f"youth_{self.session_id}"
+        return self
+
     class Config:
         extra = "forbid"
 
