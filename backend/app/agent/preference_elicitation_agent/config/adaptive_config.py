@@ -44,13 +44,16 @@ class AdaptiveConfig(BaseModel):
     )
 
     fim_det_threshold: float = Field(
-        default=2000,  # Calibrated for D-optimal vignettes (allows 8-9 vignettes, balances info gain + UX)
-        description="Stop if FIM determinant exceeds this"
+        default=10.0,
+        description="Stop if det(FIM)/det(prior_FIM) exceeds this ratio. "
+                    "Measures relative information gain: 10.0 = stop when 10x more info than prior alone."
     )
 
     max_variance_threshold: float = Field(
-        default=0.65,  # Relaxed from 0.5: work_environment dimension requires ~14+ vignettes to reach 0.5
-        description="Stop if max variance across dimensions is below this (relaxed to 0.65 to reduce vignette count)"
+        default=0.25,
+        description="Stop if max variance across dimensions is below this. "
+                    "Must be less than prior_variance (0.5) to be meaningful. "
+                    "0.25 = stop when uncertainty is halved from the prior."
     )
 
     # MNL temperature
@@ -113,8 +116,8 @@ class AdaptiveConfig(BaseModel):
             enabled=os.getenv("ADAPTIVE_D_EFFICIENCY_ENABLED", "false").lower() == "true",
             min_vignettes=int(os.getenv("ADAPTIVE_MIN_VIGNETTES", "4")),
             max_vignettes=int(os.getenv("ADAPTIVE_MAX_VIGNETTES", "12")),
-            fim_det_threshold=float(os.getenv("ADAPTIVE_FIM_THRESHOLD", "100")),
-            max_variance_threshold=float(os.getenv("ADAPTIVE_VARIANCE_THRESHOLD", "0.65")),
+            fim_det_threshold=float(os.getenv("ADAPTIVE_FIM_THRESHOLD", "10.0")),
+            max_variance_threshold=float(os.getenv("ADAPTIVE_VARIANCE_THRESHOLD", "0.25")),
             temperature=float(os.getenv("ADAPTIVE_TEMPERATURE", "1.0")),
             uncertainty_threshold=float(os.getenv("ADAPTIVE_UNCERTAINTY_THRESHOLD", "0.3"))
         )
