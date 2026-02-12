@@ -273,8 +273,16 @@ class DatabaseApplicationStateStore(ApplicationStateStore):
             # ========== Recommender Agent Data Transfer ==========
             # Copy preference data from preference agent to recommender agent if needed
             # This ensures seamless handoff from preference elicitation to recommendations
+            # Only transfer when the preference agent has actually completed work
+            # (not just default values). PreferenceVector() defaults exist on fresh states,
+            # so we check n_vignettes_completed > 0 to avoid mutating state on every load.
+            _pref_vec = state.preference_elicitation_agent_state.preference_vector
+            _has_meaningful_preferences = (
+                _pref_vec is not None
+                and _pref_vec.n_vignettes_completed > 0
+            )
             if (state.recommender_advisor_agent_state.preference_vector is None
-                    and state.preference_elicitation_agent_state.preference_vector is not None):
+                    and _has_meaningful_preferences):
 
                 self._logger.info("Transferring preference data to recommender agent")
 
