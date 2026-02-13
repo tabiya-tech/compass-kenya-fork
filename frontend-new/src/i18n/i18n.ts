@@ -12,6 +12,7 @@ import enGb from "./locales/en-GB/translation.json";
 import enUs from "./locales/en-US/translation.json";
 import esEs from "./locales/es-ES/translation.json";
 import esAr from "./locales/es-AR/translation.json";
+import swKe from "./locales/sw-KE/translation.json";
 
 // --- Import feedback questions ---
 import questionsEnGb from "src/feedback/overallFeedback/feedbackForm/questions-en-GB.json";
@@ -34,6 +35,7 @@ const resources = {
   ...constructLocaleResources(Locale.EN_US, { ...enUs, questions: questionsEnUs }),
   ...constructLocaleResources(Locale.ES_AR, { ...esAr, questions: questionsEsAr }),
   ...constructLocaleResources(Locale.ES_ES, { ...esEs, questions: questionsEsEs }),
+  ...constructLocaleResources(Locale.SW_KE, { ...swKe }),
 };
 
 // Validate DEFAULT_LOCALE before using it

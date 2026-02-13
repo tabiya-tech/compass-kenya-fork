@@ -13,17 +13,18 @@ Model = Literal[
 
 @final
 class AgentsConfig:
-    default_model: Final[Model] = "gemini-2.5-flash-lite"
+    default_model: Final[Model] = "gemini-2.5-flash"
     """
     The LLM model name to use by default.
+    Upgraded from gemini-2.5-flash-lite for better Swahili language support (M3).
     """
 
-    fast_model: Final[Model] = "gemini-2.5-flash-lite"
+    fast_model: Final[Model] = "gemini-2.5-flash"
     """
     The fast LLM model name to use.
     
     Expectations
-    - Low reasoning
+    - Good reasoning with strong multilingual (Swahili) support
     - Fast in response time
     """
 
