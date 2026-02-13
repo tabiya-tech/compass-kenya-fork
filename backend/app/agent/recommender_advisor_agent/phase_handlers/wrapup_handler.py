@@ -22,7 +22,7 @@ from app.conversation_memory.conversation_memory_manager import ConversationCont
 
 # DB6 imports (Epic 1 dependency - optional)
 try:
-    from app.epic1.db6_youth_database.db6_client import DB6Client, YouthProfile
+    from app.database_contracts.db6_youth_database.db6_client import DB6Client, YouthProfile
     DB6_AVAILABLE = True
 except ImportError:
     DB6Client = None

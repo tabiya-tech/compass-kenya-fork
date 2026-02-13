@@ -805,7 +805,7 @@ async def test_intro_phase():
 
         # Create state
         state = RecommenderAdvisorAgentState(
-            session_id="test_session_12345",
+            session_id=12345,
             youth_id="test_user_123",
             country_of_user=TEST_COUNTRY,
             conversation_phase=ConversationPhase.INTRO,
@@ -873,7 +873,7 @@ async def test_present_phase():
         # Create state
         recommendations = create_sample_recommendations()
         state = RecommenderAdvisorAgentState(
-            session_id="test_session_12345",
+            session_id=12345,
             country_of_user=TEST_COUNTRY,
             youth_id="test_user_123",
             conversation_phase=ConversationPhase.PRESENT_RECOMMENDATIONS,
@@ -941,7 +941,7 @@ async def test_exploration_phase():
         selected_occ = recommendations.occupation_recommendations[0]
 
         state = RecommenderAdvisorAgentState(
-            session_id="test_session_12345",
+            session_id=12345,
             youth_id="test_user_123",
             country_of_user=TEST_COUNTRY,
             conversation_phase=ConversationPhase.CAREER_EXPLORATION,
@@ -1025,7 +1025,7 @@ async def test_concerns_phase():
         selected_occ = recommendations.occupation_recommendations[0]
 
         state = RecommenderAdvisorAgentState(
-            session_id="test_session_12345",
+            session_id=12345,
             youth_id="test_user_123",
             country_of_user=TEST_COUNTRY,
             conversation_phase=ConversationPhase.ADDRESS_CONCERNS,
@@ -1118,7 +1118,7 @@ async def test_action_phase():
         selected_occ = recommendations.occupation_recommendations[0]
 
         state = RecommenderAdvisorAgentState(
-            session_id="test_session_12345",
+            session_id=12345,
             youth_id="test_user_123",
             country_of_user=TEST_COUNTRY,
             conversation_phase=ConversationPhase.ACTION_PLANNING,
@@ -1217,7 +1217,7 @@ async def test_tradeoffs_phase():
         preferred_occ = recommendations.occupation_recommendations[2]  # Marketing
 
         state = RecommenderAdvisorAgentState(
-            session_id="test_session_12345",
+            session_id=12345,
             youth_id="test_user_123",
             country_of_user=TEST_COUNTRY,
             conversation_phase=ConversationPhase.DISCUSS_TRADEOFFS,
@@ -1299,7 +1299,7 @@ async def test_followup_phase():
         recommendations = create_sample_recommendations()
 
         state = RecommenderAdvisorAgentState(
-            session_id="test_session_12345",
+            session_id=12345,
             youth_id="test_user_123",
             country_of_user=TEST_COUNTRY,
             conversation_phase=ConversationPhase.FOLLOW_UP,
@@ -1379,7 +1379,7 @@ async def test_skills_pivot_phase():
         recommendations = create_sample_recommendations()
 
         state = RecommenderAdvisorAgentState(
-            session_id="test_session_12345",
+            session_id=12345,
             youth_id="test_user_123",
             country_of_user=TEST_COUNTRY,
             conversation_phase=ConversationPhase.SKILLS_UPGRADE_PIVOT,
@@ -1461,7 +1461,7 @@ async def test_wrapup_phase():
         )
 
         state = RecommenderAdvisorAgentState(
-            session_id="test_session_12345",
+            session_id=12345,
             youth_id="test_user_123",
             country_of_user=TEST_COUNTRY,
             conversation_phase=ConversationPhase.WRAPUP,
@@ -1558,7 +1558,7 @@ async def test_full_conversation():
 
         # Initialize state
         state = RecommenderAdvisorAgentState(
-            session_id="test_session_12345",
+            session_id=12345,
             youth_id="test_user_123",
             country_of_user=TEST_COUNTRY,
             conversation_phase=ConversationPhase.INTRO,

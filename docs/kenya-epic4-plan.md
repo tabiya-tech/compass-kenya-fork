@@ -34,7 +34,7 @@
 **Files to Modify**:
 - `backend/evaluation_tests/e2e_chat_executor.py` - Add metrics_collector parameter, call hooks
 - `backend/evaluation_tests/app_conversation_e2e_test.py` - Initialize collector, export metrics
-- `backend/evaluation_tests/evalution_metrics.py` - Add baseline columns to CSV
+- `backend/evaluation_tests/evaluation_metrics.py` - Add baseline columns to CSV
 
 **Metrics Captured**:
 - Turn count, conversation time (total + by phase + by agent)
