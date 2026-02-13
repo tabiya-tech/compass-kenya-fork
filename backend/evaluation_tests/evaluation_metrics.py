@@ -61,10 +61,7 @@ def pytest_runtest_makereport(item):
     if is_repeated:
         test_name = re.sub(r"-\d+-\d+\]$", "]", item.name)
 
-    label = "untagged"
-
-    if marker and marker.args:
-        label: str = marker.args[0]  # Use the first argument as the version label
+    label: str = marker.args[0] if (marker and marker.args) else "untagged"
 
     # Log result details
     results = [{

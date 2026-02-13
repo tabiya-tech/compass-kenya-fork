@@ -67,7 +67,7 @@ async def test_recommender_advisor_agent_e2e(
     get_i18n_manager().set_locale(test_case.locale)
     print(f"Running E2E test case {test_case.name}")
 
-    session_id = str(get_random_session_id())
+    session_id = get_random_session_id()
     output_folder = os.path.join(os.getcwd(), 'test_output/recommender_agent/e2e', test_case.name)
 
     conversation_manager = ConversationMemoryManager(UNSUMMARIZED_WINDOW_SIZE, TO_BE_SUMMARIZED_WINDOW_SIZE)

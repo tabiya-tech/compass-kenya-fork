@@ -256,11 +256,12 @@ class DatabaseApplicationStateStore(ApplicationStateStore):
                 ]
                 _changes = True
                 self._logger.info(
-                    f"✅ Successfully populated initial_experiences_snapshot with {explored_count} experiences"
+                    "Successfully populated initial_experiences_snapshot with %d experiences",
+                    explored_count
                 )
             elif state.preference_elicitation_agent_state.initial_experiences_snapshot is None:
                 self._logger.warning(
-                    "⚠️  Cannot populate initial_experiences_snapshot: explored_experiences is empty or None"
+                    "Cannot populate initial_experiences_snapshot: explored_experiences is empty or None"
                 )
             else:
                 # Already populated, log for debugging
@@ -301,7 +302,7 @@ class DatabaseApplicationStateStore(ApplicationStateStore):
                 state.recommender_advisor_agent_state.youth_id = f"youth_{state.session_id}"
 
                 _changes = True
-                self._logger.info("✅ Successfully transferred preference data to recommender agent")
+                self._logger.info("Successfully transferred preference data to recommender agent")
 
             # after the upgrade, we save the state
             if _changes:

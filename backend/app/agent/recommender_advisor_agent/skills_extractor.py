@@ -7,10 +7,13 @@ suitable for Node2vec recommendation algorithm.
 
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
-from collections import defaultdict
 
 from app.agent.experience.experience_entity import ExperienceEntity
 from app.vector_search.esco_entities import SkillEntity
+
+PROFICIENCY_WEIGHT_AVG_SCORE = 0.60
+PROFICIENCY_WEIGHT_FREQUENCY = 0.25
+PROFICIENCY_WEIGHT_TOP_SKILL_RATIO = 0.15
 
 
 @dataclass
@@ -43,7 +46,7 @@ class SkillAggregation:
         """
         Calculate proficiency score for this skill.
 
-        Formula: 0.60×avg_score + 0.25×frequency_norm + 0.15×top_skill_ratio
+        Formula: PROFICIENCY_WEIGHT_AVG_SCORE * avg_score + PROFICIENCY_WEIGHT_FREQUENCY * frequency_norm + PROFICIENCY_WEIGHT_TOP_SKILL_RATIO * top_skill_ratio
 
         Where:
         - avg_score: Average of all skill scores
@@ -70,11 +73,10 @@ class SkillAggregation:
         # Ratio of top_skills appearances vs total appearances
         top_skill_ratio = self.from_top_skills / self.frequency if self.frequency > 0 else 0.0
 
-        # Weighted proficiency calculation
         proficiency = (
-            0.60 * avg_score +
-            0.25 * frequency_norm +
-            0.15 * top_skill_ratio
+            PROFICIENCY_WEIGHT_AVG_SCORE * avg_score
+            + PROFICIENCY_WEIGHT_FREQUENCY * frequency_norm
+            + PROFICIENCY_WEIGHT_TOP_SKILL_RATIO * top_skill_ratio
         )
 
         return round(proficiency, 4)
