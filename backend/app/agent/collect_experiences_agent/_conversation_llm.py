@@ -382,7 +382,7 @@ class _ConversationLLM:
                 
                 Do not ask me questions that are not related to the experience data fields listed above.
                 
-                Ask for one or two missing fields at a time. If I provide only one, follow up for the missing information.
+                Ask for exactly one missing field at a time. Do not combine multiple questions in one response.
                 If I say "I already shared the information" or similar, do not ask me to repeat it; use what you already have.
                 
                 Once you have gathered all the information for a work experience, continue collecting more experiences of the same type.
