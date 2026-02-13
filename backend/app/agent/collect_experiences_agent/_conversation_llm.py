@@ -350,12 +350,13 @@ class _ConversationLLM:
                 
                 Do not ask me questions that are not related to the experience data fields listed above.
                 
-                Ask for one or two missing fields at a time. If I provide only one, follow up for the missing information.
+                Ask for exactly one missing field at a time. Do not combine multiple questions in one response.
                 If I say "I already shared the information" or similar, do not ask me to repeat it; use what you already have.
                 
                 Once you have gathered all the information for a work experience, do not do a full recap each time.
                 Only ask a brief confirmation if something is ambiguous or you just corrected a detail.
-                Otherwise acknowledge briefly and move on; the full recap happens at the end.
+                Otherwise acknowledge briefly and always end with a clear question about the next topic or next experience.
+                Never leave the user without a prompt for what comes next.
                 If you do confirm, keep it to one sentence and one question.
                 
                 ##'experience_title' instructions
@@ -668,6 +669,10 @@ def _get_explore_experiences_instructions(*,
             
             We have explored experiences that include:
                 {explored_types}  
+            
+            IMPORTANT: Summarize all collected experiences briefly, then you MUST ask:
+            'Is there anything you would like to add or change before we move on?'
+            Do not just provide a summary without this question. The user needs a clear prompt to continue.
             
             '#Transition' instructions will guide you on how to transition to the next phase.
             """), explored_types=_get_experience_types(explored_types))

@@ -1,0 +1,15 @@
+{
+  "name": "persona_1_sw_simple_swahili",
+  "persona": "informal",
+  "locale": "sw-KE",
+  "country_of_user": "Kenya",
+  "conversation_rounds": 60,
+  "simulated_user_prompt": "Wewe ni kijana kutoka Kenya unayezungumza Kiswahili. Una uzoefu mmoja kama muuzaji wa mboga sokoni Nairobi kuanzia 2022 hadi sasa. Hujawahi kuwa na kazi nyingine, mafunzo, au kazi ya kujitolea. Jibu kwa Kiswahili tu, kwa ufupi, na toa maelezo tu unapoulizwa.",
+  "metrics_thresholds": {
+    "max_turn_count": 28,
+    "max_repetition_rate": 0.10,
+    "min_starter_diversity": 0.30,
+    "min_achievement_rate": 0.05,
+    "max_llm_calls": 220
+  }
+}

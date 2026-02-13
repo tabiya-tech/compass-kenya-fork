@@ -29,3 +29,6 @@ phase_ctx_var = contextvars.ContextVar("phase", default=":none:")
 
 # LLM call duration in milliseconds (for current operation)
 llm_call_duration_ms_ctx_var = contextvars.ContextVar("llm_call_duration_ms", default=-1)
+
+# Detected language for the current turn (ENGLISH, SWAHILI, or MIXED)
+detected_language_ctx_var = contextvars.ContextVar("detected_language", default="english")

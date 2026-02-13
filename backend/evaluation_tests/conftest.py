@@ -65,7 +65,7 @@ async def setup_search_services() -> SearchServices:
 def setup_multi_locale_app_config():
     """
     Ensure ApplicationConfig is set with multi-locale language config for evaluation tests.
-    Reuses existing ApplicationConfig if present, replacing language_config with EN_US, EN_GB, and ES_AR entries.
+    Reuses existing ApplicationConfig if present, replacing language_config with EN_US, EN_GB, ES_AR, and SW_KE entries.
     """
     try:
         current = get_application_config()
@@ -78,7 +78,8 @@ def setup_multi_locale_app_config():
             LocaleDateFormatEntry(locale=Locale.EN_US, date_format="MM/DD/YYYY"),
             LocaleDateFormatEntry(locale=Locale.EN_GB, date_format="DD/MM/YYYY"),
             LocaleDateFormatEntry(locale=Locale.ES_AR, date_format="DD/MM/YYYY"),
-            LocaleDateFormatEntry(locale=Locale.ES_ES, date_format="DD/MM/YYYY")
+            LocaleDateFormatEntry(locale=Locale.ES_ES, date_format="DD/MM/YYYY"),
+            LocaleDateFormatEntry(locale=Locale.SW_KE, date_format="DD/MM/YYYY"),
         ],
     )
 
@@ -94,6 +95,7 @@ def setup_multi_locale_app_config():
             cv_storage_bucket="test",
             features={},
             language_config=language_config,
+            app_name="Compass",
         )
     else:
         config = current.model_copy(update={"language_config": language_config})

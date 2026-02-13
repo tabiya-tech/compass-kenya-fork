@@ -36,6 +36,7 @@ def _ensure_test_app_config():
             LocaleDateFormatEntry(locale=Locale.EN_GB, date_format="DD/MM/YYYY"),
             LocaleDateFormatEntry(locale=Locale.ES_AR, date_format="DD/MM/YYYY"),
             LocaleDateFormatEntry(locale=Locale.ES_ES, date_format="DD/MM/YYYY"),
+            LocaleDateFormatEntry(locale=Locale.SW_KE, date_format="DD/MM/YYYY"),
         ],
     )
     config = ApplicationConfig(
@@ -49,6 +50,7 @@ def _ensure_test_app_config():
         cv_storage_bucket="test",
         features={},
         language_config=language_config,
+        app_name="Compass",
     )
     set_application_config(config)
     reset_date_format_cache()

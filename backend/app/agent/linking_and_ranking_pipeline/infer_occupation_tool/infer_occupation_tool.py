@@ -8,7 +8,9 @@ from pydantic import BaseModel
 
 from app.agent.agent_types import LLMStats
 from app.agent.experience.work_type import WorkType
+from app.context_vars import detected_language_ctx_var
 from app.countries import Country
+from app.i18n.swahili_mapping import SwahiliMappingService
 from app.vector_search.esco_entities import OccupationSkillEntity
 from app.vector_search.esco_search_service import OccupationSkillSearchService, OccupationSearchService
 from app.vector_search.similarity_search_service import FilterSpec
@@ -79,6 +81,25 @@ class InferOccupationTool:
         #  using a different case yields imprecise results
         titles: set[str] = {experience_title.strip().lower()}.union(
             {title.strip().lower() for title in contextualization_response.contextual_titles})
+
+        # Dual-query retrieval for Swahili / mixed input (M3):
+        # When the detected language is Swahili or mixed, normalize Swahili titles
+        # and add the English-normalized versions to the search set alongside originals.
+        detected_lang = detected_language_ctx_var.get("english")
+        if detected_lang in ("swahili", "mixed"):
+            mapping_service = SwahiliMappingService.get_instance()
+            normalized_titles: set[str] = set()
+            for title in list(titles):
+                result = mapping_service.normalize(title)
+                if result.matched and result.normalized.lower() != title:
+                    normalized_titles.add(result.normalized.strip().lower())
+            if normalized_titles:
+                self._logger.info(
+                    "Dual-query: adding %d normalized titles for Swahili input: %s",
+                    len(normalized_titles), normalized_titles
+                )
+                titles = titles.union(normalized_titles)
+
         # Filter out empty titles to avoid calling embeddings with empty text
         titles_before_filtering = len(titles)
         titles = {t for t in titles if t}

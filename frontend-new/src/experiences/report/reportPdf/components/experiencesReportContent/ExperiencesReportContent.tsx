@@ -50,6 +50,7 @@ const ExperiencesReportContent: React.FC<ExperienceProps> = ({ experience, repor
   const showTitle = experienceDetails.title;
   const displayTitle = experience.normalized_experience_title ?? experience.experience_title;
 
+
   return (
     <View style={styles.container} data-testid={DATA_TEST_ID.EXPERIENCES_CONTENT_REPORT_CONTAINER}>
       <View style={styles.contentColumn}>

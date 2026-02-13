@@ -12,7 +12,8 @@ from app.agent.agent_director.llm_agent_director import LLMAgentDirector
 from app.app_config import get_application_config
 from app.application_state import ApplicationStateManager
 from app.constants.errors import HTTPErrorResponse
-from app.context_vars import session_id_ctx_var, user_id_ctx_var, client_id_ctx_var, user_language_ctx_var
+from app.context_vars import session_id_ctx_var, user_id_ctx_var, client_id_ctx_var, user_language_ctx_var, detected_language_ctx_var
+from app.agent.language_detector import detect_language, get_locale_for_detected_language, DetectedLanguage
 from app.conversation_memory.conversation_memory_manager import ConversationMemoryManager
 from app.conversations.constants import MAX_MESSAGE_LENGTH, UNEXPECTED_FAILURE_MESSAGE
 from app.conversations.experience.routes import add_experience_routes
@@ -95,10 +96,22 @@ def add_conversation_routes(app: FastAPI, authentication: Authentication):
         session_id_ctx_var.set(session_id)
         user_id_ctx_var.set(user_id)
 
-        # The user's language to send messages in.
-        # For now, it is using the backend default language from app_config.
+        # Detect the user's language from their input and set the locale accordingly.
+        # This enables runtime language switching between English and Swahili.
         app_config = get_application_config()
-        user_language_ctx_var.set(app_config.language_config.default_locale)
+        default_locale = app_config.language_config.default_locale
+
+        detected = detect_language(user_input)
+        detected_language_ctx_var.set(detected.value)
+        locale_str = get_locale_for_detected_language(detected, default_locale.value)
+        try:
+            user_language_ctx_var.set(Locale.from_locale_str(locale_str))
+        except ValueError:
+            # If detected locale is not yet registered (e.g., sw-KE not in Locale enum yet),
+            # fall back to the default locale.
+            logger.warning("Detected locale '%s' not registered, falling back to default '%s'",
+                           locale_str, default_locale.value)
+            user_language_ctx_var.set(default_locale)
 
         # Do not allow user input that is too long,
         # as a basic measure to prevent abuse.
