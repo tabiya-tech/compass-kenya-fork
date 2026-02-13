@@ -1,0 +1,771 @@
+{
+  "common": {
+    "buttons": {
+      "login": "Ingia",
+      "logout": "Toka",
+      "submit": "Wasilisha",
+      "register": "Jisajili",
+      "startNewConversation": "Anza mazungumzo mapya",
+      "settings": "Mipangilio",
+      "cancel": "Ghairi",
+      "confirm": "Ndio, nina uhakika",
+      "backToLogin": "Rudi kwenye kuingia",
+      "save": "Hifadhi",
+      "goBack": "Rudi",
+      "restore": "Rejesha",
+      "revert": "Rudisha",
+      "continue": "Endelea",
+      "noThankYou": "Hapana, asante",
+      "iWantToStay": "Nataka kubaki",
+      "yes": "Ndio",
+      "no": "Hapana",
+      "skip": "Ruka",
+      "yesExit": "Ndio, toka"
+    },
+    "fields": {
+      "email": "Barua pepe",
+      "password": "Nenosiri",
+      "confirmEmail": "Thibitisha barua pepe"
+    },
+    "validation": {
+      "validEmailRequired": "Tafadhali ingiza anwani sahihi ya barua pepe",
+      "emailsDoNotMatch": "Barua pepe hazifanani",
+      "passwordMinLength": "Nenosiri lazima liwe na angalau herufi 8.",
+      "passwordNeedLowercase": "Nenosiri lazima liwe na angalau herufi moja ndogo.",
+      "passwordNeedUppercase": "Nenosiri lazima liwe na angalau herufi moja kubwa.",
+      "passwordNeedNumber": "Nenosiri lazima liwe na angalau nambari moja.",
+      "passwordNeedSpecialChar": "Nenosiri lazima liwe na angalau alama moja maalum kama: !@#$%*& nk."
+    },
+    "chat": {
+      "errors": {
+        "messageLimit": "Kikomo cha ujumbe ni herufi {{max}}.",
+        "invalidSpecialCharacters": "Alama maalum zisizo sahihi: {{chars}}"
+      }
+    },
+    "upload": {
+      "errors": {
+        "maxFileSize": "Faili iliyochaguliwa ni kubwa sana. Ukubwa wa juu ni MB 3.",
+        "tooDense": "Maudhui ya faili iliyopakiwa ni ndefu sana kuchakatwa. Tafadhali punguza urefu wake na ujaribu tena.",
+        "emptyParse": "Hatukuweza kutambua uzoefu katika CV yako. Tafadhali angalia faili na ujaribu tena.",
+        "generic": "Imeshindikana kuchakata CV yako. Tafadhali jaribu tena au tumia faili nyingine.",
+        "rateLimit": "Upakiaji mwingi sana kwa wakati mmoja. Tafadhali subiri dakika moja na ujaribu tena.",
+        "maxUploadsReached": "Umefika kikomo cha upakiaji wa CV kwa mazungumzo haya. Upakiaji zaidi hauruhusiwi.",
+        "duplicate": "CV hii tayari imepakiwa. Ichague kutoka CV zako zilizopakiwa awali.",
+        "unsupportedFileType": "Aina ya faili haikusaiidiwi. Inaruhusiwa: PDF, DOCX, TXT.",
+        "timeout": "Upakiaji umeisha muda. Tafadhali jaribu tena.",
+        "unauthorized": "Huna ruhusa. Tafadhali ingia tena.",
+        "uploadNotFound": "Upakiaji haujapatikana. Huenda haukuanza.",
+        "cvMarkdownTooLong": "Maudhui ya CV yako ni ndefu sana. Tafadhali fupisha CV yako na ujaribu tena."
+      }
+    },
+    "time": {
+      "onDate": "tarehe {{date}}",
+      "yesterday": "jana",
+      "daySingular": "siku",
+      "dayPlural": "siku",
+      "hourSingular": "saa",
+      "hourPlural": "masaa",
+      "minuteSingular": "dakika",
+      "minutePlural": "dakika",
+      "ago": "{{time}} iliyopita",
+      "justNow": "sasa hivi"
+    },
+    "errors": {
+      "updateState": "Imeshindikana kusasisha hali ya upangaji wa ujuzi. Tafadhali jaribu tena baadaye.",
+      "generic": "Kuna kitu kimekwenda vibaya. Tafadhali jaribu tena.",
+      "api": {
+        "requestTooLong": "Data iliyotumwa kwa huduma inaonekana kuwa kubwa sana. Tafadhali jaribu tena na data ndogo zaidi.",
+        "tooManyRequests": "Inaonekana unafanya maombi mengi sana. Tafadhali punguza kasi na ujaribu tena baadaye.",
+        "unexpectedError": "Kosa lisilotarajiwa limetokea. Tafadhali jaribu tena baadaye.",
+        "serverConnectionError": "Haiwezi kuunganisha na huduma. Tafadhali angalia muunganisho wako wa mtandao au jaribu tena baadaye.",
+        "resourceNotFound": "Rasilimali iliyoombwa haijapatikana. Tafadhali futa kashe ya kivinjari chako na upakie upya ukurasa.",
+        "authenticationFailure": "Inaonekana haujaingia. Tafadhali ingia ili kuendelea.",
+        "permissionDenied": "Inaonekana huna ruhusa zinazohitajika. Tafadhali toka na uingie tena.",
+        "unableToProcessResponse": "Tumekutana na tatizo wakati wa kuchakata data. Futa kashe ya kivinjari na upakie upya au jaribu tena baadaye.",
+        "serviceUnavailable": "Huduma haipatikani kwa sasa. Tafadhali jaribu tena baadaye.",
+        "dataValidationError": "Inaonekana kuna tatizo na ombi lako. Tafadhali hakikisha data ni sahihi na ujaribu tena.",
+        "unableToProcessRequest": "Samahani. Kuna kitu kimekwenda vibaya wakati wa kuchakata ombi lako."
+      }
+    },
+    "status": {
+      "calculating": "Inakokotoa",
+      "cancelling": "Inaghairi",
+      "saving": "Inahifadhi"
+    },
+    "backdrop": {
+      "loggingYouOut": "Tunakutoa nje..."
+    },
+    "modal": {
+      "areYouSure": "Una uhakika?",
+      "areYouSureYouWantToExit": "Una uhakika unataka kutoka?"
+    }
+  },
+  "chat": {
+    "chatHeader": {
+      "viewExperiences": "Tazama uzoefu",
+      "feedbackMessage": "Tungependa kusikia maoni yako kuhusu uzoefu wako hadi sasa!",
+      "giveFeedback": "Toa Maoni",
+      "feedbackMessagePlaceholder": "Tungependa kusikia mawazo yako! Tafadhali shiriki maoni au mapendekezo yoyote unayoyaweka kwa kuboresha {{appName}}.",
+      "sendFeedback": "Tuma Maoni",
+      "feedbackSuccessMessage": "Asante kwa maoni yako!",
+      "giveGeneralFeedback": "Toa maoni ya jumla",
+      "userInfo": "Taarifa za mtumiaji",
+      "userIconAlt": "Ikoni ya Mtumiaji",
+      "beforeYouGo": "Kabla hujaondoka",
+      "logoutConfirmationMessage": "Una uhakika unataka kutoka?",
+      "anonymousAccountWarning": "Kwa sasa unatumia akaunti isiyojulikana. Ukitoka, utapoteza historia ya mazungumzo yako na uzoefu.",
+      "logoutWarningAnonymous": "Ukitoka, utapoteza historia ya mazungumzo yako na uzoefu.",
+      "createAccountToSaveProgress": "Unda akaunti ili kuhifadhi maendeleo yako",
+      "continueYourJourneyLater": "na uendelee safari yako baadaye.",
+      "formTitle": "Toa maoni ya jumla",
+      "nameLabel": "Jina",
+      "namePlaceholder": "Jina Lako",
+      "emailLabel": "Barua pepe",
+      "descriptionLabel": "Maelezo",
+      "emailPlaceholder": "barua.pepe@mfano.org",
+      "addScreenshot": "Ongeza picha ya skrini",
+      "requiredLabel": "(inahitajika)",
+      "cancelButton": "Ghairi"
+    },
+    "cvUploadPolling": {
+      "uploadingCv": "Inapakia CV",
+      "cancelled": "Upakiaji wa CV umeghairiwa",
+      "uploadedSuccessfully": "CV imepakiwa kwa mafanikio",
+      "converting": "Inabadilisha CV",
+      "processing": "Inachakata CV",
+      "extractingExperiences": "Inatoa uzoefu",
+      "savingCv": "Inahifadhi CV",
+      "failed": "Upakiaji wa CV umeshindikana",
+      "failedToStart": "Imeshindikana kuanza upakiaji.",
+      "networkErrorStatus": "Kosa la mtandao wakati wa kuangalia hali ya upakiaji.",
+      "failedToCancel": "Imeshindikana kughairi upakiaji",
+      "uploadingFileNamed": "Inapakia {{filename}}...",
+      "thinkingMessage": "Inachakata CV yako, hii inaweza kuchukua muda..."
+    },
+    "chatMessageField": {
+      "addActionAriaLabel": "ongeza",
+      "moreActionsTooltip": "vitendo zaidi",
+      "sendMessageTooltip": "tuma ujumbe",
+      "uploadCvIntro": "Unaweza kupakia CV yako mara tu tunapoanza kuchunguza uzoefu wako",
+      "uploadCvCollectExperiences": "PDF, DOCX, TXT • Upeo wa MB {{MAX_FILE_SIZE_MB}} • Herufi {{MAX_MARKDOWN_CHARS}} upeo",
+      "uploadCvOtherPhase": "Upakiaji wa CV unapatikana tu wakati wa ukusanyaji wa uzoefu",
+      "uploadCvLabel": "Pakia CV",
+      "viewUploadedLabel": "CV zilizopakiwa awali",
+      "placeholders": {
+        "chatFinished": "Mazungumzo yamekamilika. Huwezi kutuma ujumbe zaidi.",
+        "aiTyping": "AI inaandika..., subiri ikamilishe.",
+        "offline": "Hauko mtandaoni. Tafadhali unganisha kwenye mtandao ili kutuma ujumbe.",
+        "default": "Andika ujumbe wako...",
+        "uploading": "Inapakia CV..."
+      }
+    },
+    "chatMessage": {
+      "typingChatMessage": {
+        "typing": "Inaandika",
+        "thinking": "Inatafuta ujuzi unaohusiana na uzoefu huu"
+      },
+      "conversationConclusionFooter": {
+        "youCanNow": "Sasa unaweza",
+        "viewAndDownloadCv": "Tazama na Pakua CV yako",
+        "here": "hapa.",
+        "createAccountIntro": "Ikiwa ungependa kuchunguza ujuzi na uzoefu wako baadaye, unaweza",
+        "createAccount": "Unda Akaunti",
+        "verificationReminder": "Barua pepe ya uthibitisho imetumwa kwenye anwani yako. Tafadhali thibitisha akaunti yako kabla ya kuingia tena.",
+        "feedbackWelcome": "Tungependa kupata",
+        "feedbackLinkText": "Maoni",
+        "feedbackFromYouSuffix": "zaidi kutoka kwako. Inachukua dakika 5 tu na inatusaidia kuboresha!",
+        "feedbackInProgressPrefix": "Tafadhali",
+        "feedbackInProgressLinkText": "Kamilisha Maoni yako",
+        "feedbackInProgressSuffix": "ili kutusaidia kuboresha uzoefu wako!"
+      },
+      "sent": "imetumwa "
+    },
+    "chat": {
+      "notifications": {
+        "experiencesFetchFailed": "Imeshindikana kupata uzoefu",
+        "logoutSuccess": "Umetoka kwa mafanikio",
+        "startConversationFailed": "Imeshindikana kuanza mazungumzo mapya",
+        "startConversationSuccess": "Mazungumzo mapya yameanza"
+      },
+      "backdrop": {
+        "loggingOut": "Tunakutoa nje, subiri kidogo..."
+      },
+      "startNewConversationDialog": {
+        "title": "Anza Mazungumzo Mapya?",
+        "content": "Unapoanza mazungumzo mapya, ujumbe wote wa mazungumzo ya sasa utapotea milele.",
+        "confirmation": "Una uhakika unataka kuanza mazungumzo mapya?"
+      },
+      "refreshConfirmationDialog": {
+        "title": "Una uhakika ungependa kupaisha upya?",
+        "content": "{{appName}} inaandika na kupaisha upya ukurasa kunaweza kusababisha matatizo. Unaweza kupoteza maendeleo ya mazungumzo yako ya sasa.",
+        "question": "Ungependa kusubiri {{appName}} imalize, au upakie upya?",
+        "waitButton": "Subiri {{appName}}",
+        "refreshButton": "Paisha upya"
+      }
+    },
+    "chatProgressbar": {
+      "labels": {
+        "workTypes": "aina za kazi",
+        "experiences": "uzoefu",
+        "questions": "maswali",
+        "tasks": "kazi"
+      },
+      "phases": {
+        "initializing": "Inaanzisha...",
+        "intro": "Utangulizi",
+        "collecting": "Inakusanya",
+        "exploring": "Inachunguza",
+        "discoveringPreferences": "Inagundua mapendeleo",
+        "rankingOccupations": "Inapanga kazi",
+        "finished": "Mazungumzo yamekamilika",
+        "unknown": "Hatua isiyojulikana"
+      }
+    },
+    "util": {
+      "feedbackThankYou": "Asante kwa kuchukua muda kushiriki maoni yako muhimu.",
+      "ratingThankYou": "Asante kwa kukadiria {{appName}}.",
+      "errorSomethingWentWrong": "Samahani, kuna kitu kimekwenda vibaya upande wangu... Tafadhali paisha upya ukurasa na ujaribu tena?",
+      "errorPleaseRepeat": "Samahani, kuna kitu kimekwenda vibaya upande wangu... Tafadhali rudia tena?",
+      "messages": {
+        "experiencesIntro": "Hizi ni uzoefu wangu:"
+      }
+    },
+    "reaction": {
+      "components": {
+        "dislikeReasonPopover": {
+          "title": "Tafadhali tuambie tatizo ni nini?",
+          "closeButton": "funga maoni",
+          "reasons": {
+            "inappropriateTone": "Toni isiyofaa",
+            "offensiveLanguage": "Lugha ya kukera",
+            "biased": "Upendeleo",
+            "incorrectInformation": "Taarifa isiyo sahihi",
+            "irrelevant": "Haihusiani",
+            "confusing": "Inachanganya"
+          }
+        },
+        "reactionButtons": {
+          "likeLabel": "penda",
+          "dislikeLabel": "sipendi",
+          "errors": {
+            "submitLike": "Imeshindikana kuwasilisha maoni. Tafadhali jaribu tena.",
+            "removeLike": "Imeshindikana kuondoa maoni. Tafadhali jaribu tena.",
+            "submitDislike": "Imeshindikana kuwasilisha maoni. Tafadhali jaribu tena.",
+            "removeDislike": "Imeshindikana kuondoa maoni. Tafadhali jaribu tena."
+          }
+        }
+      }
+    }
+  },
+  "auth": {
+    "pages": {
+      "login": {
+        "welcomeTitle": "Karibu kwenye {{appName}}!",
+        "welcomeBack": "Karibu tena!",
+        "loginToYourAccountToContinue": "Ingia kwenye akaunti yako ili kuendelea",
+        "loginUsing": "Ingia ukitumia",
+        "loggingYouIn": "Tunakuingiza...",
+        "loggingInAria": "Inaingia",
+        "dontHaveAnAccount": "Huna akaunti? ",
+        "fillInEmailAndPassword": "Tafadhali jaza barua pepe na nenosiri",
+        "orLoginToYourAccountToContinue": "Au ingia kwenye akaunti yako ili kuendelea",
+        "or": "au",
+        "invitationCodeValid": "Nambari ya mwaliko ni sahihi",
+        "continueAsGuest": "Endelea kama Mgeni",
+        "components": {
+          "loginWithInviteCodeForm": {
+            "loginCode": "Nambari ya Kuingia"
+          }
+        }
+      },
+      "register": {
+        "welcomeTitle": "Karibu kwenye {{appName}}!",
+        "welcomeBack": "Karibu tena!",
+        "subtitle": "Tunahitaji taarifa fulani ili kuanza",
+        "registerWithGoogle": "Jisajili na Google",
+        "alreadyHaveAccount": "Tayari una akaunti?",
+        "registeringYou": "Tunakusajili...",
+        "enterRegistrationCode": "Ingiza nambari yako ya usajili",
+        "registrationCode": "Nambari ya usajili",
+        "andEitherContinueWith": "na endelea na",
+        "components": {
+          "registerWithEmailForm": {
+            "registeringAria": "Inasajili"
+          }
+        }
+      },
+      "landing": {
+        "continueAsGuest": "Endelea kama Mgeni",
+        "subtitleBold": "Gundua Uwezo Wako Kamili",
+        "subtitleBody": "Gundua na ueleze ujuzi wako kupitia mazungumzo ya asili yanayoongozwa na AI. Jenga wasifu wako wa ujuzi na upakue CV ili kuanza kutafuta kazi. Unda akaunti ya bure ili kuhifadhi maendeleo yako na kutembelea tena historia ya mazungumzo yako.",
+        "invitationCodeValid": "Nambari ya mwaliko ni sahihi",
+        "welcome": "Karibu!",
+        "welcomeTitle": "Karibu kwenye {{appName}}!",
+        "or": "au",
+        "loggingYouIn": "Tunakuingiza..."
+      },
+      "verifyEmail": {
+        "registrationThankYou": "Asante kwa kujisajili kwenye {{appName}}.",
+        "verificationEmailSentMessage": "Barua pepe ya uthibitisho imetumwa kwenye anwani yako ya barua pepe. Ili kuendelea, tafadhali thibitisha anwani yako ya barua pepe kwanza."
+      }
+    },
+    "components": {
+      "anonymousAccountConversionDialog": {
+        "registerAccount": "Sajili Akaunti",
+        "registrationInfo": "Tafadhali jisajili na barua pepe ili kuhifadhi ufikivu wa mazungumzo haya.",
+        "closeRegistrationForm": "Funga fomu ya usajili",
+        "invalidEmail": "Tafadhali ingiza anwani sahihi ya barua pepe",
+        "emailsMismatch": "Tafadhali hakikisha anwani zote mbili za barua pepe zinafanana",
+        "passwordRequirementsNotMet": "Tafadhali hakikisha nenosiri lako linakidhi mahitaji yote",
+        "registrationSuccess": "Akaunti imesajiliwa kwa mafanikio!",
+        "verificationSentWithEmail": "Kwa sasa umeingia na barua pepe: {{email}}. Barua pepe ya uthibitisho imetumwa. Tafadhali thibitisha akaunti yako kabla ya kuingia tena.",
+        "registrationFailed": "Imeshindikana kusajili akaunti",
+        "emailWarning": "Tafadhali hakikisha unatumia barua pepe sahihi, kwani haiwezi kubadilishwa baadaye na utaulizwa kuithibitisha."
+      },
+      "passwordReset": {
+        "forgotPassword": "Umesahau nenosiri?",
+        "pleaseEnterEmail": "Tafadhali ingiza anwani yako ya barua pepe",
+        "passwordResetEmailSent": "Barua pepe ya kuweka upya nenosiri imetumwa!",
+        "failedToSendResetEmail": "Imeshindikana kutuma barua pepe ya kuweka upya",
+        "passwordResetLinkSent": "Kiungo cha kuweka upya nenosiri kimetumwa kwenye anwani yako ya barua pepe.",
+        "resetPassword": "Weka upya Nenosiri",
+        "closePasswordResetForm": "Funga fomu ya kuweka upya nenosiri"
+      },
+      "registrationCodeFormModal": {
+        "closeRegistrationCodeForm": "Funga fomu ya nambari ya usajili",
+        "noRegistrationCodePrompt": "Huna nambari ya usajili?",
+        "reachOut": "Wasiliana nasi"
+      },
+      "requestInvitationCodeFormModal": {
+        "requestAccessTitle": "Omba ufikivu wa {{appName}}",
+        "requestAccessSubtitle": "Tafadhali tuambie jinsi unavyopanga kutumia {{appName}}. Tutakagua ombi lako kwa makini na kukuwasiliana nawe hivi karibuni.",
+        "closeRequestInvitationForm": "Funga fomu ya kuomba nambari ya mwaliko",
+        "name": "Jina",
+        "message": "Ujumbe",
+        "messagePlaceholder": "Tafadhali shiriki jinsi unavyopanga kutumia {{appName}}",
+        "invitationRequestSubmitSuccess": "Ombi lako la ufikivu wa {{appName}} limewasilishwa kwa mafanikio.",
+        "invitationRequestSubmitError": "Kuna kitu kimekwenda vibaya wakati wa kujaribu kutuma ombi lako"
+      },
+      "requestInvitationCode": {
+        "requestLoginCode": "Huna nambari ya kuingia?"
+      },
+      "resendVerificationEmail": {
+        "emailNotVerified": "Barua pepe yako haijathibitishwa. Tafadhali angalia kisanduku chako cha barua pepe.",
+        "resendVerificationEmail": "Tuma tena barua pepe ya uthibitisho",
+        "resendVerificationEmailSuccess": "Barua pepe ya uthibitisho imetumwa kwa mafanikio",
+        "resendVerificationEmailFailedWithMessage": "Imeshindikana kutuma barua pepe ya uthibitisho: {{message}}"
+      },
+      "socialAuth": {
+        "orContinueWith": "Au endelea na",
+        "loginWithGoogle": "Ingia na Google",
+        "googleLoginIsNotAvailableWhenOffline": "Kuingia na Google hakupatikani ukiwa nje ya mtandao.",
+        "socialFailedLoginWithMessage": "Imeshindikana kuingia: {{message}}",
+        "accountNotRegistered": "Akaunti hii haijasajiliwa. Tafadhali wasiliana na mtoa kiungo hiki."
+      }
+    },
+    "loggingYouOutNotice": "Tunakutoa nje...",
+    "errors": {
+      "loginFailedWithMessage": "Imeshindikana kuingia: {{message}}",
+      "registerFailedWithMessage": "Usajili Umeshindikana: {{message}}",
+      "preferencesFetchFailedWithMessage": "Kosa limetokea wakati wa kujaribu kupata mapendeleo yako: {{message}}",
+      "firebase": {
+        "emailAlreadyInUse": "Anwani ya barua pepe tayari inatumika na akaunti nyingine.",
+        "emailNotVerified": "Barua pepe unayotumia imesajiliwa, lakini bado hujaithibitisha. Tafadhali thibitisha barua pepe yako ili kuendelea.",
+        "invalidCredential": "Barua pepe/nenosiri iliyotolewa si sahihi.",
+        "invalidEmail": "Anwani ya barua pepe si sahihi.",
+        "operationNotAllowed": "Akaunti za barua pepe/nenosiri hazijawezeshwa.",
+        "weakPassword": "Nenosiri ni dhaifu sana.",
+        "userDisabled": "Akaunti ya mtumiaji imezimwa.",
+        "userNotFound": "Hakuna mtumiaji aliyepatikana kwa stakabadhi zilizotolewa.",
+        "wrongPassword": "Nenosiri si sahihi.",
+        "tooManyRequests": "Tumezuia maombi yote kutoka kifaa hiki kwa sababu ya shughuli zisizo za kawaida. Jaribu tena baadaye.",
+        "internalError": "Kosa la ndani limetokea.",
+        "tooManyUsers": "Kuna watumiaji wengi sana kwenye mradi huu.",
+        "invalidRegistrationCode": "Nambari ya usajili uliyoingiza si sahihi. Tafadhali angalia nambari na ujaribu tena.",
+        "invalidInvitationCode": "Nambari ya mwaliko uliyoingiza si sahihi. Tafadhali angalia nambari na ujaribu tena.",
+        "invalidInvitationType": "Nambari uliyotumia ni ya usajili na si ya kuingia. Tafadhali nenda kwenye ukurasa wa usajili.",
+        "invalidRegistrationType": "Nambari uliyotumia ni ya kuingia na si ya usajili. Tafadhali nenda kwenye ukurasa wa kuingia.",
+        "popupClosedByUser": "Dirisha la kuingia la Google lilifungwa kabla ya kukamilisha mchakato wa kuingia.",
+        "invalidLoginMethod": "Operesheni hii hairuhusiwi kwa njia ya sasa ya kuingia.",
+        "emailAlreadyVerified": "Anwani ya barua pepe tayari imethibitishwa."
+      }
+    },
+    "verificationEmailSentShort": "Barua pepe ya Uthibitisho Imetumwa!"
+  },
+  "experiences": {
+    "experiencesDrawer": {
+      "components": {
+        "experienceEditForm": {
+          "components": {
+            "summaryEditField": {
+              "summaryPlaceholder": "Muhtasari wa uzoefu",
+              "restoreFailed": "Imeshindikana kurejesha muhtasari. Tafadhali jaribu tena baadaye.",
+              "restored": "Muhtasari umejeshwa."
+            }
+          },
+          "updateSuccess": "Uzoefu umesasishwa kwa mafanikio!",
+          "updateFailed": "Imeshindikana kusasisha uzoefu. Tafadhali jaribu tena baadaye.",
+          "skillsAddedSuccess": "Ujuzi umeongezwa kwa mafanikio!",
+          "editTitle": "Hariri Uzoefu",
+          "infoLabel": "Taarifa za uzoefu",
+          "infoHelp": "Bonyeza sehemu ili kusasisha aina ya kazi, jina, tarehe, kampuni, mahali, au muhtasari wa uzoefu wako.",
+          "field": {
+            "experienceTitlePlaceholder": "Jina la uzoefu",
+            "experienceTitleRequired": "* Jina la uzoefu linahitajika",
+            "startDatePlaceholder": "Tarehe ya kuanza",
+            "endDatePlaceholder": "Tarehe ya kumaliza",
+            "companyPlaceholder": "Kampuni",
+            "locationPlaceholder": "Mahali"
+          },
+          "topSkillsHelpEdit": "Bonyeza ujuzi ili kuona maelezo zaidi. Tumia menyu ya kushuka kubadilisha lebo ya ujuzi na ikoni ya kufuta kuiondoa. Bonyeza kitufe cha Ongeza Ujuzi kuongeza zaidi.",
+          "addSkillButton": "Ongeza ujuzi",
+          "updatingBackdrop": "Inasasisha uzoefu...",
+          "maxCharsAllowed": "Upeo wa herufi {{count}} unaruhusiwa."
+        },
+        "experiencesDrawerHeader": {
+          "closeTitle": "Funga uzoefu"
+        },
+        "experiencesDrawerContent": {
+          "menu": {
+            "edit": "Hariri",
+            "delete": "Futa",
+            "revert": "Rudisha"
+          },
+          "actionsUnavailableUntilExplored": "Vitendo hivi vitapatikana baada ya kujadili uzoefu kwa undani na {{appName}}.",
+          "moreOptionsTitle": "Chaguo zaidi",
+          "topSkillsLabel": "Ujuzi wa Juu",
+          "topSkillsHelp": "Bonyeza ujuzi ili kuona maelezo zaidi.",
+          "noSkillsYet": "Hakuna ujuzi uliogunduliwa bado",
+          "untitled": "Bila jina!"
+        },
+        "skillPopover": {
+          "alsoKnownAs": "Pia inajulikana kama:"
+        },
+        "restoreExperiencesDrawer": {
+          "title": "Rejesha Uzoefu",
+          "fetchFailed": "Imeshindikana kupata uzoefu uliofutwa. Tafadhali jaribu tena baadaye.",
+          "empty": "Hakuna uzoefu uliofutwa uliopatikana."
+        },
+        "downloadReportButton": {
+          "downloadCv": "Pakua CV",
+          "downloading": "Inapakua",
+          "helpTipBlockedMessage": "Huwezi kupakua ripoti hadi umalize kuchunguza angalau uzoefu mmoja."
+        }
+      },
+      "deleteSuccess": "Uzoefu umefutwa kwa mafanikio!",
+      "deleteFailed": "Imeshindikana kufuta uzoefu.",
+      "userHasNoSessions": "Mtumiaji hana vipindi",
+      "noActiveSession": "Hakuna kipindi kinachotumika kilichopatikana",
+      "restoreSuccess": "Uzoefu umerejeshwa kwa mafanikio!",
+      "restoreFailed": "Imeshindikana kurejesha uzoefu.",
+      "personalInfoTooltip": "Sehemu zimejazwa kwa taarifa ulizoweza kutoa awali na zimehifadhiwa kwa usalama kwenye kifaa chako.",
+      "andSkillsTitle": "Uzoefu na Ujuzi",
+      "personalInformationTitle": "Taarifa za Kibinafsi",
+      "personalInfo": {
+        "nameLabel": "Jina:",
+        "namePlaceholder": "Ingiza jina lako hapa",
+        "emailLabel": "Barua pepe:",
+        "emailPlaceholder": "Ingiza barua pepe yako hapa",
+        "phoneLabel": "Simu:",
+        "phonePlaceholder": "Ingiza nambari yako ya simu hapa",
+        "addressLabel": "Anwani:",
+        "addressPlaceholder": "Ingiza anwani yako hapa"
+      },
+      "uncategorizedTooltip": "Kulingana na mazungumzo, uzoefu huu haukuweza kuainishwa kiotomatiki.",
+      "restoreDeletedLink": "Rejesha uzoefu uliofutwa",
+      "unsavedChanges": {
+        "title": "Mabadiliko Yasiyohifadhiwa",
+        "content": "Una mabadiliko yasiyohifadhiwa. Una uhakika unataka kufunga bila kuhifadhi?",
+        "closeButton": "Funga",
+        "keepEditingButton": "Endelea Kuhariri"
+      },
+      "delete": {
+        "title": "Futa Uzoefu",
+        "content": "Una uhakika unataka kufuta uzoefu huu? Kitendo hiki hakiwezi kutenduliwa.",
+        "confirmButton": "Futa"
+      },
+      "revert": {
+        "title": "Rudisha Uzoefu",
+        "content": "Una uhakika unataka kurudisha uzoefu huu kwenye toleo lake la awali? Hii itafuta mabadiliko yoyote uliyoyafanya.",
+        "confirmButton": "Rudisha"
+      },
+      "deletingBackdrop": "Inafuta uzoefu...",
+      "restoringBackdrop": "Inarejesha uzoefu...",
+      "emptyStateMessage": "Bado hatujagunduza uzoefu wowote. Tuendelee kuzungumza.",
+      "util": {
+        "workTypeDescription": {
+          "selfEmployment": "Unajifanyia kazi, unaendesha biashara yako mwenyewe, au unachukua kazi za kujitegemea",
+          "formalSectorWagedEmployment": "Una kazi ya kulipwa na unafanya kazi kwa mwajiri, kampuni, au shirika",
+          "formalSectorUnpaidTraineeWork": "Uko katika jukumu la mafunzo au uzoefu wa kazi ili kupata ujuzi",
+          "unseenUnpaid": "Unafanya kazi isiyolipwa kama kutunza watu, kazi za nyumbani, au kujitolea kwa jamii",
+          "uncategorized": "{{appName}} haikuweza kuainisha aina hii ya kazi"
+        },
+        "errors": {
+          "experienceTitleMaxLength": "Upeo wa herufi {{max}} unaruhusiwa.",
+          "companyMaxLength": "Upeo wa herufi {{max}} unaruhusiwa.",
+          "locationMaxLength": "Upeo wa herufi {{max}} unaruhusiwa.",
+          "summaryMaxLength": "Upeo wa herufi {{max}} unaruhusiwa.",
+          "timelineMaxLength": "Upeo wa herufi {{max}} unaruhusiwa."
+        }
+      }
+    },
+    "report": {
+      "skillsReportTitle": "Ripoti ya Ujuzi",
+      "skillsDescriptionTitle": "Maelezo ya Ujuzi",
+      "experiencesTitle": "UZOEFU",
+      "selfEmploymentTitle": "Kujiajiri",
+      "salaryWorkTitle": "Kazi ya Mshahara",
+      "unpaidWorkTitle": "Kazi Isiyolipwa",
+      "traineeWorkTitle": "Kazi ya Mfunzwa",
+      "uncategorizedTitle": "Haijaainishwa",
+      "topSkillsTitle": "Ujuzi wa Juu: ",
+      "skillsDescriptionText": "Hapa chini, utapata orodha ya ujuzi uliogunduliwa wakati wa mazungumzo yako na {{appName}}, pamoja na maelezo yake.",
+      "disclaimer": {
+        "part1": "Kanusho: ",
+        "part2": "Ujuzi ulioorodheshwa unategemea mazungumzo na mgombea, haujathibitishwa na Tabiya, na unaweza kuwa si sahihi. ",
+        "part3": "Taarifa inapaswa kukaguliwa kabla ya kutumika kwa kutafuta kazi, mahojiano ya kazi, au kuunda CV."
+      },
+      "bodyText": "Ripoti hii inafupisha taarifa muhimu zilizokusanywa wakati wa mazungumzo na {{appName}} tarehe {{date}}. {{appName}} ni chatbot ya AI inayosaidia watafutaji wa kazi kuchunguza ujuzi na uzoefu wao."
+    }
+  },
+  "features": {
+    "skillsRanking": {
+      "components": {
+        "skillsRankingPrompt": {
+          "mainMessage": "Karibu kumaliza! Jibu maswali machache zaidi ya utafiti na tutakutumia <0>{{compensationAmount}}</0> muda wa maongezi ukishamaliza kazi zote."
+        },
+        "skillsRankingBriefing": {
+          "introWorkBased": "Ikiwa una hamu, ninaweza kukokotoa ni sehemu gani ya fursa za <0>{{jobPlatformUrl}}</0> zinazofanana na ujuzi wako.",
+          "introTimeBased": "Ikiwa una hamu, ninaweza kukokotoa ni sehemu gani ya fursa za <0>{{jobPlatformUrl}}</0> zinazofanana na ujuzi wako. Hii inaweza kuchukua muda.",
+          "puzzleInstructions": "Utaona herufi zilizopinduka kwenye skrini chache. Pindua kila herufi kuwa sawa ukitumia vifungo vya kupindua.",
+          "failedToContinue": "Imeshindikana kuendelea. Tafadhali jaribu tena baadaye."
+        },
+        "skillsRankingProofOfValue": {
+          "waitingMessage": "Tafadhali subiri ninapofanya mahesabu, au bonyeza ghairi wakati wowote.",
+          "puzzleAutoCompleteMessage": "Inakamilisha mafumbo yaliyobaki kiotomatiki..."
+        },
+        "skillsRankingCompletionAdvice": {
+          "adviceMessage": "Ushauri: Nambari hizi ni zako. Nambari hizi zinawezaje kubadilisha jinsi unavyotafuta kazi wiki hii?"
+        },
+        "skillsRankingRetypedRank": {
+          "question_1": "Kama swali la mwisho, tukumbuke nilichokuambia hapo juu kuhusu ufanano wako na fursa:",
+          "question_2": "angalia tena nilichosema ujumbe tatu uliopita, ni asilimia ngapi ya fursa",
+          "question_3": " kwenye",
+          "question_4": " unakidhi ujuzi muhimu?",
+          "sliderAria": "Kitelezi cha asilimia ya nafasi iliyoandikwa tena"
+        },
+        "skillsRankingPerceivedRank": {
+          "questionWithDisclosure": "Sasa, fikiria watumiaji hawa 100 wa <0>{{jobPlatformUrl}}</0>. <0>Ni wangapi kati ya 100 hao</0> unaaminini wanafaa kwa <0>fursa chache zaidi</0> kwenye <0>{{jobPlatformUrl}}</0> <0>kuliko wewe</0>?",
+          "questionWithoutDisclosure": "Kabla hatujamaliza mazungumzo yetu, nina swali moja la mwisho.",
+          "sliderAria": "Kitelezi cha asilimia ya nafasi inayodhaniwa"
+        },
+        "skillsRankingDisclosure": {
+          "skillsRankingMarketDisclosure": {
+            "message_1": "Unakidhi ujuzi muhimu kwa ",
+            "message_2": " ya fursa zilizotangazwa kwenye ",
+            "message_3": ". Huo ni uwanja mzuri wa chaguo!"
+          },
+          "skillsRankingJobSeekerDisclosure": {
+            "pendingMessage": "Asante! Tunakagua fursa za hivi karibuni za {{jobPlatformUrl}} ili nambari ziwe sahihi.",
+            "comparisonPart1_prefix": "Zaidi ya hayo, ",
+            "comparisonPart1_main": "Ikilinganishwa na watumiaji wengine wa \n{{jobPlatformUrl}}\n, uko katika kundi [\n{{groupIndex}}\n] kati ya \n{{groupTotal}}\n.",
+            "comparisonPart2_prefix": "Fikiria kupanga watumiaji 100 wa \n{{jobPlatformUrl}}\n kutoka wenye kazi chache zaidi hadi wengi zaidi wanaofaa. ",
+            "comparisonPart2_group": "[\n{{groupIndex}}\n]",
+            "comparisonPart2_middle": ", ambacho ni kundi ",
+            "comparisonPart2_label": "[\n{{comparisonLabel}}\n]",
+            "comparisonPart2_suffix": ".",
+            "updateError": "Imeshindikana kusasisha hali ya upangaji wa ujuzi. Tafadhali jaribu tena baadaye."
+          }
+        },
+        "rotateToSolve": {
+          "instructions1": "Pindua kila herufi hadi iwe sawa. Chagua herufi kwa kubonyeza, kisha pindua kwa",
+          "instructions2": " au upande mwingine kwa",
+          "allCompleteMessage": "Mafumbo yote yamekamilika! Hongera!",
+          "puzzleCompleteMessage": "Fumbo limekamilika! Tafadhali tatua jingine au ghairi.",
+          "rotateLeftAria": "Pindua herufi kushoto",
+          "rotateRightAria": "Pindua herufi kulia"
+        }
+      }
+    }
+  },
+  "consent": {
+    "components": {
+      "consentPage": {
+        "beforeWeBeginTitle": "Kabla hatujaanza...",
+        "introPart1": "Tulitengeneza zana hii ya AI kwa ajili yako kwa uangalifu ili kukusaidia wewe na vijana wengine kama wewe kuchunguza ujuzi wao na kugundua fursa mpya.",
+        "introHighlightResponsibly": "Tafadhali tumia AI kwa uwajibikaji!",
+        "introPart2": "Teknolojia ya AI ni mpya na si kamilifu. Haielewi muktadha kama binadamu.",
+        "introPart3": "Daima kagua maelezo muhimu na uepuke kushiriki taarifa za kibinafsi kuhusu wewe na wengine na AI wakati wa mazungumzo.",
+        "introPart4": "Tusaidie kuweka maingiliano yote ya AI salama na chanya!",
+        "termsAndConditions": "Vigezo na Masharti",
+        "privacyPolicy": "Sera ya Faragha",
+        "checkboxTermsAndConditions": "Nimesoma na ninakubali <0>{{terms_and_conditions}}</0> ya {{appName}}.",
+        "checkboxPrivacyPolicy": "Nimesoma na ninakubali <0>{{privacy_policy}}</0> ya {{appName}}.",
+        "areYouReady": "Uko tayari kuanza?",
+        "acceptButton": "Ndio, niko tayari",
+        "withSupportFrom": "Kwa msaada kutoka",
+        "modalApology": "Tunasikitika kwamba umechagua kutokubali {{terms_and_conditions}} na {{privacy_policy}}.",
+        "modalCannotProceed": "Hutaweza kuendelea na uta",
+        "modalLoggedOutHighlight": "tolewa nje.",
+        "modalYesExit": "Ndio, toka",
+        "snackbarAgreementAccepted": "Makubaliano Yamekubaliwa",
+        "snackbarUserNotFound": "Mtumiaji hajapatikana",
+        "snackbarLoggedOutSuccess": "Umetoka kwa mafanikio.",
+        "snackbarLoggedOutFailure": "Imeshindikana kutoka.",
+        "snackbarFailedUpdatePreferences": "Imeshindikana kusasisha mapendeleo ya mtumiaji"
+      }
+    }
+  },
+  "sensitiveData": {
+    "components": {
+      "sensitiveDataForm": {
+        "title": "Toa Taarifa Zako",
+        "subtitle": "Tunatumia data yako kubinafsisha uzoefu wako na tunaweza kukuwasiliana kuhusu {{appName}}.",
+        "unskippableSubtitle": "Tafadhali toa taarifa zifuatazo ili kuendelea.",
+        "skippableSubtitle": "Unaweza kuruka hatua hii.",
+        "helpTipText": "Taarifa zako zimesimbwa kwa njia ya kisasa na zimehifadhiwa kwa usalama.",
+        "failedToLoadConfig": "Imeshindikana kupakia usanidi wa fomu",
+        "invalidForm": "Tafadhali sahihisha makosa katika fomu kabla ya kuwasilisha.",
+        "savedSuccess": "Data ya kibinafsi imehifadhiwa kwa mafanikio na kwa usalama.",
+        "errorDefault": "Data ya kibinafsi haikuweza kuhifadhiwa. Tafadhali jaribu tena.",
+        "errorEncryptedDataTooLarge": "Data ya kibinafsi inaonekana kuwa kubwa sana kuhifadhiwa. Tafadhali jaribu tena kwa maadili madogo zaidi.",
+        "collectionSkipped": "Ukusanyaji wa data ya kibinafsi umerukwa.",
+        "rejectParagraph1": "Tunasikitika kwamba umechagua kutotoa data yako. Hutaweza kuendelea na utatolewa nje.",
+        "skipParagraph1": "Tunasikitika kwamba unapendelea kutotoa data yako.",
+        "skipParagraph1Highlighted": " hutaweza kutoa taarifa hii baadaye.",
+        "startConversation": "Anza mazungumzo",
+        "areYouSureYouWantToSkip": "Una uhakika unataka kuruka?",
+        "yesSkip": "Ndio, ruka",
+        "shareData": "Shiriki data",
+        "skipping": "Inaruka...",
+        "refreshPage": "Paisha Upya Ukurasa"
+      },
+      "enumField": {
+        "pleaseSelectX": "Tafadhali chagua {{x}}",
+        "clearSelection": "Futa chaguo"
+      }
+    }
+  },
+  "feedback": {
+    "overallFeedback": {
+      "feedbackForm": {
+        "components": {
+          "customerSatisfactionRating": {
+            "questionText": "Hatimaye, tungependa kusikia mawazo yako kuhusu uzoefu wako hadi sasa! Umeridhika kiasi gani na {{appName}}?",
+            "ratingLabelLow": "Sijaridhika",
+            "ratingLabelHigh": "Nimeridhika",
+            "submitSuccess": "Maoni ya ukadiriaji yamewasilishwa kwa mafanikio!",
+            "submitError": "Imeshindikana kuwasilisha maoni. Tafadhali jaribu tena baadaye."
+          },
+          "feedbackFormContent": {
+            "previous": "Iliyotangulia",
+            "next": "Inayofuata"
+          }
+        },
+        "submitSuccess": "Maoni yamewasilishwa kwa mafanikio!",
+        "submitError": "Imeshindikana kuwasilisha maoni. Tafadhali jaribu tena baadaye.",
+        "helpUsImprove": "Tusaidie kuboresha!",
+        "closeForm": "funga fomu ya maoni",
+        "submittingFeedback": "Inawasilisha maoni..."
+      }
+    },
+    "bugReport": {
+      "reportBug": "Ripoti hitilafu"
+    }
+  },
+  "error": {
+    "errorPage": {
+      "illustrationAlt": "picha ya kosa",
+      "defaultMessage": "Kuna kitu kimekwenda vibaya na {{appName}}. Jaribu kupaisha upya ukurasa...",
+      "notFound": "Kosa la 404 - Ukurasa Haujapatikana"
+    },
+    "restAPIError": {
+      "storyChooseMessageLabel": "Chagua ujumbe wa kosa wa kuonyesha:",
+      "storySelectPlaceholder": "Chagua ujumbe wa kosa"
+    }
+  },
+  "app": {
+    "isOnlineProvider": {
+      "offline": "Hauko mtandaoni",
+      "backOnline": "Umerudi mtandaoni"
+    },
+    "compassLogoAlt": "Nembo ya {{appName}}"
+  },
+  "info": {
+    "infoDrawer": {
+      "frontendTitle": "Frontend",
+      "backendTitle": "Backend",
+      "applicationInformation": "Taarifa za Programu",
+      "closeApplicationInformation": "Funga taarifa za programu",
+      "versionInfo": {
+        "date": "Tarehe",
+        "version": "Toleo",
+        "buildNumber": "Nambari ya Ujenzi",
+        "gitSha": "GIT SHA"
+      }
+    }
+  },
+  "theme": {
+    "confirmModalDialog": {
+      "closeConfirmModal": "funga dirisha la uthibitisho"
+    },
+    "passwordInput": {
+      "togglePasswordVisibility": "badilisha uonekaji wa nenosiri"
+    },
+    "helpTip": {
+      "tooltip": "msaada"
+    }
+  },
+  "i18n": {
+    "languageContextMenu": {
+      "selector": "Kichaguzi cha Lugha"
+    }
+  },
+  "cv": {
+    "cvTypingChatMessage": {
+      "uploading": "Tafadhali subiri ninapopakia na kuchakata CV yako",
+      "uploadedReady": "Maudhui ya CV yako yako kwenye sehemu ya maandishi. Kagua na utume ukiwa tayari."
+    },
+    "uploadedCVsMenu": {
+      "backTitle": "Rudi kwenye menyu kuu",
+      "titleWithCount": "CV zilizopakiwa awali ({{count}})",
+      "helpCollect": "Bonyeza CV kupakia maudhui yake kwenye sehemu ya maandishi. Kagua na utume ukiwa tayari.",
+      "helpDisabled": "Uchaguzi wa CV unapatikana tu wakati wa awamu ya ukusanyaji wa uzoefu.",
+      "empty": "Hakuna CV zilizopakiwa zilizopatikana."
+    },
+    "cancellableTypingChatMessage": {
+      "typing": "Inaandika",
+      "thinking": "Tafadhali subiri, hii inaweza kuchukua muda",
+      "cancel": "Ghairi"
+    }
+  },
+  "_deprecated": {
+    "bias_experience_accuracy": "Usahihi wa Upendeleo na Uzoefu",
+    "inaccurate": "Si sahihi",
+    "very_accurate": "Sahihi sana",
+    "skill_accuracy": "Usahihi wa Ujuzi",
+    "final_feedback": "Maoni ya mwisho",
+    "difficult": "Ngumu",
+    "easy": "Rahisi",
+    "unlikely": "Si uwezekano",
+    "likely": "Uwezekano"
+  },
+  "steps": {
+    "biasAndExperience": "Usahihi wa Upendeleo na Uzoefu",
+    "skillAccuracy": "Usahihi wa Ujuzi",
+    "finalFeedback": "Maoni ya mwisho"
+  },
+  "labels": {
+    "inaccurate": "Si sahihi",
+    "veryAccurate": "Sahihi sana",
+    "difficult": "Ngumu",
+    "easy": "Rahisi",
+    "unlikely": "Si uwezekano",
+    "likely": "Uwezekano"
+  },
+  "buttons": {
+    "submit": "Wasilisha",
+    "next": "Inayofuata",
+    "previous": "Iliyotangulia"
+  }
+}

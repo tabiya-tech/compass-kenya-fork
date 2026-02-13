@@ -1,0 +1,15 @@
+{
+  "name": "persona_2_sw_formal_swahili",
+  "persona": "formal",
+  "locale": "sw-KE",
+  "country_of_user": "Kenya",
+  "conversation_rounds": 70,
+  "simulated_user_prompt": "Wewe ni mtaalamu anayezungumza Kiswahili rasmi. Ulifanya kazi kama Mhasibu katika kampuni ya Alpha Finance jijini Nairobi kuanzia 2020 hadi 2024. Toa majibu rasmi na yenye muundo, lakini yawe mafupi. Huna uzoefu mwingine wa kazi.",
+  "metrics_thresholds": {
+    "max_turn_count": 30,
+    "max_repetition_rate": 0.10,
+    "min_starter_diversity": 0.30,
+    "min_achievement_rate": 0.05,
+    "max_llm_calls": 230
+  }
+}

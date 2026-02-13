@@ -28,37 +28,67 @@ class PersonaType(Enum):
 
 # Keywords indicating formal employment background (Persona 2)
 FORMAL_INDICATORS = [
-    # Job structure terms
+    # Job structure terms (English)
     "title", "position", "department", "responsibilities",
     "role", "duties", "job description",
-    # Management/hierarchy terms
+    # Management/hierarchy terms (English)
     "managed", "reported to", "team lead", "supervisor",
     "manager", "director", "head of", "in charge of",
-    # Organization terms
+    # Organization terms (English)
     "company", "organization", "corporation", "firm",
     "enterprise", "institution", "agency",
-    # Formal employment terms
+    # Formal employment terms (English)
     "employed", "employment", "contract", "permanent",
     "full-time", "part-time", "salary", "benefits",
-    # CV-like terms
+    # CV-like terms (English)
     "resume", "cv", "curriculum", "qualifications",
     "certifications", "degree", "diploma",
+    # Swahili formal employment terms
+    "cheo",         # title/position
+    "wajibu",       # responsibilities
+    "idara",        # department
+    "msimamizi",    # supervisor
+    "mkurugenzi",   # director
+    "kampuni",      # company
+    "shirika",      # organization
+    "mkataba",      # contract
+    "mshahara",     # salary
+    "shahada",      # degree
+    "cheti",        # certificate/diploma
+    "ofisa",        # officer
+    "mkuu",         # head/chief
+    "naibu",        # deputy
 ]
 
 # Keywords indicating informal work background (Persona 1)
 INFORMAL_INDICATORS = [
-    # Task-oriented descriptions
+    # Task-oriented descriptions (English)
     "tasks", "daily work", "what i did", "what i do",
     "helped with", "worked on", "did some",
-    # Informal work contexts
+    # Informal work contexts (English)
     "hustle", "side job", "gig", "odd jobs",
     "casual", "temporary", "seasonal",
-    # Community/family work
+    # Community/family work (English)
     "family", "neighbor", "community", "volunteer",
     "helped out", "assisted", "took care of",
-    # Informal business
+    # Informal business (English)
     "my own", "small business", "selling", "trading",
     "street", "market", "shop",
+    # Swahili informal work terms
+    "kazi",             # work/tasks
+    "biashara ndogo",   # small business
+    "kuuza",            # selling
+    "soko",             # market
+    "duka",             # shop
+    "familia",          # family
+    "jirani",           # neighbor
+    "kujitolea",        # volunteer
+    "vibarua",          # casual/odd jobs
+    "msimu",            # seasonal
+    "shamba",           # farm
+    "boda",             # boda boda (motorcycle taxi)
+    "mama mboga",       # vegetable seller
+    "mchuuzi",          # hawker/street vendor
 ]
 
 # Weights for detection (higher = stronger signal)

@@ -1,0 +1,65 @@
+{
+  "welcomeAgentFirstEncounter": "Karibu! Mimi ni Compass, niko hapa kukusaidia kugundua na kuonyesha ujuzi wako.\nHivi ndivyo mchakato huu unavyofanya kazi:\n\n• Kwanza, nitakuuliza muhtasari mfupi wa kazi yako, ikiwemo shughuli zozote ambazo hukulipwa kama kujitolea au kusaidia familia.\n• Tunapozungumza, CV yako itaanza kuundwa.\n• Baada ya mambo ya msingi kukamilika, tutachunguza kwa undani kila uzoefu ili kupata maelezo muhimu.\n\nLenga kile kinachokuhusu zaidi. Mazungumzo yanachukua wastani wa dakika 50 (inaweza kuwa zaidi kulingana na idadi ya uzoefu), kwa hivyo panga ipasavyo.\nIkihitajika, unaweza kuunda akaunti na kurudi baadaye kuendelea pale ulipoishia.\n\nUkiwa na maswali yoyote, usisite kuuliza.\n\nUko tayari kuanza?",
+  "collectExperiences": {
+    "didNotUnderstand": "Samahani, sikuelewa. Tafadhali sema tena kwa njia nyingine?",
+    "moveToOtherExperiences": "Tuendelee na uzoefu mwingine wa kazi.",
+    "finalMessage": "Asante kwa kushiriki uzoefu wako. Tuendelee na hatua inayofuata.",
+    "noExperienceCollected": "Hakuna data ya uzoefu iliyokusanywa bado",
+    "allFieldsFilled": "Sehemu zote zimejazwa.",
+    "allFieldsNotFilled": "Sehemu zote hazijajazwa.",
+    "workType": {
+      "formalWagedDescription": "kufanya kazi kwa kampuni au biashara ya mtu mwingine kwa pesa",
+      "unpaidTraineeDescription": "kazi isiyolipwa kama mfunzwa kwa kampuni au shirika",
+      "selfEmploymentDescription": "kuendesha biashara yako mwenyewe, kufanya kazi ya kujitegemea au mkataba",
+      "unseenUnpaidDescription": "kazi isiyolipwa kama kujitolea kwa jamii, kutunza familia yako au nyingine, kusaidia nyumbani",
+      "noneDescription": "hakuna uzoefu wa kazi",
+      "notSupported": "Aina hii ya kazi haitumiki"
+    },
+    "fields": {
+      "experienceTitle": "jina la uzoefu",
+      "paidWork": "kazi ya kulipwa",
+      "workType": "aina ya kazi",
+      "startDate": "tarehe ya kuanza",
+      "endDate": "tarehe ya kumaliza",
+      "company": "kampuni/mpokeaji wa kazi",
+      "location": "mahali"
+    },
+    "askAboutType": "Niulize kuhusu uzoefu unaojumuisha: {experience_type}",
+    "recapPrompt": "Tuangalie tena, na unipe nafasi ya kusahihisha makosa yoyote."
+  },
+  "exploreExperiences": {
+    "noMoreExperiences": "Inaonekana hakuna uzoefu zaidi wa kujadili.",
+    "skippedExperienceMissingDetails": "Nimepita uzoefu wako \"{experience_title}\" kwa sababu hukushiriki maelezo ya kutosha",
+    "finishedAll": "Nimekamilisha kuchunguza uzoefu wako wote.",
+    "noSkillsIdentified": "Hakuna ujuzi uliotambuliwa",
+    "linkAndRank": {
+      "summaryMessage": "Kulingana na taarifa uliyotoa kuhusu uzoefu wako kama '{experience_title}', hapa kuna muhtasari mfupi:\n\n{summary}\n\nUjuzi {top_count} wa juu ulioonyeshwa:{skills_summary}"
+    }
+  },
+  "agentDirector": {
+    "finalMessage": "Mazungumzo yamekamilika!",
+    "errorRetry": "Ninakabiliwa na matatizo fulani kwa sasa, tafadhali rudia ulichosema?",
+    "allAgentsDone": "Mazungumzo yamekamilika, mawakala wote wamemaliza!",
+    "forcefullyEnded": "Mazungumzo yameisha kwa nguvu"
+  },
+  "experience": {
+    "until": "hadi {end_date}",
+    "noTitleProvidedYet": "Jina la kazi bado halijatolewa",
+    "workType": {
+      "short": {
+        "formalSectorWagedEmployment": "Ajira ya Mshahara",
+        "formalSectorUnpaidTraineeWork": "Mfunzwa",
+        "selfEmployment": "Kujiajiri",
+        "unseenUnpaid": "Kujitolea/Bila Malipo"
+      }
+    }
+  },
+  "exploreSkills": {
+    "finalMessage": "Asante kwa kushiriki maelezo haya! Nina taarifa zote ninazohitaji.",
+    "question": {
+      "formalWaged": "Unafikiri ni nini muhimu unapofanya kazi katika kampuni kama hiyo?",
+      "selfEmployment": "Unafikiri ni nini muhimu unapokuwa bosi wako mwenyewe?",
+      "unseenUnpaid": "Unafikiri ni nini muhimu zaidi unaposaidia jamii au kutunza wengine?"
+    }
+  }
+}
