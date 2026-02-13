@@ -13,18 +13,19 @@ Model = Literal[
 
 @final
 class AgentsConfig:
-    default_model: Final[Model] = "gemini-2.5-flash"
+    default_model: Final[Model] = "gemini-2.5-flash-lite"
     """
     The LLM model name to use by default.
-    Upgraded from gemini-2.5-flash-lite for better Swahili language support (M3).
+    Uses Flash Lite for fast response times in conversation-facing agents.
+    Swahili support is handled via mapping/normalization layer instead of model upgrade.
     """
 
-    fast_model: Final[Model] = "gemini-2.5-flash"
+    fast_model: Final[Model] = "gemini-2.5-flash-lite"
     """
     The fast LLM model name to use.
     
     Expectations
-    - Good reasoning with strong multilingual (Swahili) support
+    - Low reasoning
     - Fast in response time
     """
 
@@ -33,7 +34,7 @@ class AgentsConfig:
     The LLM model name to use for deep reasoning.
     
     Expectations
-    - High reasoning
+    - Good reasoning
     - Slow in response time compared to the fast model
     """
 
