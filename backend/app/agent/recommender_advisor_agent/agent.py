@@ -65,7 +65,7 @@ from app.vector_search.similarity_search_service import SimilaritySearchService
 
 # DB6 imports (Epic 1 dependency - optional)
 try:
-    from app.epic1.db6_youth_database.db6_client import DB6Client
+    from app.database_contracts.db6_youth_database.db6_client import DB6Client
     DB6_AVAILABLE = True
 except ImportError:
     DB6Client = None
@@ -172,30 +172,36 @@ class RecommenderAdvisorAgent(Agent):
             logger=self.logger
         )
 
-        # Initialize exploration handler (depends on concerns_handler)
-        self._exploration_handler = ExplorationPhaseHandler(
-            conversation_llm=self._conversation_llm,
-            conversation_caller=self._conversation_caller,
-            intent_classifier=self._intent_classifier,
-            occupation_search_service=self._occupation_search_service,
-            logger=self.logger
-        )
-
-        # Initialize present handler (depends on exploration_handler and concerns_handler)
-        self._present_handler = PresentPhaseHandler(
-            conversation_llm=self._conversation_llm,
-            conversation_caller=self._conversation_caller,
-            intent_classifier=self._intent_classifier,
-            occupation_search_service=self._occupation_search_service,
-            logger=self.logger
-        )
-        
         self._tradeoffs_handler = TradeoffsPhaseHandler(
             conversation_llm=self._conversation_llm,
             conversation_caller=self._conversation_caller,
             logger=self.logger
         )
-        
+
+        # Initialize exploration handler with delegation targets (constructor injection)
+        self._exploration_handler = ExplorationPhaseHandler(
+            conversation_llm=self._conversation_llm,
+            conversation_caller=self._conversation_caller,
+            intent_classifier=self._intent_classifier,
+            concerns_handler=self._concerns_handler,
+            action_handler=self._action_handler,
+            tradeoffs_handler=self._tradeoffs_handler,
+            occupation_search_service=self._occupation_search_service,
+            logger=self.logger
+        )
+
+        # Initialize present handler with delegation targets (constructor injection)
+        self._present_handler = PresentPhaseHandler(
+            conversation_llm=self._conversation_llm,
+            conversation_caller=self._conversation_caller,
+            intent_classifier=self._intent_classifier,
+            exploration_handler=self._exploration_handler,
+            concerns_handler=self._concerns_handler,
+            tradeoffs_handler=self._tradeoffs_handler,
+            occupation_search_service=self._occupation_search_service,
+            logger=self.logger
+        )
+
         self._followup_handler = FollowupPhaseHandler(
             conversation_llm=self._conversation_llm,
             conversation_caller=self._conversation_caller,
@@ -221,22 +227,9 @@ class RecommenderAdvisorAgent(Agent):
             logger=self.logger
         )
 
-        # Set up delegation chains for seamless phase transitions
-        # ExplorationHandler can delegate to ConcernsHandler, ActionHandler, and TradeoffsHandler
-        self._exploration_handler._concerns_handler = self._concerns_handler
-        self._exploration_handler._action_handler = self._action_handler
-        self._exploration_handler._tradeoffs_handler = self._tradeoffs_handler
-
-        # PresentHandler can delegate to ExplorationHandler, ConcernsHandler, TradeoffsHandler, and SkillsPivotHandler
-        self._present_handler._exploration_handler = self._exploration_handler
-        self._present_handler._concerns_handler = self._concerns_handler
-        self._present_handler._tradeoffs_handler = self._tradeoffs_handler
+        # Remaining delegation
         self._present_handler._skills_pivot_handler = self._skills_pivot_handler
-
-        # ExplorationHandler can also delegate to SkillsPivotHandler for out-of-list requests
         self._exploration_handler._skills_pivot_handler = self._skills_pivot_handler
-
-        # ActionHandler can delegate to PresentHandler, ConcernsHandler, and WrapupHandler
         self._action_handler._present_handler = self._present_handler
         self._action_handler._concerns_handler = self._concerns_handler
         self._action_handler._wrapup_handler = self._wrapup_handler
@@ -298,8 +291,9 @@ class RecommenderAdvisorAgent(Agent):
         Returns:
             Initialized RecommenderAdvisorAgentState
         """
+        session_id = uuid4().int & ((1 << 48) - 1)
         return RecommenderAdvisorAgentState(
-            session_id=str(uuid4()),
+            session_id=session_id,
             youth_id=youth_id,
             country_of_user=country_of_user,
             preference_vector=preference_vector,
