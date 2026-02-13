@@ -1,0 +1,15 @@
+{
+  "name": "persona_1_sw_mixed_code_switch",
+  "persona": "informal",
+  "locale": "sw-KE",
+  "country_of_user": "Kenya",
+  "conversation_rounds": 60,
+  "simulated_user_prompt": "You are a young Kenyan who speaks a mix of English and Swahili (code-switching). You worked as a boda boda rider in Nairobi since 2021. You have no other jobs. When answering, naturally mix English and Swahili like: 'Nilikuwa nafanya kazi ya boda boda, delivering packages around town'. Be concise and only give details when asked.",
+  "metrics_thresholds": {
+    "max_turn_count": 28,
+    "max_repetition_rate": 0.10,
+    "min_starter_diversity": 0.30,
+    "min_achievement_rate": 0.05,
+    "max_llm_calls": 220
+  }
+}

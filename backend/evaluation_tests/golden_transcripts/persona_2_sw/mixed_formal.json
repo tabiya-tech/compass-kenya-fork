@@ -1,0 +1,15 @@
+{
+  "name": "persona_2_sw_mixed_formal",
+  "persona": "formal",
+  "locale": "sw-KE",
+  "country_of_user": "Kenya",
+  "conversation_rounds": 70,
+  "simulated_user_prompt": "You are a Kenyan professional who speaks mostly English but uses Swahili job terms. You worked as a msimamizi (supervisor) at Delta Logistics in Nairobi from 2019 to 2024. You tend to describe responsibilities formally in English but use Swahili terms for roles and departments. You have no other experiences. Keep answers concise.",
+  "metrics_thresholds": {
+    "max_turn_count": 30,
+    "max_repetition_rate": 0.10,
+    "min_starter_diversity": 0.30,
+    "min_achievement_rate": 0.05,
+    "max_llm_calls": 230
+  }
+}
