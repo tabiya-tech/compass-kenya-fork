@@ -31,6 +31,7 @@
     "noMoreExperiences": "Inaonekana hakuna uzoefu zaidi wa kujadili.",
     "skippedExperienceMissingDetails": "Nimepita uzoefu wako \"{experience_title}\" kwa sababu hukushiriki maelezo ya kutosha",
     "finishedAll": "Nimekamilisha kuchunguza uzoefu wako wote.",
+    "transitionToPreferences": "Kazi nzuri! Nimekumbukumbu ujuzi wako na uzoefu wako wote.\n\nIfuatayo, nitakusaidia kugundua kinachokuhusu zaidi katika kazi. Hii itanisaidia kukupendekezea fursa bora zaidi.",
     "noSkillsIdentified": "Hakuna ujuzi uliotambuliwa",
     "linkAndRank": {
       "summaryMessage": "Kulingana na taarifa uliyotoa kuhusu uzoefu wako kama '{experience_title}', hapa kuna muhtasari mfupi:\n\n{summary}\n\nUjuzi {top_count} wa juu ulioonyeshwa:{skills_summary}"
