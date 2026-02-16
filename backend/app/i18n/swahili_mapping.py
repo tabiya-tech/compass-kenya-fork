@@ -250,8 +250,8 @@ class SwahiliMappingService:
         # Calculate how many random picks we need
         random_count = max(0, n - len(pinned))
 
-        # Sample from remaining
-        rng = random.Random(seed)
+        # Sample from remaining (seeded for reproducibility, not crypto)
+        rng = random.Random(seed)  # nosec B311
         if random_count >= len(remaining):
             sample = remaining
         else:
