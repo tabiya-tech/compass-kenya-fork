@@ -14,8 +14,10 @@ from app.countries import Country
 from app.server_config import UNSUMMARIZED_WINDOW_SIZE, TO_BE_SUMMARIZED_WINDOW_SIZE
 from app.vector_search.vector_search_dependencies import SearchServices
 from evaluation_tests.baseline_metrics_collector import BaselineMetricsCollector
+from app.agent.language_detector import get_detected_language_for_locale
 from app.agent.persona_detector import detect_persona
-
+from app.context_vars import detected_language_ctx_var
+from app.i18n.translation_service import get_i18n_manager
 
 logger = logging.getLogger(__name__)
 
@@ -90,10 +92,11 @@ class E2EChatExecutor:
         self._state.agent_director_state.persona_type = persona_type
         self._state.collect_experience_state.persona_type = persona_type
         self._state.skills_explorer_agent_state.persona_type = persona_type
+        locale = get_i18n_manager().get_locale()
+        detected_language_ctx_var.set(get_detected_language_for_locale(locale))
         await self._agent_director.execute(agent_input)
         # get the context again after the history has been updated
         conversation_context = await self._conversation_memory_manager.get_conversation_context()
-
 
         # Record metrics PER TURN (before combining) to correctly attribute LLM calls
         if self._metrics_collector:
@@ -138,11 +141,9 @@ class E2EChatExecutor:
 
         return is_complete
 
-
     def _record_turn_metrics_per_turn(self, from_index: int, context: ConversationContext):
         """
         Record metrics for each individual turn in the conversation history.
-
 
         This correctly attributes LLM calls to the agent that made them, rather than
         combining all stats and attributing them to the last agent (which was causing
@@ -151,16 +152,13 @@ class E2EChatExecutor:
         """
         _hist = context.all_history
 
-
         for turn in _hist.turns[from_index:]:
             agent_output = turn.output
-
 
             # Get the actual agent type that produced this turn's output
             agent_type = "UNKNOWN"
             if agent_output.agent_type:
                 agent_type = agent_output.agent_type.name if hasattr(agent_output.agent_type, 'name') else str(agent_output.agent_type)
-
 
             # Determine the phase based on agent type (more accurate than current state)
             # The current_phase in state reflects the END state, not the state during each turn
@@ -169,7 +167,6 @@ class E2EChatExecutor:
             # Record turn (only count non-artificial turns for user-facing metrics)
             if not turn.input.is_artificial:
                 self._metrics_collector.record_turn(phase, agent_type)
-
 
             # Record LLM calls with correct agent attribution
             for llm_stat in agent_output.llm_stats:
@@ -190,7 +187,6 @@ class E2EChatExecutor:
                     llm_stat.response_token_count
                 )
 
-
             # Extract and record agent questions from the message
             message = agent_output.message_for_user
             if message and '?' in message:
@@ -204,7 +200,6 @@ class E2EChatExecutor:
     def _infer_phase_from_agent(self, agent_type: str) -> str:
         """
         Infer the conversation phase from the agent type.
-
 
         This provides more accurate phase attribution than using current_phase,
         which reflects the final state after all transitions.

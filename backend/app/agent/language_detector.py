@@ -18,6 +18,7 @@ DetectedLanguage:
 import re
 from enum import Enum
 from typing import Optional
+from app.i18n.types import Locale
 
 
 class DetectedLanguage(Enum):
@@ -171,6 +172,17 @@ def get_locale_for_detected_language(detected: DetectedLanguage, default_locale_
         return "sw-KE"
     else:
         return default_locale_str
+
+
+def get_detected_language_for_locale(locale: "Locale") -> str:
+    """
+    Map a Locale to the detected language value for context vars.
+    Used when locale is pre-configured (e.g. E2E tests, golden transcripts)
+    rather than detected from user input.
+    """
+    if locale == Locale.SW_KE:
+        return DetectedLanguage.SWAHILI.value
+    return DetectedLanguage.ENGLISH.value
 
 
 # Pre-compute sets for fast lookup

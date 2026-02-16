@@ -14,6 +14,8 @@ from app.app_config import set_application_config, ApplicationConfig
 from app.countries import Country, get_country_from_string
 from app.i18n.language_config import LanguageConfig, LocaleDateFormatEntry
 from app.i18n.locale_date_format import reset_date_format_cache
+from app.agent.language_detector import get_detected_language_for_locale
+from app.context_vars import detected_language_ctx_var
 from app.i18n.types import Locale
 from app.i18n.translation_service import get_i18n_manager
 from app.version.types import Version
@@ -73,6 +75,7 @@ async def _run_transcript(transcript: dict, output_dir: Path):
     _ensure_test_app_config()
     locale = Locale.from_locale_str(transcript.get("locale", "en-US"))
     get_i18n_manager().set_locale(locale)
+    detected_language_ctx_var.set(get_detected_language_for_locale(locale))
 
     search_services = await get_search_services()
     experience_pipeline_config = ExperiencePipelineConfig.model_validate({

@@ -100,8 +100,6 @@ class LLMCaller(Generic[RESPONSE_T]):
             duration_ms = round((llm_end_time - llm_start_time) * 1000, 2)
             llm_call_duration_ms_ctx_var.set(duration_ms)
 
-
-
             response_text = llm_response.text
             try:
                 model_response = extract_json(response_text, self._model_response_type)
