@@ -85,8 +85,8 @@ def get_language_style(*, with_locale: bool = True, for_json_output: bool = Fals
             language = get_i18n_manager().get_locale()
             if language == Locale.SW_KE:
                 prompt += _get_swahili_glossary_section()
-        except Exception:
-            pass  # If locale lookup fails, skip glossary
+        except Exception as e:
+            logger.warning("Locale lookup failed, skipping glossary: %s", e)
 
     prompt += STD_LANGUAGE_STYLE_JSON if for_json_output else STD_LANGUAGE_STYLE
 
