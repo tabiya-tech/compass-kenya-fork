@@ -2,9 +2,10 @@ import logging
 
 from fastapi import Depends
 
-from app.server_dependencies.db_dependencies import CompassDBProvider
 from app.agent.agent_director.llm_agent_director import LLMAgentDirector
 from app.conversation_memory.conversation_memory_manager import ConversationMemoryManager
+from app.user_recommendations.services.get_user_recommendations_service import get_user_recommendations_service
+from app.user_recommendations.services.service import IUserRecommendationsService
 from app.vector_search.vector_search_dependencies import SearchServices, get_all_search_services
 from app.agent.linking_and_ranking_pipeline import ExperiencePipelineConfig
 from app.app_config import ApplicationConfig, get_application_config
@@ -16,7 +17,8 @@ logger = logging.getLogger(__name__)
 def get_agent_director(conversation_manager: ConversationMemoryManager = Depends(get_conversation_memory_manager),
                        search_services: SearchServices = Depends(get_all_search_services),
                        application_config: ApplicationConfig = Depends(get_application_config),
-                       application_db=Depends(CompassDBProvider.get_application_db),
+                       user_recommendations_service: IUserRecommendationsService = Depends(
+                           get_user_recommendations_service),
                        ) -> LLMAgentDirector:
     """
     # Get the agent director instance.
@@ -32,5 +34,5 @@ def get_agent_director(conversation_manager: ConversationMemoryManager = Depends
         conversation_manager=conversation_manager,
         search_services=search_services,
         experience_pipeline_config=experience_pipeline_config,
-        application_db=application_db,
+        user_recommendations_service=user_recommendations_service,
     )

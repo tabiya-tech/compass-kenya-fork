@@ -11,7 +11,6 @@ import logging
 from pathlib import Path
 
 from app.app_config import set_application_config, ApplicationConfig
-from app.server_dependencies.db_dependencies import CompassDBProvider
 from app.countries import Country, get_country_from_string
 from app.i18n.language_config import LanguageConfig, LocaleDateFormatEntry
 from app.i18n.locale_date_format import reset_date_format_cache
@@ -79,7 +78,6 @@ async def _run_transcript(transcript: dict, output_dir: Path):
     detected_language_ctx_var.set(get_detected_language_for_locale(locale))
 
     search_services = await get_search_services()
-    application_db = await CompassDBProvider.get_application_db()
     experience_pipeline_config = ExperiencePipelineConfig.model_validate({
         "number_of_clusters": transcript.get("number_of_clusters", 5),
         "number_of_top_skills_to_pick_per_cluster": transcript.get("number_of_top_skills_to_pick_per_cluster", 2),
@@ -97,7 +95,6 @@ async def _run_transcript(transcript: dict, output_dir: Path):
         default_country_of_user=get_country_from_string(transcript.get("country_of_user", "Unspecified")),
         search_services=search_services,
         experience_pipeline_config=experience_pipeline_config,
-        application_db=application_db,
         metrics_collector=metrics_collector,
     )
 

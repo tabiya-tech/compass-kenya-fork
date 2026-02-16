@@ -4,6 +4,8 @@ from typing import Optional
 
 from app.agent.agent_director.abstract_agent_director import ConversationPhase
 from app.agent.agent_director.llm_agent_director import LLMAgentDirector
+from app.user_recommendations.services.service import IUserRecommendationsService
+from app.user_recommendations.types import UserRecommendations
 from app.agent.agent_types import AgentInput, AgentOutput
 from app.agent.experience import ExperienceEntity
 from app.agent.linking_and_ranking_pipeline import ExperiencePipelineConfig
@@ -22,13 +24,23 @@ from app.i18n.translation_service import get_i18n_manager
 logger = logging.getLogger(__name__)
 
 
+class _NoRecommendationsService(IUserRecommendationsService):
+    async def upsert(self, user_id: str, data: UserRecommendations) -> None:
+        pass
+
+    async def get_by_user_id(self, user_id: str):
+        return None
+
+    async def has_recommendations(self, user_id: str) -> bool:
+        return False
+
+
 class E2EChatExecutor:
     def __init__(self, *,
                  session_id: int,
                  default_country_of_user: Country,
                  search_services: SearchServices,
                  experience_pipeline_config: ExperiencePipelineConfig,
-                 application_db,
                  metrics_collector: Optional[BaselineMetricsCollector] = None
                  ):
         self._state = ApplicationState.new_state(session_id=session_id, country_of_user=default_country_of_user)
@@ -39,7 +51,7 @@ class E2EChatExecutor:
             conversation_manager=self._conversation_memory_manager,
             experience_pipeline_config=experience_pipeline_config,
             search_services=search_services,
-            application_db=application_db,
+            user_recommendations_service=_NoRecommendationsService(),
         )
         self._agent_director.set_state(self._state.agent_director_state)
         self._agent_director.get_welcome_agent().set_state(self._state.welcome_agent_state)

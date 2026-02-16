@@ -8,6 +8,8 @@ from _pytest.logging import LogCaptureFixture
 
 from app.agent.agent_director.abstract_agent_director import AgentDirectorState
 from app.agent.agent_director.llm_agent_director import LLMAgentDirector
+from app.user_recommendations.services.service import IUserRecommendationsService
+from app.user_recommendations.types import UserRecommendations
 from app.agent.agent_types import AgentType
 from app.agent.collect_experiences_agent import CollectExperiencesAgentState
 from app.agent.explore_experiences_agent_director import ExploreExperiencesAgentDirectorState
@@ -28,8 +30,7 @@ from evaluation_tests.conversation_libs.conversation_test_function import conver
 
 
 @pytest.fixture(scope="function")
-async def setup_agent_director(setup_search_services: Awaitable[SearchServices],
-                              in_memory_application_database) -> tuple[
+async def setup_agent_director(setup_search_services: Awaitable[SearchServices]) -> tuple[
     ConversationMemoryManager,
     Callable[
         [LogCaptureFixture, ScriptedUserEvaluationTestCase],
@@ -40,13 +41,20 @@ async def setup_agent_director(setup_search_services: Awaitable[SearchServices],
     conversation_manager = ConversationMemoryManager(UNSUMMARIZED_WINDOW_SIZE, TO_BE_SUMMARIZED_WINDOW_SIZE)
     conversation_manager.set_state(state=ConversationMemoryManagerState(session_id=session_id))
     search_services = await setup_search_services
-    application_db = await in_memory_application_database
+
+    class _NoRecommendationsService(IUserRecommendationsService):
+        async def upsert(self, user_id: str, data: UserRecommendations) -> None:
+            pass
+        async def get_by_user_id(self, user_id: str):
+            return None
+        async def has_recommendations(self, user_id: str) -> bool:
+            return False
 
     agent_director = LLMAgentDirector(
         conversation_manager=conversation_manager,
         search_services=search_services,
         experience_pipeline_config=ExperiencePipelineConfig(),
-        application_db=application_db,
+        user_recommendations_service=_NoRecommendationsService(),
     )
     agent_director.set_state(AgentDirectorState(session_id=session_id))
     agent_director.get_welcome_agent().set_state(WelcomeAgentState(session_id=session_id))
