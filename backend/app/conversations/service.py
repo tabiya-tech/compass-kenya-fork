@@ -20,8 +20,11 @@ from app.metrics.application_state_metrics_recorder.recorder import IApplication
 from app.job_preferences.service import IJobPreferencesService
 from app.job_preferences.types import JobPreferences
 
-from app.context_vars import turn_index_ctx_var
+from app.app_config import get_application_config
+from app.context_vars import turn_index_ctx_var, detected_language_ctx_var, user_language_ctx_var
 from app.agent.persona_detector import detect_persona
+from app.agent.language_detector import detect_language, get_locale_for_detected_language, DetectedLanguage
+from app.i18n.types import Locale
 
 class ConversationAlreadyConcludedError(Exception):
     """
@@ -113,7 +116,6 @@ class ConversationService(IConversationService):
         # get the current index in the conversation history, so that we can return only the new messages
         current_index = len(context.all_history.turns)
 
-
         # Set turn_index in context for observability logging
         turn_index_ctx_var.set(current_index)
 
@@ -127,7 +129,26 @@ class ConversationService(IConversationService):
         state.collect_experience_state.persona_type = persona_type
         state.skills_explorer_agent_state.persona_type = persona_type
 
-
+        previous_detections = [
+            detect_language(msg) for msg in history_messages[-3:]
+        ] if history_messages else []
+        detected = detect_language(
+            user_input.message,
+            conversation_history=history_messages,
+            previous_detections=previous_detections or None,
+        )
+        detected_language_ctx_var.set(detected.value)
+        app_config = get_application_config()
+        default_locale = app_config.language_config.default_locale
+        locale_str = get_locale_for_detected_language(detected, default_locale.value)
+        try:
+            user_language_ctx_var.set(Locale.from_locale_str(locale_str))
+        except ValueError:
+            self._logger.warning(
+                "Detected locale '%s' not registered, falling back to default '%s'",
+                locale_str, default_locale.value,
+            )
+            user_language_ctx_var.set(default_locale)
 
         await self._agent_director.execute(user_input=user_input)
         # get the context again after updating the history
