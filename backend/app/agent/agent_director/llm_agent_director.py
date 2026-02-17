@@ -9,7 +9,9 @@ from app.agent.farewell_agent import FarewellAgent
 from app.agent.linking_and_ranking_pipeline import ExperiencePipelineConfig
 from app.agent.preference_elicitation_agent.agent import PreferenceElicitationAgent
 from app.agent.recommender_advisor_agent.agent import RecommenderAdvisorAgent
+from app.agent.recommender_advisor_agent.matching_service_client import MatchingServiceClient
 from app.agent.welcome_agent import WelcomeAgent
+from app.app_config import get_application_config
 from app.conversation_memory.conversation_memory_manager import ConversationMemoryManager
 from app.conversation_memory.conversation_memory_types import ConversationContext
 from app.vector_search.vector_search_dependencies import SearchServices
@@ -28,6 +30,30 @@ class LLMAgentDirector(AbstractAgentDirector):
                  experience_pipeline_config: ExperiencePipelineConfig
                  ):
         super().__init__(conversation_manager)
+
+        # Initialize matching service client from config
+        matching_service_client = None
+        try:
+            app_config = get_application_config()
+            if app_config.matching_service_url and app_config.matching_service_api_key:
+                matching_service_client = MatchingServiceClient(
+                    base_url=app_config.matching_service_url,
+                    api_key=app_config.matching_service_api_key
+                )
+                self._logger.info(
+                    f"Matching service client initialized: {app_config.matching_service_url}"
+                )
+            else:
+                self._logger.warning(
+                    "Matching service not configured (URL or API key missing). "
+                    "Recommender agent will use fallback recommendations."
+                )
+        except Exception as e:
+            self._logger.warning(
+                f"Failed to initialize matching service client: {e}. "
+                "Recommender agent will use fallback recommendations."
+            )
+
         # initialize the agents
         self._agents: dict[AgentType, Agent] = {
             AgentType.WELCOME_AGENT: WelcomeAgent(),
@@ -44,7 +70,8 @@ class LLMAgentDirector(AbstractAgentDirector):
             AgentType.RECOMMENDER_ADVISOR_AGENT: RecommenderAdvisorAgent(
                 db6_client=None,  # Optional: Youth database integration
                 node2vec_client=None,  # Optional: Node2Vec recommendation service
-                occupation_search_service=search_services.occupation_search_service
+                occupation_search_service=search_services.occupation_search_service,
+                matching_service_client=matching_service_client  # NEW: Deployed matching service
             ),
             AgentType.FAREWELL_AGENT: FarewellAgent()
         }

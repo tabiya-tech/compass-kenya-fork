@@ -109,6 +109,11 @@ class ConversationService(IConversationService):
         self._agent_director.get_explore_experiences_agent().get_exploring_skills_agent().set_state(
             state.skills_explorer_agent_state)
         self._agent_director.get_preference_elicitation_agent().set_state(state.preference_elicitation_agent_state)
+
+        # Prepare recommender state with skills and preferences if not already set
+        self._prepare_recommender_state_if_needed(state)
+
+        self._agent_director.get_recommender_advisor_agent().set_state(state.recommender_advisor_agent_state)
         self._conversation_memory_manager.set_state(state.conversation_memory_manager_state)
 
         # Handle the user input
@@ -276,3 +281,71 @@ class ConversationService(IConversationService):
             # Don't fail the conversation - just log the error
             # This is a denormalized copy; the primary data is already in DB6
             self._logger.error(f"Failed to save preference vector to JobPreferences: {e}", exc_info=True)
+
+    def _prepare_recommender_state_if_needed(self, state: ApplicationState) -> None:
+        """
+        Prepare RecommenderAdvisorAgent state with skills and preferences if not already initialized.
+
+        This populates the recommender state with:
+        - Skills vector from explored experiences
+        - Preference vector from preference elicitation agent
+        - BWS occupation scores from preference elicitation
+        - Location data (city/province) - optional for v1
+
+        Args:
+            state: Application state containing all agent states
+        """
+        rec_state = state.recommender_advisor_agent_state
+
+        # Skip if already initialized with skills and preferences
+        if rec_state.skills_vector is not None and rec_state.preference_vector is not None:
+            return
+
+        try:
+            # Extract skills from explored experiences
+            if rec_state.skills_vector is None:
+                from app.agent.recommender_advisor_agent.skills_extractor import SkillsExtractor
+
+                explored_experiences = state.explore_experiences_director_state.explored_experiences
+                extractor = SkillsExtractor()
+                skills_vector = extractor.extract_skills_vector(explored_experiences)
+
+                rec_state.skills_vector = skills_vector
+                self._logger.info(
+                    f"Extracted skills vector for recommender: "
+                    f"{len(skills_vector.get('skills', []))} skills from "
+                    f"{skills_vector.get('total_experiences', 0)} experiences"
+                )
+
+            # Extract preference vector from preference elicitation agent
+            if rec_state.preference_vector is None:
+                pref_state = state.preference_elicitation_agent_state
+                if pref_state.preference_vector is not None:
+                    rec_state.preference_vector = pref_state.preference_vector
+                    self._logger.info(
+                        f"Loaded preference vector for recommender "
+                        f"(confidence: {pref_state.preference_vector.confidence_score:.2f})"
+                    )
+
+            # Extract BWS occupation scores from preference elicitation
+            if rec_state.bws_occupation_scores is None:
+                pref_state = state.preference_elicitation_agent_state
+                if pref_state.bws_occupation_scores:
+                    rec_state.bws_occupation_scores = pref_state.bws_occupation_scores
+                    self._logger.info(
+                        f"Loaded BWS occupation scores for recommender: "
+                        f"{len(pref_state.bws_occupation_scores)} occupations"
+                    )
+
+            # Set youth_id (use session_id as fallback)
+            if rec_state.youth_id is None:
+                rec_state.youth_id = f"youth_{state.session_id}"
+
+            # Location data (city/province) - optional for v1
+            # TODO: Extract from user profile or welcome agent when implemented
+            # For now, matching service will use defaults
+
+        except Exception as e:
+            # Don't fail - just log the error
+            # Recommender agent will work with whatever data is available
+            self._logger.warning(f"Error preparing recommender state: {e}", exc_info=True)
