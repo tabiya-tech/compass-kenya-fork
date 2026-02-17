@@ -50,6 +50,8 @@ class IntroPhaseHandler(BasePhaseHandler):
         if state.recommendations is None:
             state.recommendations = await self._recommendation_interface.generate_recommendations(
                 youth_id=state.youth_id,
+                city=state.city,
+                province=state.province,
                 preference_vector=state.preference_vector,
                 skills_vector=state.skills_vector,
                 bws_occupation_scores=state.bws_occupation_scores,

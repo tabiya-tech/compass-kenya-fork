@@ -92,6 +92,17 @@ class ApplicationConfig(BaseModel):
     A flag to disable registration code validation for registered users.
     """
 
+    matching_service_url: Optional[str] = None
+    """
+    URL for the matching service API endpoint (Epic 3).
+    Example: https://matching-gateway-dev-9baomanq.uc.gateway.dev/match
+    """
+
+    matching_service_api_key: Optional[str] = None
+    """
+    API key for authenticating with the matching service (Epic 3).
+    """
+
     @model_validator(mode='after')
     def check_cv_upload_configurations(self) -> "ApplicationConfig":
         # Check that the CV upload configurations are valid.
