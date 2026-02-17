@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """
-Test recommendations for a specific user.
+Check recommendations for a specific user by fetching from database.
 
-Fetches user data from database and generates recommendations.
+Requires credentials (MongoDB + Matching Service).
+Not run by pytest/CI due to filename (doesn't match test_*.py pattern).
 
 Usage:
-    poetry run python scripts/test_user_recommendations.py MaaUmBy38fOVo19Zqf9mqiTjWi52
+    poetry run python scripts/check_user_recommendations.py <user_id>
+
+Example:
+    poetry run python scripts/check_user_recommendations.py MaaUmBy38fOVo19Zqf9mqiTjWi52
 """
 
 import asyncio
@@ -124,7 +128,7 @@ async def get_user_data(user_id: str):
         client.close()
 
 
-async def test_recommendations(user_id: str):
+async def check_recommendations(user_id: str):
     """Test generating recommendations for a user."""
 
     # Get user data
@@ -249,12 +253,12 @@ async def test_recommendations(user_id: str):
 async def main():
     """Main entry point."""
     if len(sys.argv) < 2:
-        print("Usage: poetry run python scripts/test_user_recommendations.py <user_id>")
-        print("Example: poetry run python scripts/test_user_recommendations.py MaaUmBy38fOVo19Zqf9mqiTjWi52")
+        print("Usage: poetry run python scripts/check_user_recommendations.py <user_id>")
+        print("Example: poetry run python scripts/check_user_recommendations.py MaaUmBy38fOVo19Zqf9mqiTjWi52")
         sys.exit(1)
 
     user_id = sys.argv[1]
-    await test_recommendations(user_id)
+    await check_recommendations(user_id)
 
 
 if __name__ == "__main__":
