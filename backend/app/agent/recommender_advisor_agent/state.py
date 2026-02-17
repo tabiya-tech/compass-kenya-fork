@@ -60,6 +60,16 @@ class RecommenderAdvisorAgentState(BaseModel):
         description="Country of the user for localization (e.g., KENYA, SOUTH_AFRICA)"
     )
 
+    city: Optional[str] = Field(
+        default=None,
+        description="User's city (e.g., 'Johannesburg', 'Nairobi') - required by matching service"
+    )
+
+    province: Optional[str] = Field(
+        default=None,
+        description="User's province/state (e.g., 'Gauteng', 'Nairobi County') - required by matching service"
+    )
+
     skills_vector: Optional[dict[str, Any]] = Field(
         default=None,
         description="Skills vector from Epic 4 (skill IDs + proficiency levels)"

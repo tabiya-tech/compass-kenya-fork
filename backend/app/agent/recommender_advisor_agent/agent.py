@@ -88,14 +88,16 @@ class RecommenderAdvisorAgent(Agent):
         db6_client: Optional['DB6Client'] = None,
         node2vec_client: Optional[Any] = None,
         occupation_search_service: Optional[SimilaritySearchService[OccupationEntity]] = None,
+        matching_service_client: Optional[Any] = None,
     ):
         """
         Initialize the Recommender/Advisor Agent.
 
         Args:
             db6_client: Optional DB6 client for Epic 1 Youth Database integration.
-            node2vec_client: Optional Node2Vec client for generating recommendations.
+            node2vec_client: Optional Node2Vec client for generating recommendations (legacy).
             occupation_search_service: Optional occupation search service for finding occupations not in recommendations.
+            matching_service_client: Optional MatchingServiceClient for deployed matching service.
         """
         super().__init__(
             agent_type=AgentType.RECOMMENDER_ADVISOR_AGENT,
@@ -105,19 +107,19 @@ class RecommenderAdvisorAgent(Agent):
         self._state: Optional[RecommenderAdvisorAgentState] = None
         self._db6_client = db6_client
         self._occupation_search_service = occupation_search_service
-        
+
         # Initialize LLM
         llm_config = LLMConfig(
             # generation_config=LOW_TEMPERATURE_GENERATION_CONFIG | JSON_GENERATION_CONFIG
             generation_config=MEDIUM_TEMPERATURE_GENERATION_CONFIG | JSON_GENERATION_CONFIG
         )
-        
+
         conversation_system_instructions = self._build_conversation_system_instructions()
         self._conversation_llm = GeminiGenerativeLLM(
             system_instructions=conversation_system_instructions,
             config=llm_config
         )
-        
+
         # Initialize LLM callers
         self._conversation_caller: LLMCaller[ConversationResponse] = LLMCaller[ConversationResponse](
             model_response_type=ConversationResponse
@@ -136,8 +138,11 @@ class RecommenderAdvisorAgent(Agent):
         from app.agent.recommender_advisor_agent.intent_classifier import IntentClassifier
         self._intent_classifier = IntentClassifier(intent_caller=self._intent_caller)
 
-        # Initialize recommendation interface
-        self._recommendation_interface = RecommendationInterface(node2vec_client)
+        # Initialize recommendation interface with matching service client
+        self._recommendation_interface = RecommendationInterface(
+            matching_service_client=matching_service_client,
+            node2vec_client=node2vec_client  # Keep for backwards compatibility
+        )
 
         # Initialize phase handlers
         self._init_phase_handlers()
@@ -272,6 +277,8 @@ class RecommenderAdvisorAgent(Agent):
         self,
         youth_id: str,
         country_of_user: 'Country',
+        city: Optional[str] = None,
+        province: Optional[str] = None,
         preference_vector: Optional[PreferenceVector] = None,
         skills_vector: Optional[dict] = None,
         bws_occupation_scores: Optional[dict[str, float]] = None,
@@ -283,6 +290,8 @@ class RecommenderAdvisorAgent(Agent):
         Args:
             youth_id: User/youth identifier
             country_of_user: Country of the user for localization
+            city: User's city (required by matching service)
+            province: User's province/state (required by matching service)
             preference_vector: Preference vector from Epic 2
             skills_vector: Skills vector from Epic 4
             bws_occupation_scores: BWS occupation ranking from Epic 2
@@ -296,6 +305,8 @@ class RecommenderAdvisorAgent(Agent):
             session_id=session_id,
             youth_id=youth_id,
             country_of_user=country_of_user,
+            city=city,
+            province=province,
             preference_vector=preference_vector,
             skills_vector=skills_vector,
             bws_occupation_scores=bws_occupation_scores,

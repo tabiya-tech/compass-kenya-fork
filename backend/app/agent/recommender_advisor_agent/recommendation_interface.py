@@ -193,24 +193,28 @@ except ImportError:
 class RecommendationInterface:
     """
     Interface for generating/loading recommendations.
-    
-    Abstracts away the source of recommendations (Node2Vec or stubs)
+
+    Abstracts away the source of recommendations (MatchingServiceClient or stubs)
     so the agent doesn't need to know about the implementation.
     """
-    
-    def __init__(self, node2vec_client: Optional[Any] = None):
+
+    def __init__(self, matching_service_client: Optional[Any] = None, node2vec_client: Optional[Any] = None):
         """
         Initialize the recommendation interface.
-        
+
         Args:
-            node2vec_client: Optional Node2Vec client for generating recommendations.
+            matching_service_client: Optional MatchingServiceClient for deployed matching service.
+            node2vec_client: Optional Node2Vec client (deprecated - use matching_service_client).
                             If None, uses stub recommendations.
         """
-        self._node2vec_client = node2vec_client
+        self._matching_service_client = matching_service_client
+        self._node2vec_client = node2vec_client  # Keep for backwards compatibility
     
     async def generate_recommendations(
         self,
         youth_id: str,
+        city: Optional[str] = None,
+        province: Optional[str] = None,
         preference_vector: Optional[PreferenceVector] = None,
         skills_vector: Optional[dict] = None,
         bws_occupation_scores: Optional[dict[str, float]] = None,
@@ -218,10 +222,12 @@ class RecommendationInterface:
         """
         Generate recommendations for a user.
 
-        Tries Node2Vec first, falls back to stubs if unavailable.
+        Tries MatchingServiceClient first, then Node2Vec, falls back to stubs if unavailable.
 
         Args:
             youth_id: User/youth identifier
+            city: User's city (required by matching service)
+            province: User's province/state (required by matching service)
             preference_vector: Preference vector from Epic 2
             skills_vector: Skills vector from Epic 4
             bws_occupation_scores: BWS occupation ranking from Epic 2
@@ -229,10 +235,29 @@ class RecommendationInterface:
         Returns:
             Node2VecRecommendations object (in agent format)
         """
-        # Try Node2Vec client first
+        # Try MatchingServiceClient first (deployed service)
+        if self._matching_service_client:
+            try:
+                logger.info(f"Generating recommendations for {youth_id} via MatchingServiceClient")
+                raw_output = await self._matching_service_client.generate_recommendations(
+                    youth_id=youth_id,
+                    city=city,
+                    province=province,
+                    skills_vector=skills_vector,
+                    preference_vector=preference_vector
+                )
+
+                # Convert matching service format to agent format
+                logger.debug("Converting MatchingService output to agent format")
+                return Node2VecRecommendations.from_jasmin_output(raw_output)
+
+            except Exception as e:
+                logger.warning(f"MatchingServiceClient failed, trying fallbacks: {e}")
+
+        # Try Node2Vec client (legacy/local)
         if self._node2vec_client and NODE2VEC_AVAILABLE:
             try:
-                logger.info(f"Generating recommendations for {youth_id} via Node2Vec")
+                logger.info(f"Generating recommendations for {youth_id} via Node2Vec (legacy)")
                 raw_output = await self._node2vec_client.generate_recommendations(
                     youth_id=youth_id,
                     preference_vector=preference_vector,

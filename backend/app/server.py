@@ -231,6 +231,8 @@ application_config = ApplicationConfig(
     language_config=language_config,
     app_name=_global_product_name.strip(),
     disable_registration_code=_disable_registration_code,
+    matching_service_url=os.getenv("MATCHING_SERVICE_URL"),
+    matching_service_api_key=os.getenv("MATCHING_SERVICE_API_KEY"),
 )
 
 set_application_config(application_config)
