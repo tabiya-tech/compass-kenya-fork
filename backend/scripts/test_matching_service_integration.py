@@ -9,7 +9,7 @@ import asyncio
 import sys
 import logging
 from pathlib import Path
-from dotenv import load_dotenv()
+from dotenv import load_dotenv
 import os
 
 # Add backend to path
