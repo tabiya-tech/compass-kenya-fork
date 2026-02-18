@@ -252,6 +252,7 @@ async def initialize_handlers():
 
 @pytest.mark.asyncio
 @pytest.mark.llm_integration
+@pytest.mark.evaluation_test
 async def test_action_planning_intent_classification():
     """
     Test the exact conversation flow that caused the error.
