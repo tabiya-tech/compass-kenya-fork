@@ -26,7 +26,6 @@ class MatchingServiceClient:
     The service provides occupation, opportunity, and skill gap recommendations
     based on user skills and preferences.
 
-    Endpoint: https://matching-gateway-dev-9baomanq.uc.gateway.dev/match
     Authentication: API key via x-api-key header
     """
 
@@ -35,7 +34,7 @@ class MatchingServiceClient:
         Initialize the matching service client.
 
         Args:
-            base_url: Base URL for matching service (e.g., https://matching-gateway-dev-9baomanq.uc.gateway.dev/match)
+            base_url: Base URL for matching service
             api_key: API key for authentication
             timeout: Request timeout in seconds (default: 30)
         """

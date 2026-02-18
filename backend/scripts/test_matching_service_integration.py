@@ -9,6 +9,8 @@ import asyncio
 import sys
 import logging
 from pathlib import Path
+from dotenv import load_dotenv()
+import os
 
 # Add backend to path
 backend_dir = Path(__file__).parent.parent
@@ -27,6 +29,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+BASE_URL = os.getenv("MATCHING_SERVICE_URL")
+API_KEY = os.getenv("MATCHING_SERVICE_API_KEY")
 
 async def test_matching_service_connection():
     """Test basic HTTP connection to matching service."""
@@ -36,8 +40,8 @@ async def test_matching_service_connection():
 
     # Initialize client with dev credentials
     client = MatchingServiceClient(
-        base_url="https://matching-gateway-dev-9baomanq.uc.gateway.dev/match",
-        api_key="AIzaSyAdirPom5z8sXSzkmSHs2xXFkF8j7O9yKY",
+        base_url=BASE_URL,
+        api_key=API_KEY,
         timeout=30.0
     )
 
@@ -81,8 +85,8 @@ async def test_skills_transformation():
     print("="*80)
 
     client = MatchingServiceClient(
-        base_url="https://matching-gateway-dev-9baomanq.uc.gateway.dev/match",
-        api_key="AIzaSyAdirPom5z8sXSzkmSHs2xXFkF8j7O9yKY"
+        base_url=BASE_URL,
+        api_key=API_KEY
     )
 
     # Sample skills vector from SkillsExtractor
@@ -158,8 +162,8 @@ async def test_preference_transformation():
     print("="*80)
 
     client = MatchingServiceClient(
-        base_url="https://matching-gateway-dev-9baomanq.uc.gateway.dev/match",
-        api_key="AIzaSyAdirPom5z8sXSzkmSHs2xXFkF8j7O9yKY"
+        base_url=BASE_URL,
+        api_key=API_KEY
     )
 
     # Test with Pydantic model (mock)
@@ -201,8 +205,8 @@ async def test_end_to_end_flow():
 
     # Create matching service client
     client = MatchingServiceClient(
-        base_url="https://matching-gateway-dev-9baomanq.uc.gateway.dev/match",
-        api_key="AIzaSyAdirPom5z8sXSzkmSHs2xXFkF8j7O9yKY"
+        base_url=BASE_URL,
+        api_key=API_KEY
     )
 
     # Create recommendation interface
