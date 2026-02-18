@@ -95,7 +95,6 @@ class ApplicationConfig(BaseModel):
     matching_service_url: Optional[str] = None
     """
     URL for the matching service API endpoint (Epic 3).
-    Example: https://matching-gateway-dev-9baomanq.uc.gateway.dev/match
     """
 
     matching_service_api_key: Optional[str] = None
