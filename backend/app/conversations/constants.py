@@ -18,5 +18,8 @@ DIVE_IN_EXPERIENCES_PERCENTAGE = 40
 # if you are at preference elicitation phase, the percentage is 70% of the total progress.
 PREFERENCE_ELICITATION_PERCENTAGE = 70
 
+# if you are at recommendation phase (e.g. step-skip flow), between pref elicitation and finished.
+RECOMMENDATION_PERCENTAGE = 85
+
 # if you are at finished conversation phase, the percentage is 100% of the total progress.
 FINISHED_CONVERSATION_PERCENTAGE = 100

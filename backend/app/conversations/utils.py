@@ -10,8 +10,14 @@ from app.conversation_memory.conversation_memory_types import ConversationHistor
 from app.conversations.types import ConversationMessage, ConversationMessageSender, MessageReaction, \
     ConversationPhaseResponse, CurrentConversationPhaseResponse
 from app.conversations.reactions.types import Reaction
-from app.conversations.constants import BEGINNING_CONVERSATION_PERCENTAGE, FINISHED_CONVERSATION_PERCENTAGE, \
-    DIVE_IN_EXPERIENCES_PERCENTAGE, COLLECT_EXPERIENCES_PERCENTAGE, PREFERENCE_ELICITATION_PERCENTAGE
+from app.conversations.constants import (
+    BEGINNING_CONVERSATION_PERCENTAGE,
+    DIVE_IN_EXPERIENCES_PERCENTAGE,
+    COLLECT_EXPERIENCES_PERCENTAGE,
+    PREFERENCE_ELICITATION_PERCENTAGE,
+    RECOMMENDATION_PERCENTAGE,
+    FINISHED_CONVERSATION_PERCENTAGE,
+)
 
 
 def _convert_to_message_reaction(reaction: Reaction | None) -> MessageReaction | None:
@@ -130,6 +136,15 @@ def get_current_conversation_phase_response(state: ApplicationState, logger: Log
         ##############################
         current_phase = CurrentConversationPhaseResponse.INTRO
         current_phase_percentage = BEGINNING_CONVERSATION_PERCENTAGE
+    elif (current_conversation_phase == ConversationPhase.COUNSELING
+          and state.agent_director_state.skip_to_recommendation):
+        ##############################
+        #   2.0 Step-skip: direct to recommendations (bypassed skills/pref elicitation).
+        ##############################
+        current_phase = CurrentConversationPhaseResponse.RECOMMENDATION
+        current_phase_percentage = RECOMMENDATION_PERCENTAGE
+        current = None
+        total = None
     elif current_conversation_phase == ConversationPhase.COUNSELING:
         ##############################
         #    2. Counseling phase.

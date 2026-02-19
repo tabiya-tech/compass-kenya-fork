@@ -15,6 +15,7 @@ const getUserFriendlyPhaseNames = (): Record<ConversationPhase, string> => {
         [ConversationPhase.COLLECT_EXPERIENCES]: "chat.chatProgressbar.phases.collecting",
         [ConversationPhase.DIVE_IN]: "chat.chatProgressbar.phases.exploring",
         [ConversationPhase.PREFERENCE_ELICITATION]: "chat.chatProgressbar.phases.discoveringPreferences",
+        [ConversationPhase.RECOMMENDATION]: "chat.chatProgressbar.phases.recommendations",
         [ConversationPhase.ENDED]: "chat.chatProgressbar.phases.finished",
         [ConversationPhase.UNKNOWN]: "chat.chatProgressbar.phases.unknown",
       };
