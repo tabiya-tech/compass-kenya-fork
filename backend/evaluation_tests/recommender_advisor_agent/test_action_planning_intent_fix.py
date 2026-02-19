@@ -10,6 +10,8 @@ This test simulates the exact conversation that caused the error:
 Tests the fixes:
 1. Null check for failed intent classification
 2. ACTION_PLANNING-specific prompt in IntentClassifier
+
+Requires GCP credentials. Marked evaluation_test to exclude from CI.
 """
 
 import asyncio
@@ -48,18 +50,13 @@ from app.agent.agent_types import AgentInput, AgentOutput
 from common_libs.llm.generative_models import GeminiGenerativeLLM
 from common_libs.llm.models_utils import LLMConfig, LOW_TEMPERATURE_GENERATION_CONFIG, JSON_GENERATION_CONFIG
 from app.countries import Country
-
-# Import sample data creation functions
-import sys
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-from test_recommender_agent_interactive import (
+from evaluation_tests.recommender_advisor_agent.sample_data import (
     create_sample_recommendations,
     create_sample_skills_vector,
-    create_sample_preference_vector
+    create_sample_preference_vector,
 )
 
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -71,7 +68,6 @@ class ConversationLogger:
         self.log_file = log_file
         self.log_file.parent.mkdir(parents=True, exist_ok=True)
 
-        # Clear existing log
         with open(self.log_file, 'w') as f:
             f.write(f"=== Conversation Log - {datetime.now().isoformat()} ===\n\n")
 
@@ -124,7 +120,6 @@ class ConversationLogger:
 
 async def initialize_handlers():
     """Initialize all phase handlers."""
-    # Initialize LLM
     llm_config = LLMConfig(
         generation_config=LOW_TEMPERATURE_GENERATION_CONFIG | JSON_GENERATION_CONFIG
     )
@@ -134,7 +129,6 @@ async def initialize_handlers():
         config=llm_config
     )
 
-    # Create LLM callers
     conversation_caller = LLMCaller[ConversationResponse](
         model_response_type=ConversationResponse
     )
@@ -151,13 +145,9 @@ async def initialize_handlers():
         model_response_type=ActionExtractionResult
     )
 
-    # Initialize recommendation interface
     recommendation_interface = RecommendationInterface(node2vec_client=None)
-
-    # Initialize IntentClassifier
     intent_classifier = IntentClassifier(intent_caller=intent_caller)
 
-    # Initialize handlers
     concerns_handler = ConcernsPhaseHandler(
         conversation_llm=llm,
         conversation_caller=conversation_caller,
@@ -222,7 +212,6 @@ async def initialize_handlers():
         intent_classifier=intent_classifier
     )
 
-    # Set up delegation chains
     exploration_handler._action_handler = action_handler
     exploration_handler._tradeoffs_handler = tradeoffs_handler
     exploration_handler._skills_pivot_handler = skills_pivot_handler
@@ -251,7 +240,6 @@ async def initialize_handlers():
 
 
 @pytest.mark.asyncio
-@pytest.mark.llm_integration
 @pytest.mark.evaluation_test
 async def test_action_planning_intent_classification():
     """
@@ -259,29 +247,26 @@ async def test_action_planning_intent_classification():
 
     Conversation flow:
     1. Intro
-    2. User: "okay" → Present recommendations
-    3. User: "none of these seem interesting, I want to transition into DJing" → Guardrail
-    4. User: "I would still like to explore what it takes to pursue DJing" → Skills pivot
-    5. User: "Okay maybe I want to look at careers that build more directly on your current strengths" → Back to present
-    6. User: "show them to me again" → Re-present
-    7. User: "maybe the Equipment fundi" → Career exploration
-    8. User: "I would love to explore how becoming a general electrician first..." → Exploration with tradeoff
-    9. User: "Well, electrical work, idk, arent there electrical hazards..." → Address concerns
-    10. User: "yes that clears it" → Action planning
-    11. User: "yes I want to enroll in Training" → THIS CAUSED THE ERROR
+    2. User: "okay" -> Present recommendations
+    3. User: "none of these seem interesting, I want to transition into DJing" -> Guardrail
+    4. User: "I would still like to explore what it takes to pursue DJing" -> Skills pivot
+    5. User: "Okay maybe I want to look at careers that build more directly on your current strengths" -> Back to present
+    6. User: "show them to me again" -> Re-present
+    7. User: "maybe the Equipment fundi" -> Career exploration
+    8. User: "I would love to explore how becoming a general electrician first..." -> Exploration with tradeoff
+    9. User: "Well, electrical work, idk, arent there electrical hazards..." -> Address concerns
+    10. User: "yes that clears it" -> Action planning
+    11. User: "yes I want to enroll in Training" -> THIS CAUSED THE ERROR
     """
 
-    # Set up logging
     log_file = Path(__file__).parent / "logs" / "action_planning_fix_test.log"
     conv_logger = ConversationLogger(log_file)
 
     logger.info(f"Starting test - log file: {log_file}")
 
     try:
-        # Initialize handlers
         handlers = await initialize_handlers()
 
-        # Create initial state
         state = RecommenderAdvisorAgentState(
             session_id=12345,
             youth_id="test_user_123",
@@ -292,12 +277,10 @@ async def test_action_planning_intent_classification():
             preference_vector=create_sample_preference_vector()
         )
 
-        # Create conversation context
         conversation_history = ConversationHistory()
 
-        # Define conversation turns (simulating the exact user inputs)
         conversation_turns = [
-            ("", "INTRO - auto"),  # Turn 0: Intro
+            ("", "INTRO - auto"),
             ("okay", "Present recommendations"),
             ("Uhm none of these seem interesting to me, I want to transition into Djiing", "Guardrail trigger"),
             ("I would still like to explore what it takes to pursue DJing", "Persist on DJing"),
@@ -310,32 +293,27 @@ async def test_action_planning_intent_classification():
             ("yes I want to enroll in Training", "THE PROBLEMATIC INPUT - Commit to training"),
         ]
 
-        # Execute conversation
         for turn_index, (user_input, description) in enumerate(conversation_turns):
             logger.info(f"\n{'='*80}")
             logger.info(f"Turn {turn_index}: {description}")
             logger.info(f"Phase: {state.conversation_phase}")
             logger.info(f"User input: '{user_input}'")
 
-            # Get current handler
             current_handler = handlers.get(state.conversation_phase)
             assert current_handler is not None, f"No handler for phase: {state.conversation_phase}"
 
-            # Create context
             context = ConversationContext(
                 all_history=conversation_history,
                 history=conversation_history,
                 summary=""
             )
 
-            # Execute handler
             try:
                 response, llm_stats = await current_handler.handle(user_input, state, context)
 
                 logger.info(f"Agent response: {response.message[:100]}...")
                 logger.info(f"New phase: {state.conversation_phase}")
 
-                # Log to file
                 conv_logger.log_turn(
                     turn_number=turn_index,
                     phase=str(state.conversation_phase),
@@ -344,7 +322,6 @@ async def test_action_planning_intent_classification():
                     llm_stats=llm_stats
                 )
 
-                # Update conversation history
                 conversation_turn = ConversationTurn(
                     index=turn_index,
                     input=AgentInput(message=user_input, is_artificial=(turn_index == 0)),
@@ -357,19 +334,16 @@ async def test_action_planning_intent_classification():
                 )
                 conversation_history.turns.append(conversation_turn)
 
-                # CRITICAL TEST: Turn 10 (index 10) should NOT crash
                 if turn_index == 10:
                     logger.info("✓ CRITICAL TEST PASSED: Turn 10 did not crash!")
                     logger.info(f"  Phase after turn: {state.conversation_phase}")
                     logger.info(f"  Response generated successfully")
 
-                    # Verify we're in the right phase (should be ACTION_PLANNING or WRAPUP)
                     assert state.conversation_phase in [
                         ConversationPhase.ACTION_PLANNING,
                         ConversationPhase.WRAPUP
                     ], f"Expected ACTION_PLANNING or WRAPUP, got {state.conversation_phase}"
 
-                # Check if conversation finished
                 if response.finished:
                     logger.info("Conversation marked as finished")
                     break
@@ -378,7 +352,6 @@ async def test_action_planning_intent_classification():
                 logger.error(f"Error at turn {turn_index}: {type(e).__name__}: {e}")
                 conv_logger.log_error(turn_index, e)
 
-                # If error is at turn 10, this is the bug we're testing for
                 if turn_index == 10:
                     raise AssertionError(
                         f"CRITICAL TEST FAILED: Turn 10 crashed with error: {type(e).__name__}: {e}"
@@ -386,7 +359,6 @@ async def test_action_planning_intent_classification():
                 else:
                     raise
 
-        # Log success
         conv_logger.log_success()
         logger.info(f"\n{'='*80}")
         logger.info("TEST PASSED - All turns completed successfully!")
@@ -399,5 +371,4 @@ async def test_action_planning_intent_classification():
 
 
 if __name__ == "__main__":
-    # Run the test directly
     asyncio.run(test_action_planning_intent_classification())

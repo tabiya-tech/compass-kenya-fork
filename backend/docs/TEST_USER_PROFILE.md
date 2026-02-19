@@ -4,9 +4,9 @@ This document describes the sample user profile used for testing the **Recommend
 
 ---
 
-## 📦 JSON Schema
+## JSON Schema
 
-> ⚠️ **IMPORTANT**: The test script uses a **simplified stub** for `skills_vector`. The actual Skills Explorer Agent produces a richer `SkillEntity` structure. See comparison below.
+>  **IMPORTANT**: The test script uses a **simplified stub** for `skills_vector`. The actual Skills Explorer Agent produces a richer `SkillEntity` structure. See comparison below.
 
 ---
 
@@ -125,15 +125,15 @@ From `app/agent/experience/experience_entity.py`, the `ExperienceEntity` contain
 
 | Field | Test Stub | Actual SkillEntity | Notes |
 |-------|-----------|-------------------|-------|
-| `preferredLabel` | ✅ Present | ✅ Present | **Same** |
-| `proficiency` | ✅ Present | ❌ Missing | Test-only field |
-| `id` | ❌ Missing | ✅ Present | DB identifier |
-| `UUID` | ❌ Missing | ✅ Present | ESCO UUID |
-| `modelId` | ❌ Missing | ✅ Present | Taxonomy model |
-| `altLabels` | ❌ Missing | ✅ Present | Alternative names |
-| `description` | ❌ Missing | ✅ Present | Skill description |
-| `score` | ❌ Missing | ✅ Present | Match score (0-1) |
-| `skillType` | ❌ Missing | ✅ Present | skill/knowledge/etc |
+| `preferredLabel` |  Present |  Present | **Same** |
+| `proficiency` |  Present |  Missing | Test-only field |
+| `id` |  Missing |  Present | DB identifier |
+| `UUID` |  Missing |  Present | ESCO UUID |
+| `modelId` |  Missing |  Present | Taxonomy model |
+| `altLabels` |  Missing |  Present | Alternative names |
+| `description` |  Missing |  Present | Skill description |
+| `score` |  Missing |  Present | Match score (0-1) |
+| `skillType` |  Missing |  Present | skill/knowledge/etc |
 
 ### How the Recommender Agent Handles This
 
@@ -158,7 +158,7 @@ This means the agent works with:
 
 ---
 
-## �📋 User Identity
+## User Identity
 
 | Field          | Value                 |
 |----------------|-----------------------|
@@ -171,7 +171,7 @@ This means the agent works with:
 
 ---
 
-## 👤 Persona Background
+## Persona Background
 
 Hassan is a 24-year-old from Mombasa with the following characteristics:
 
@@ -188,7 +188,7 @@ Hassan is a 24-year-old from Mombasa with the following characteristics:
 
 ---
 
-## 🛠️ Skills Vector
+## Skills Vector
 
 The skills vector represents Hassan's current skill proficiencies (0.0 - 1.0 scale):
 
@@ -257,27 +257,27 @@ preference_vector = PreferenceVector(
 
 ---
 
-## 🎯 Hassan's Key Priorities (from Preference Vector)
+##  Hassan's Key Priorities (from Preference Vector)
 
-1. **💰 Financial Security** (0.85) - *Highest priority*
+1. ** Financial Security** (0.85) - *Highest priority*
    - Family pressure to contribute financially
    - Looking for good, consistent income
    
-2. **⚖️ Work-Life Balance** (0.80) - *Very high priority*
+2. ** Work-Life Balance** (0.80) - *Very high priority*
    - Values flexibility in work schedule
    - Doesn't want to be locked into rigid hours
    
-3. **🛡️ Job Stability** (0.70) - *High priority*
+3. ** Job Stability** (0.70) - *High priority*
    - Prefers stable income over risky opportunities
    - Looking for reliable work arrangements
 
-4. **🔧 Task Type Preferences** (0.65) - *Moderate priority*
+4. ** Task Type Preferences** (0.65) - *Moderate priority*
    - Enjoys hands-on, practical work
    - Not interested in purely desk-based roles
 
 ---
 
-## 📊 PreferenceVector Type Definition
+## PreferenceVector Type Definition
 
 The `PreferenceVector` class includes the following comprehensive fields:
 
@@ -317,7 +317,7 @@ The `PreferenceVector` class includes the following comprehensive fields:
 
 ---
 
-## 🏗️ Usage in Test Script
+## Usage in Test Script
 
 The profile is created in the test script as follows:
 
@@ -344,9 +344,10 @@ state = RecommenderAdvisorAgentState(
 
 ---
 
-## 📁 Source Files
+## Source Files
 
 - **Agent Implementation**: [`compass/backend/app/agent/recommender_advisor_agent/agent.py`](../app/agent/recommender_advisor_agent/agent.py)
+- **Sample Data**: [`compass/backend/evaluation_tests/recommender_advisor_agent/sample_data.py`](../evaluation_tests/recommender_advisor_agent/sample_data.py)
 - **Interactive Test Script**: [`compass/backend/scripts/test_recommender_agent_interactive.py`](../scripts/test_recommender_agent_interactive.py)
 - **PreferenceVector Type**: [`compass/backend/app/agent/preference_elicitation_agent/types.py`](../app/agent/preference_elicitation_agent/types.py)
 
