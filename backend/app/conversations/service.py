@@ -19,6 +19,10 @@ from app.conversations.utils import get_messages_from_conversation_manager, filt
 from app.sensitive_filter import sensitive_filter
 from app.metrics.application_state_metrics_recorder.recorder import IApplicationStateMetricsRecorder
 from app.job_preferences.service import IJobPreferencesService
+from app.conversations.phase_data import (
+    apply_entry_phase,
+    build_phase_data_status_from_state,
+)
 from app.user_recommendations.services.service import IUserRecommendationsService
 from app.job_preferences.types import JobPreferences
 
@@ -101,23 +105,22 @@ class ConversationService(IConversationService):
         state = await self._application_state_metrics_recorder.get_state(session_id)
 
         if state.agent_director_state.current_phase == ConversationPhase.INTRO:
-            has_recommendation = await self._user_recommendations_service.has_recommendations(user_id)
-            data = PhaseDataStatus(has_recommendation=has_recommendation)
+            data = await build_phase_data_status_from_state(
+                state, user_id, self._user_recommendations_service
+            )
             entry_phase = determine_start_phase(data)
             self._logger.info(
-                "Step-skip check: session=%s user=%s has_recommendation=%s entry_phase=%s",
-                session_id, user_id, has_recommendation, entry_phase.value,
+                "Step-skip check: session=%s user=%s entry_phase=%s",
+                session_id, user_id, entry_phase.value,
             )
-            if entry_phase == JourneyPhase.RECOMMENDATION:
-                state.agent_director_state.skip_to_recommendation = True
-                state.agent_director_state.current_phase = ConversationPhase.COUNSELING
+            if apply_entry_phase(state, entry_phase):
                 self._logger.info(
-                    "Step-skip: skipping to RECOMMENDATION phase (user has pre-computed recommendations)"
+                    "Step-skip: skipping to %s phase",
+                    entry_phase.value,
                 )
             else:
                 self._logger.info(
-                    "Step-skip: starting at %s (no skip, proceeding with intro)",
-                    entry_phase.value,
+                    "Step-skip: starting at SKILLS_ELICITATION (no skip, proceeding with intro)",
                 )
 
         if state.agent_director_state.current_phase == ConversationPhase.ENDED:
@@ -308,7 +311,7 @@ class ConversationService(IConversationService):
         """
         Prepare RecommenderAdvisorAgent state with skills and preferences if not already initialized.
 
-        When skip_to_recommendation is True, loads pre-computed recommendations from
+        When skip_to_phase is RECOMMENDATION, loads pre-computed recommendations from
         user_recommendations collection and passes them to the agent.
 
         Otherwise populates:
@@ -323,7 +326,8 @@ class ConversationService(IConversationService):
         """
         rec_state = state.recommender_advisor_agent_state
 
-        if state.agent_director_state.skip_to_recommendation and rec_state.recommendations is None:
+        if (state.agent_director_state.skip_to_phase == JourneyPhase.RECOMMENDATION
+                and rec_state.recommendations is None):
             self._logger.info(
                 "Step-skip: loading pre-computed recommendations for user=%s", user_id
             )

@@ -12,12 +12,19 @@ from app.agent.welcome_agent import WelcomeAgentState
 from app.store.database_application_state_store import DatabaseApplicationStateStore
 from app.agent.agent_types import AgentInput, AgentOutput, AgentType
 from app.agent.agent_director.abstract_agent_director import AgentDirectorState, ConversationPhase
-from app.agent.explore_experiences_agent_director import ExploreExperiencesAgentDirectorState, ConversationPhase as ExplorePhase
-from app.agent.explore_experiences_agent_director import ExperienceState, DiveInPhase
+from app.agent.explore_experiences_agent_director import (
+    ExploreExperiencesAgentDirectorState,
+    ConversationPhase as ExplorePhase,
+    ExperienceState,
+    DiveInPhase,
+)
 from app.agent.collect_experiences_agent import CollectExperiencesAgentState, CollectedData
 from app.agent.skill_explorer_agent import SkillsExplorerAgentState
+from app.agent.preference_elicitation_agent import PreferenceElicitationAgentState
+from app.agent.recommender_advisor_agent import RecommenderAdvisorAgentState
 from app.conversation_memory.conversation_memory_types import ConversationMemoryManagerState, ConversationHistory, ConversationTurn
 from app.agent.experience.experience_entity import ExperienceEntity, ResponsibilitiesData
+from app.agent.experience.upgrade_experience import get_editable_experience
 from app.agent.experience.work_type import WorkType
 from app.agent.experience.timeline import Timeline
 from app.application_state import ApplicationState
@@ -79,6 +86,8 @@ async def populate_sample_conversation(*, mongo_uri: str, database_name: str, _s
         conversation_memory_manager_state = create_conversation_memory_manager_state(_session_id, conversation_history)
         collect_experience_state = create_collect_experience_state(_session_id)
         skills_explorer_agent_state = create_skills_explorer_agent_state(_session_id)
+        preference_elicitation_agent_state = PreferenceElicitationAgentState(session_id=_session_id)
+        recommender_advisor_agent_state = RecommenderAdvisorAgentState(session_id=_session_id)
 
         # Create the application state
         application_state = ApplicationState(
@@ -88,7 +97,9 @@ async def populate_sample_conversation(*, mongo_uri: str, database_name: str, _s
             explore_experiences_director_state=explore_experiences_director_state,
             conversation_memory_manager_state=conversation_memory_manager_state,
             collect_experience_state=collect_experience_state,
-            skills_explorer_agent_state=skills_explorer_agent_state
+            skills_explorer_agent_state=skills_explorer_agent_state,
+            preference_elicitation_agent_state=preference_elicitation_agent_state,
+            recommender_advisor_agent_state=recommender_advisor_agent_state,
         )
 
         total_states += 1
@@ -297,11 +308,19 @@ def create_explore_experiences_director_state(_session_id: int) -> ExploreExperi
         experience=freelance_experience
     )}
 
+    editable_experiences = [
+        get_editable_experience(exp) for exp in [bakery_experience, freelance_experience]
+    ]
+    explored_experiences = [
+        ExperienceEntity[tuple[int, SkillEntity]].model_validate(e.model_dump())
+        for e in editable_experiences
+    ]
     return ExploreExperiencesAgentDirectorState(
         session_id=_session_id,
         experiences_state=experience_states,
-        current_experience_uuid=None,  # No current experience as conversation is completed
-        conversation_phase=ExplorePhase.DIVE_IN  # Conversation ended in DIVE_IN phase
+        explored_experiences=explored_experiences,
+        current_experience_uuid=None,
+        conversation_phase=ExplorePhase.DIVE_IN,
     )
 
 
@@ -344,13 +363,16 @@ def create_collect_experience_state(_session_id: int) -> CollectExperiencesAgent
 
 def create_skills_explorer_agent_state(_session_id: int) -> SkillsExplorerAgentState:
     """Create a sample skills explorer agent state for a completed conversation."""
-    # Get experience UUIDs from the explore experiences director state
     explore_state = create_explore_experiences_director_state(_session_id)
-    experience_uuids = list(explore_state.experiences_state.keys())
+    return create_skills_explorer_agent_state_from_explore(explore_state)
 
+
+def create_skills_explorer_agent_state_from_explore(explore_state: ExploreExperiencesAgentDirectorState) -> SkillsExplorerAgentState:
+    """Create skills explorer state from an existing explore experiences director state."""
+    experience_uuids = list(explore_state.experiences_state.keys())
     return SkillsExplorerAgentState(
-        session_id=_session_id,
-        first_time_for_experience={uuid: False for _uuid in experience_uuids},
+        session_id=explore_state.session_id,
+        first_time_for_experience={uid: False for uid in experience_uuids},
         experiences_explored=experience_uuids
     )
 
@@ -632,6 +654,33 @@ def create_sample_conversation_history() -> ConversationHistory:
     ]
 
     return ConversationHistory(turns=conversation_turns)
+
+
+def create_sample_conversation_history_for_preference_skip() -> ConversationHistory:
+    """Create conversation history ending at the transition to preference elicitation (no farewell)."""
+    full = create_sample_conversation_history()
+    turns = full.turns[:-1]
+    last_turn = turns[-1]
+    new_output = AgentOutput(
+        message_id=str(ObjectId()),
+        message_for_user=(
+            "After examining the information you provided, I identified the following skills:\n"
+            "• bake confections\n"
+            "• prepare bakery products\n"
+            "• work according to recipe\n"
+            "• cake decoration\n"
+            "• client management\n"
+            "• project planning\n\n"
+            "Now let's explore your job preferences so I can suggest roles that match what matters to you."
+        ),
+        finished=False,
+        agent_type=AgentType.EXPLORE_SKILLS_AGENT,
+        agent_response_time_in_sec=1.2,
+        llm_stats=[],
+        sent_at=last_turn.output.sent_at,
+    )
+    turns[-1] = ConversationTurn(index=last_turn.index, input=last_turn.input, output=new_output)
+    return ConversationHistory(turns=turns)
 
 
 def parse_args():

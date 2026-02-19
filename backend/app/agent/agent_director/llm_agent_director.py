@@ -3,6 +3,7 @@ from pathlib import Path
 from app.agent.agent import Agent
 from app.agent.agent_director._llm_router import LLMRouter
 from app.agent.agent_director.abstract_agent_director import AbstractAgentDirector, ConversationPhase
+from app.conversations.phase_state_machine import JourneyPhase
 from app.agent.agent_types import AgentInput, AgentOutput, AgentType
 from app.agent.explore_experiences_agent_director import ExploreExperiencesAgentDirector
 from app.agent.farewell_agent import FarewellAgent
@@ -122,9 +123,20 @@ class LLMAgentDirector(AbstractAgentDirector):
 
         # In the consulting phase, the agent type is determined by the user's intent.
         if phase == ConversationPhase.COUNSELING:
-            if self._state.skip_to_recommendation:
+            skip_phase = self._state.skip_to_phase
+            if skip_phase == JourneyPhase.RECOMMENDATION:
                 self._logger.info(
-                    "Step-skip: routing to RECOMMENDER_ADVISOR_AGENT (skip_to_recommendation=True)"
+                    "Step-skip: routing to RECOMMENDER_ADVISOR_AGENT (skip_to_phase=RECOMMENDATION)"
+                )
+                return AgentType.RECOMMENDER_ADVISOR_AGENT
+            if skip_phase == JourneyPhase.PREFERENCE_ELICITATION:
+                self._logger.info(
+                    "Step-skip: routing to PREFERENCE_ELICITATION_AGENT (skip_to_phase=PREFERENCE_ELICITATION)"
+                )
+                return AgentType.PREFERENCE_ELICITATION_AGENT
+            if skip_phase == JourneyPhase.MATCHING:
+                self._logger.info(
+                    "Step-skip: routing to RECOMMENDER_ADVISOR_AGENT (skip_to_phase=MATCHING)"
                 )
                 return AgentType.RECOMMENDER_ADVISOR_AGENT
             return await self._llm_router.execute(
@@ -230,6 +242,11 @@ class LLMAgentDirector(AbstractAgentDirector):
                 
                 if not agent_for_task.is_responsible_for_conversation_history():
                     await self._conversation_manager.update_history(clean_input, agent_output)
+
+                # clear skip_to_phase if the target agent finished
+                if agent_output.finished and self._state.skip_to_phase is not None:
+                    self._state.skip_to_phase = None
+                    self._logger.info("Step-skip: target agent finished, clearing skip_to_phase")
 
                 # Update the conversation phase
                 new_phase = self._get_new_phase(agent_output)
