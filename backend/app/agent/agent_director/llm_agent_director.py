@@ -15,7 +15,7 @@ from app.app_config import get_application_config
 from app.conversation_memory.conversation_memory_manager import ConversationMemoryManager
 from app.conversation_memory.conversation_memory_types import ConversationContext
 from app.vector_search.vector_search_dependencies import SearchServices
-from motor.motor_asyncio import AsyncIOMotorDatabase
+from app.user_recommendations.services.service import IUserRecommendationsService
 from app.i18n.translation_service import t
 from app.context_vars import phase_ctx_var, agent_type_ctx_var # for observability logging
 
@@ -29,9 +29,10 @@ class LLMAgentDirector(AbstractAgentDirector):
                  conversation_manager: ConversationMemoryManager,
                  search_services: SearchServices,
                  experience_pipeline_config: ExperiencePipelineConfig,
-                 application_db: AsyncIOMotorDatabase,
+                 user_recommendations_service: IUserRecommendationsService,
                  ):
         super().__init__(conversation_manager)
+        self._user_recommendations_service = user_recommendations_service
 
         # Initialize matching service client from config
         matching_service_client = None
@@ -122,6 +123,9 @@ class LLMAgentDirector(AbstractAgentDirector):
         # In the consulting phase, the agent type is determined by the user's intent.
         if phase == ConversationPhase.COUNSELING:
             if self._state.skip_to_recommendation:
+                self._logger.info(
+                    "Step-skip: routing to RECOMMENDER_ADVISOR_AGENT (skip_to_recommendation=True)"
+                )
                 return AgentType.RECOMMENDER_ADVISOR_AGENT
             return await self._llm_router.execute(
                 user_input=user_input,
