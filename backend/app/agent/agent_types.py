@@ -19,7 +19,6 @@ class AgentType(Enum):
     RECOMMENDER_ADVISOR_AGENT = "RecommenderAdvisorAgent"
     FAREWELL_AGENT = "FarewellAgent"
     QNA_AGENT = "QnaAgent"
-    RECOMMENDER_ADVISOR_AGENT = "RecommenderAdvisorAgent"
 
 
 class AgentInput(BaseModel):

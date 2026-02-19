@@ -101,15 +101,23 @@ class ConversationService(IConversationService):
         state = await self._application_state_metrics_recorder.get_state(session_id)
 
         if state.agent_director_state.current_phase == ConversationPhase.INTRO:
-            data = PhaseDataStatus(
-                has_recommendation=await self._user_recommendations_service.has_recommendations(user_id)
-            )
+            has_recommendation = await self._user_recommendations_service.has_recommendations(user_id)
+            data = PhaseDataStatus(has_recommendation=has_recommendation)
             entry_phase = determine_start_phase(data)
+            self._logger.info(
+                "Step-skip check: session=%s user=%s has_recommendation=%s entry_phase=%s",
+                session_id, user_id, has_recommendation, entry_phase.value,
+            )
             if entry_phase == JourneyPhase.RECOMMENDATION:
                 state.agent_director_state.skip_to_recommendation = True
+                state.agent_director_state.current_phase = ConversationPhase.COUNSELING
                 self._logger.info(
-                    "User %s has recommendations, skipping to RECOMMENDATION phase",
-                    user_id,
+                    "Step-skip: skipping to RECOMMENDATION phase (user has pre-computed recommendations)"
+                )
+            else:
+                self._logger.info(
+                    "Step-skip: starting at %s (no skip, proceeding with intro)",
+                    entry_phase.value,
                 )
 
         if state.agent_director_state.current_phase == ConversationPhase.ENDED:
@@ -125,7 +133,7 @@ class ConversationService(IConversationService):
         self._agent_director.get_preference_elicitation_agent().set_state(state.preference_elicitation_agent_state)
 
         # Prepare recommender state with skills and preferences if not already set
-        self._prepare_recommender_state_if_needed(state)
+        await self._prepare_recommender_state_if_needed(state, user_id)
 
         self._agent_director.get_recommender_advisor_agent().set_state(state.recommender_advisor_agent_state)
         self._conversation_memory_manager.set_state(state.conversation_memory_manager_state)
@@ -296,11 +304,14 @@ class ConversationService(IConversationService):
             # This is a denormalized copy; the primary data is already in DB6
             self._logger.error(f"Failed to save preference vector to JobPreferences: {e}", exc_info=True)
 
-    def _prepare_recommender_state_if_needed(self, state: ApplicationState) -> None:
+    async def _prepare_recommender_state_if_needed(self, state: ApplicationState, user_id: str) -> None:
         """
         Prepare RecommenderAdvisorAgent state with skills and preferences if not already initialized.
 
-        This populates the recommender state with:
+        When skip_to_recommendation is True, loads pre-computed recommendations from
+        user_recommendations collection and passes them to the agent.
+
+        Otherwise populates:
         - Skills vector from explored experiences
         - Preference vector from preference elicitation agent
         - BWS occupation scores from preference elicitation
@@ -308,10 +319,34 @@ class ConversationService(IConversationService):
 
         Args:
             state: Application state containing all agent states
+            user_id: User ID for loading pre-computed recommendations when skipping
         """
         rec_state = state.recommender_advisor_agent_state
 
-        # Skip if already initialized with skills and preferences
+        if state.agent_director_state.skip_to_recommendation and rec_state.recommendations is None:
+            self._logger.info(
+                "Step-skip: loading pre-computed recommendations for user=%s", user_id
+            )
+            try:
+                db_recs = await self._user_recommendations_service.get_by_user_id(user_id)
+                if db_recs:
+                    from app.agent.recommender_advisor_agent.user_recommendations_converter import (
+                        user_recommendations_to_node2vec,
+                    )
+                    rec_state.recommendations = user_recommendations_to_node2vec(user_id, db_recs)
+                    rec_state.youth_id = user_id
+                    self._logger.info(
+                        "Loaded pre-computed recommendations for recommender: "
+                        "%d occupations, %d opportunities, %d skill gaps",
+                        len(db_recs.occupation_recommendations),
+                        len(db_recs.opportunity_recommendations),
+                        len(db_recs.skill_gap_recommendations),
+                    )
+            except Exception as e:
+                self._logger.warning(
+                    "Failed to load pre-computed recommendations for skip: %s", e, exc_info=True
+                )
+
         if rec_state.skills_vector is not None and rec_state.preference_vector is not None:
             return
 
@@ -344,11 +379,11 @@ class ConversationService(IConversationService):
             # Extract BWS occupation scores from preference elicitation
             if rec_state.bws_occupation_scores is None:
                 pref_state = state.preference_elicitation_agent_state
-                if pref_state.bws_occupation_scores:
-                    rec_state.bws_occupation_scores = pref_state.bws_occupation_scores
+                if pref_state.occupation_scores:
+                    rec_state.bws_occupation_scores = pref_state.occupation_scores
                     self._logger.info(
                         f"Loaded BWS occupation scores for recommender: "
-                        f"{len(pref_state.bws_occupation_scores)} occupations"
+                        f"{len(pref_state.occupation_scores)} occupations"
                     )
 
             # Set youth_id (use session_id as fallback)
