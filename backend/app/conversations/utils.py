@@ -4,6 +4,7 @@ from typing import Optional
 
 from app.agent.explore_experiences_agent_director import DiveInPhase
 from app.agent.agent_director.abstract_agent_director import ConversationPhase
+from app.conversations.phase_state_machine import JourneyPhase
 from app.agent.explore_experiences_agent_director import ConversationPhase as CounselingConversationPhase
 from app.application_state import ApplicationState
 from app.conversation_memory.conversation_memory_types import ConversationHistory, ConversationContext
@@ -137,12 +138,14 @@ def get_current_conversation_phase_response(state: ApplicationState, logger: Log
         current_phase = CurrentConversationPhaseResponse.INTRO
         current_phase_percentage = BEGINNING_CONVERSATION_PERCENTAGE
     elif (current_conversation_phase == ConversationPhase.COUNSELING
-          and state.agent_director_state.skip_to_recommendation):
-        ##############################
-        #   2.0 Step-skip: direct to recommendations (bypassed skills/pref elicitation).
-        ##############################
-        current_phase = CurrentConversationPhaseResponse.RECOMMENDATION
-        current_phase_percentage = RECOMMENDATION_PERCENTAGE
+          and state.agent_director_state.skip_to_phase is not None):
+        skip_phase = state.agent_director_state.skip_to_phase
+        if skip_phase in (JourneyPhase.RECOMMENDATION, JourneyPhase.MATCHING):
+            current_phase = CurrentConversationPhaseResponse.RECOMMENDATION
+            current_phase_percentage = RECOMMENDATION_PERCENTAGE
+        else:
+            current_phase = CurrentConversationPhaseResponse.PREFERENCE_ELICITATION
+            current_phase_percentage = PREFERENCE_ELICITATION_PERCENTAGE
         current = None
         total = None
     elif current_conversation_phase == ConversationPhase.COUNSELING:

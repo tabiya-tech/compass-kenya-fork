@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, field_serializer, field_validator
 from app.agent.agent_types import AgentInput, AgentOutput
 from app.conversation_memory.conversation_memory_manager import IConversationMemoryManager
 from app.agent.persona_detector import PersonaType
+from app.conversations.phase_state_machine import JourneyPhase
 
 
 class ConversationPhase(Enum):
@@ -29,7 +30,7 @@ class AgentDirectorState(BaseModel):
     current_phase: ConversationPhase = Field(default=ConversationPhase.INTRO)
     conversation_conducted_at: Optional[datetime] = None
     persona_type: PersonaType = Field(default=PersonaType.INFORMAL)
-    skip_to_recommendation: bool = Field(default=False)
+    skip_to_phase: Optional[JourneyPhase] = Field(default=None)
 
     class Config:
         extra = "forbid"
@@ -66,6 +67,18 @@ class AgentDirectorState(BaseModel):
             return PersonaType[value]
         return value
 
+    @field_serializer("skip_to_phase")
+    def serialize_skip_to_phase(self, v: Optional[JourneyPhase], _info) -> Optional[str]:
+        return v.value if v is not None else None
+
+    @field_validator("skip_to_phase", mode='before')
+    def deserialize_skip_to_phase(cls, value: str | JourneyPhase | None) -> Optional[JourneyPhase]:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            return JourneyPhase(value)
+        return value
+
     # Deserialize the conversation_conducted_at datetime and ensure it's interpreted as UTC
     @field_validator("conversation_conducted_at", mode='before')
     def deserialize_conversation_conducted_at(cls, value: Optional[datetime]) -> Optional[datetime]:
@@ -73,11 +86,14 @@ class AgentDirectorState(BaseModel):
 
     @staticmethod
     def from_document(_doc: Mapping[str, Any]) -> "AgentDirectorState":
+        skip_to_phase = None
+        if _doc.get("skip_to_phase"):
+            skip_to_phase = JourneyPhase(_doc["skip_to_phase"])
         return AgentDirectorState(session_id=_doc["session_id"],
                                   current_phase=_doc["current_phase"],
                                   conversation_conducted_at=_doc.get("conversation_conducted_at", None),
                                   persona_type=_doc.get("persona_type", PersonaType.INFORMAL),
-                                  skip_to_recommendation=_doc.get("skip_to_recommendation", False))
+                                  skip_to_phase=skip_to_phase)
 
 
 def _parse_data(value: Optional[datetime | str]) -> Optional[datetime]:
