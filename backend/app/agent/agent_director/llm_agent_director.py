@@ -1,8 +1,9 @@
+import os
 from pathlib import Path
 
 from app.agent.agent import Agent
 from app.agent.agent_director._llm_router import LLMRouter
-from app.agent.agent_director.abstract_agent_director import AbstractAgentDirector, ConversationPhase
+from app.agent.agent_director.abstract_agent_director import AbstractAgentDirector, ConversationPhase, CounselingSubPhase
 from app.conversations.phase_state_machine import JourneyPhase
 from app.agent.agent_types import AgentInput, AgentOutput, AgentType
 from app.agent.explore_experiences_agent_director import ExploreExperiencesAgentDirector
@@ -117,12 +118,11 @@ class LLMAgentDirector(AbstractAgentDirector):
         if phase == ConversationPhase.ENDED:
             raise ValueError("Conversation has ended, no more agents to run")
 
-        # Currently, in the intro phase, only the welcome agent is active.
         if phase == ConversationPhase.INTRO:
             return AgentType.WELCOME_AGENT
 
-        # In the consulting phase, the agent type is determined by the user's intent.
         if phase == ConversationPhase.COUNSELING:
+            # Priority 1: Explicit phase skip overrides everything
             skip_phase = self._state.skip_to_phase
             if skip_phase == JourneyPhase.RECOMMENDATION:
                 self._logger.info(
@@ -139,49 +139,58 @@ class LLMAgentDirector(AbstractAgentDirector):
                     "Step-skip: routing to RECOMMENDER_ADVISOR_AGENT (skip_to_phase=MATCHING)"
                 )
                 return AgentType.RECOMMENDER_ADVISOR_AGENT
+
+            # Priority 2: Deterministic sub-phase routing
+            sub_phase = self._state.counseling_sub_phase
+            if sub_phase == CounselingSubPhase.EXPLORE_EXPERIENCES:
+                return AgentType.EXPLORE_EXPERIENCES_AGENT
+            if sub_phase == CounselingSubPhase.PREFERENCE_ELICITATION:
+                return AgentType.PREFERENCE_ELICITATION_AGENT
+            if sub_phase == CounselingSubPhase.RECOMMENDER_ADVISOR:
+                return AgentType.RECOMMENDER_ADVISOR_AGENT
+
+            # Fallback: use the LLM router (should not normally reach here)
+            self._logger.warning("Unexpected counseling sub-phase state, falling back to LLM router")
             return await self._llm_router.execute(
                 user_input=user_input,
                 phase=phase,
                 context=context
             )
 
-        # Otherwise, send the Farewell agent to the LLM, no penalty and no error.
+        # Otherwise, send the Farewell agent
         return AgentType.FAREWELL_AGENT
 
     def _get_new_phase(self, agent_output: AgentOutput) -> ConversationPhase:
         """
         Get the new conversation phase based on the agent output and the current phase.
+        Also advances counseling_sub_phase when agents within COUNSELING complete.
         """
         if self._state is None:
             raise RuntimeError("AgentDirectorState must be set before computing the new phase")
         current_phase = self._state.current_phase
 
-        # ConversationPhase.ENDED is the final phase
         if current_phase == ConversationPhase.ENDED:
             return ConversationPhase.ENDED
 
-            # In the intro phase, only the Welcome agent can end the phase
         if (current_phase == ConversationPhase.INTRO
                 and agent_output.agent_type == AgentType.WELCOME_AGENT
                 and agent_output.finished):
             return ConversationPhase.COUNSELING
 
-        # In the consulting phase, Explore Experiences or Recommender Advisor agents can end the phase
-        if (current_phase == ConversationPhase.COUNSELING
-                and agent_output.finished
-                and agent_output.agent_type in (
-                    AgentType.EXPLORE_EXPERIENCES_AGENT,
-                    AgentType.RECOMMENDER_ADVISOR_AGENT,
-                )):
-            return ConversationPhase.CHECKOUT
+        if current_phase == ConversationPhase.COUNSELING and agent_output.finished:
+            if agent_output.agent_type == AgentType.EXPLORE_EXPERIENCES_AGENT:
+                self._state.counseling_sub_phase = CounselingSubPhase.PREFERENCE_ELICITATION
+                self._logger.info("COUNSELING sub-phase advanced: EXPLORE_EXPERIENCES -> PREFERENCE_ELICITATION")
+                return ConversationPhase.COUNSELING
 
-        # When RecommenderAdvisorAgent finishes, go to CHECKOUT
-        if (current_phase == ConversationPhase.COUNSELING
-                and agent_output.agent_type == AgentType.RECOMMENDER_ADVISOR_AGENT
-                and agent_output.finished):
-            return ConversationPhase.CHECKOUT
+            if agent_output.agent_type == AgentType.PREFERENCE_ELICITATION_AGENT:
+                self._state.counseling_sub_phase = CounselingSubPhase.RECOMMENDER_ADVISOR
+                self._logger.info("COUNSELING sub-phase advanced: PREFERENCE_ELICITATION -> RECOMMENDER_ADVISOR")
+                return ConversationPhase.COUNSELING
 
-        # In the checkout phase, only the Farewell agent can end the phase
+            if agent_output.agent_type == AgentType.RECOMMENDER_ADVISOR_AGENT:
+                return ConversationPhase.CHECKOUT
+
         if (current_phase == ConversationPhase.CHECKOUT
                 and agent_output.agent_type == AgentType.FAREWELL_AGENT
                 and agent_output.finished):
@@ -207,6 +216,7 @@ class LLMAgentDirector(AbstractAgentDirector):
             first_call: bool = True
             transitioned_to_new_phase: bool = False
             agent_output: AgentOutput | None = None
+            context = await self._conversation_manager.get_conversation_context()
             while first_call or transitioned_to_new_phase:
                 if self._state.current_phase == ConversationPhase.ENDED:                    
                     finished_msg = t("messages", "agentDirector.finalMessage","The conversation has finished!")
@@ -214,14 +224,12 @@ class LLMAgentDirector(AbstractAgentDirector):
                         message_for_user=finished_msg,
                         finished=True,
                         agent_type=None,
-                        agent_response_time_in_sec=0,  # artificial value as there is no LLM call
-                        llm_stats=[]  # artificial value as there is no LLM call
+                        agent_response_time_in_sec=0,
+                        llm_stats=[]
                     )
                     return agent_output
 
                 first_call = False
-                # Get the context
-                context = await self._conversation_manager.get_conversation_context()
                 clean_input: AgentInput = user_input.model_copy()  # make a copy of the user input to avoid modifying the original
                 clean_input.message = clean_input.message.strip()  # Remove leading and trailing whitespaces
 
@@ -231,6 +239,13 @@ class LLMAgentDirector(AbstractAgentDirector):
                     phase=self._state.current_phase,
                     context=context)
                 self._logger.debug("Running agent: %s", {suitable_agent_type})
+
+                # Track routed agent for sticky routing and observability
+                if suitable_agent_type != self._state.last_routed_agent:
+                    self._state.last_routed_agent = suitable_agent_type
+                    self._state.sticky_turn_counter = 1
+                else:
+                    self._state.sticky_turn_counter += 1
                 
                 # Set agent_type in context for observability logging
                 agent_type_ctx_var.set(suitable_agent_type.value if suitable_agent_type else ":none:")
@@ -242,6 +257,12 @@ class LLMAgentDirector(AbstractAgentDirector):
                 
                 if not agent_for_task.is_responsible_for_conversation_history():
                     await self._conversation_manager.update_history(clean_input, agent_output)
+                    context = await self._conversation_manager.get_conversation_context()
+
+                # Reset sticky state when agent finishes
+                if agent_output.finished:
+                    self._state.last_routed_agent = None
+                    self._state.sticky_turn_counter = 0
 
                 # clear skip_to_phase if the target agent finished
                 if agent_output.finished and self._state.skip_to_phase is not None:
@@ -254,14 +275,18 @@ class LLMAgentDirector(AbstractAgentDirector):
 
                 transitioned_to_new_phase = self._state.current_phase != new_phase
                 if transitioned_to_new_phase:
-                    user_input = AgentInput(
-                        message="(silence)",
-                        is_artificial=True
-                    )
                     self._state.current_phase = new_phase
-                    
-                    # Update phase in context for observability logging
                     phase_ctx_var.set(new_phase.value if new_phase else ":none:")
+
+                    if os.environ.get("COMPASS_INLINE_PHASE_TRANSITION") == "1":
+                        # Inline transition: skip the (silence) loop re-invocation.
+                        # The next user message will be routed deterministically via sub-phase.
+                        transitioned_to_new_phase = False
+                    else:
+                        user_input = AgentInput(
+                            message="(silence)",
+                            is_artificial=True
+                        )
                 
                 # Clear agent_type after all operations and logging for this iteration
                 # This ensures observability logs capture the agent type throughout execution
