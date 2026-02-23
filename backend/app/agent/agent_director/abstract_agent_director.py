@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 from pydantic import BaseModel, Field, field_serializer, field_validator
 
-from app.agent.agent_types import AgentInput, AgentOutput
+from app.agent.agent_types import AgentInput, AgentOutput, AgentType
 from app.conversation_memory.conversation_memory_manager import IConversationMemoryManager
 from app.agent.persona_detector import PersonaType
 from app.conversations.phase_state_machine import JourneyPhase
@@ -22,12 +22,26 @@ class ConversationPhase(Enum):
     ENDED = 3
 
 
+class CounselingSubPhase(Enum):
+    """
+    Deterministic sub-phases within the COUNSELING phase.
+    Controls the agent progression: ExploreExperiences -> PreferenceElicitation -> RecommenderAdvisor.
+    The LLM Router is only used within a sub-phase, not for transitions between them.
+    """
+    EXPLORE_EXPERIENCES = 0
+    PREFERENCE_ELICITATION = 1
+    RECOMMENDER_ADVISOR = 2
+
+
 class AgentDirectorState(BaseModel):
     """
     The state of the agent director
     """
     session_id: int
     current_phase: ConversationPhase = Field(default=ConversationPhase.INTRO)
+    counseling_sub_phase: CounselingSubPhase = Field(default=CounselingSubPhase.EXPLORE_EXPERIENCES)
+    last_routed_agent: Optional[AgentType] = Field(default=None)
+    sticky_turn_counter: int = Field(default=0)
     conversation_conducted_at: Optional[datetime] = None
     persona_type: PersonaType = Field(default=PersonaType.INFORMAL)
     skip_to_phase: Optional[JourneyPhase] = Field(default=None)
@@ -55,6 +69,28 @@ class AgentDirectorState(BaseModel):
     def deserialize_current_phase(cls, value: str | ConversationPhase) -> ConversationPhase:
         if isinstance(value, str):
             return ConversationPhase[value]
+        return value
+
+    @field_serializer("counseling_sub_phase")
+    def serialize_counseling_sub_phase(self, v: CounselingSubPhase, _info):
+        return v.name
+
+    @field_validator("counseling_sub_phase", mode='before')
+    def deserialize_counseling_sub_phase(cls, value: str | CounselingSubPhase) -> CounselingSubPhase:
+        if isinstance(value, str):
+            return CounselingSubPhase[value]
+        return value
+
+    @field_serializer("last_routed_agent")
+    def serialize_last_routed_agent(self, v: Optional[AgentType], _info) -> Optional[str]:
+        return v.name if v is not None else None
+
+    @field_validator("last_routed_agent", mode='before')
+    def deserialize_last_routed_agent(cls, value: str | AgentType | None) -> Optional[AgentType]:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            return AgentType[value]
         return value
 
     @field_serializer("persona_type")
@@ -91,6 +127,10 @@ class AgentDirectorState(BaseModel):
             skip_to_phase = JourneyPhase(_doc["skip_to_phase"])
         return AgentDirectorState(session_id=_doc["session_id"],
                                   current_phase=_doc["current_phase"],
+                                  counseling_sub_phase=_doc.get("counseling_sub_phase",
+                                                                CounselingSubPhase.EXPLORE_EXPERIENCES),
+                                  last_routed_agent=_doc.get("last_routed_agent", None),
+                                  sticky_turn_counter=_doc.get("sticky_turn_counter", 0),
                                   conversation_conducted_at=_doc.get("conversation_conducted_at", None),
                                   persona_type=_doc.get("persona_type", PersonaType.INFORMAL),
                                   skip_to_phase=skip_to_phase)

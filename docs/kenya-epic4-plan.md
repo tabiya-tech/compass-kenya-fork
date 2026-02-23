@@ -288,7 +288,7 @@ pytest -m "evaluation_test" --repeat 3 \
 
 **Swahili Preparation**:
 - [x] Gemini 2.5 Flash selection documented with rationale
-- [ ] Integration checklist ready for M3 (no blockers)
+- [x] Integration checklist ready for M3 (no blockers)
 
 ---
 
@@ -329,26 +329,26 @@ pytest -m "evaluation_test" --repeat 3 \
 ## Success Criteria
 
 **Swahili Language Support**:
-- [ ] Skills elicitation flow works end-to-end in Swahili
-- [ ] Preference flow functional in Swahili
-- [ ] Language switching implemented
-- [ ] Swahili responses maintain correct tone and grammar
+- [x] Skills elicitation flow works end-to-end in Swahili
+- [x] Preference flow functional in Swahili
+- [x] Language switching implemented
+- [x] Swahili responses maintain correct tone and grammar
 
 **Localization/Mapping**:
-- [ ] Synonym mapping module created and tested
-- [ ] 50+ Swahili job terms mapped to taxonomy
-- [ ] Code-switched terms handled
-- [ ] Regional variations documented
+- [x] Synonym mapping module created and tested
+- [x] 50+ Swahili job terms mapped to taxonomy
+- [x] Code-switched terms handled
+- [x] Regional variations documented
 
 **Quality Parity**:
-- [ ] Swahili skill discovery accuracy at 80%+ of English baseline
-- [ ] Occupation matching works for Swahili inputs
-- [ ] Same structured output as English flows
+- [x] Swahili skill discovery accuracy at 80%+ of English baseline
+- [x] Occupation matching works for Swahili inputs
+- [x] Same structured output as English flows
 
 **Testing & Regression**:
-- [ ] Swahili test cases created for both personas
-- [ ] Automated tests integrated into CI
-- [ ] Regression protection for English flows
+- [x] Swahili test cases created for both personas
+- [x] Automated tests integrated into CI
+- [x] Regression protection for English flows
 
 ---
 
@@ -356,55 +356,509 @@ pytest -m "evaluation_test" --repeat 3 \
 
 **Objective**: Make Persona 2 experience coherent and add qualifications affecting eligibility. This should support basic CV file uploads in the data extraction layer.
 
+**Current State (What Already Exists)**:
+- CV upload pipeline: `backend/app/users/cv/service.py` — file upload → markdown conversion → LLM extraction → GCS storage
+- CV extraction: `CVExperienceExtractor` produces `list[str]` (plain experience bullets), **not** structured entities
+- Frontend: `Chat.tsx` / `ChatMessageField.tsx` handles file upload, polls status, displays bullets
+- MongoDB: `user_cv_uploads` collection stores upload records + experience bullets
+- Feature flag: `GLOBAL_ENABLE_CV_UPLOAD` gates the feature
+- **Gap**: CV data never flows into the conversation agents — the extracted bullets are dead-end data
+
+---
+
 ## B3: CV Integration → Merged Profile
 
-**Tasks**: TBD
+**Objective**: Bridge the existing CV upload pipeline with the conversational experience collection so that Persona 2 users who upload a CV get a faster, less repetitive flow. The agent should acknowledge what the CV already says and only ask for supplementary details.
+
+### Task 3.1: Structured CV Extraction (P0)
+
+**Problem**: `CVExperienceExtractor` returns `list[str]` — unstructured sentences. The `CollectExperiencesAgent` needs `CollectedData` objects with typed fields (title, company, timeline, work_type).
+
+**What**: Enhance the CV extraction LLM to produce structured experience data that maps directly to `CollectedData`.
+
+**Files to Create**:
+- `backend/app/users/cv/utils/structured_extractor.py` — New `CVStructuredExtractor` class
+- `backend/app/users/cv/types.py` — Add `CVExtractedExperience` Pydantic model
+
+**Files to Modify**:
+- `backend/app/users/cv/service.py` — Add structured extraction step after bullet extraction
+- `backend/app/users/cv/repository.py` — Persist structured experiences alongside bullets
+
+**`CVExtractedExperience` Model** (new type in `types.py`):
+```python
+class CVExtractedExperience(BaseModel):
+    experience_title: str
+    company: Optional[str] = None
+    location: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    work_type: Optional[str] = None  # maps to WorkType enum key
+    responsibilities: list[str] = Field(default_factory=list)
+    source: str = "cv"  # provenance marker
+```
+
+**LLM Prompt Design**: The `CVStructuredExtractor` system instructions should ask Gemini to return:
+```json
+{
+  "experiences": [
+    {
+      "experience_title": "Project Manager",
+      "company": "University of Oxford",
+      "location": "Oxford, UK",
+      "start_date": "2018",
+      "end_date": "2020",
+      "work_type": "FORMAL_SECTOR_WAGED_EMPLOYMENT",
+      "responsibilities": ["Led 5-person team", "Managed £200k budget"]
+    }
+  ],
+  "qualifications": [...]  // (extracted in B4)
+}
+```
+
+**Pipeline Update** (in `CVUploadService._pipeline`):
+1. CONVERTING → markdown
+2. EXTRACTING → bullet extraction (existing, kept for backward compat)
+3. **NEW**: STRUCTURING → structured extraction (produces `list[CVExtractedExperience]`)
+4. UPLOADING_TO_GCS → storage
+5. COMPLETED
+
+**Acceptance Criteria**:
+- [ ] `CVStructuredExtractor` produces `CVExtractedExperience` objects from CV markdown
+- [ ] Pipeline stores structured experiences in `user_cv_uploads` record
+- [ ] Existing bullet extraction is preserved (backward compat)
+- [ ] Unit tests: 3+ real CV markdowns → verified structured output
+
+---
+
+### Task 3.2: CV-to-Agent State Mapper (P0)
+
+**Problem**: Even with structured CV data, there's no bridge to the agent's `CollectedData` state. When a conversation starts, the agent has no knowledge of the uploaded CV.
+
+**What**: Create a mapper that converts `CVExtractedExperience` → `CollectedData` and a loader that pre-populates the `CollectExperiencesAgent` state.
+
+**Files to Create**:
+- `backend/app/users/cv/cv_to_agent_mapper.py` — Mapping logic + deduplication
+
+**Files to Modify**:
+- `backend/app/conversations/service.py` — Before first conversation turn, check for completed CV uploads and pre-populate agent state
+- `backend/app/agent/collect_experiences_agent/_types.py` — Add `source: Optional[str] = None` field to `CollectedData` (provenance: "cv" | "conversation" | None)
+- `backend/app/agent/collect_experiences_agent/collect_experiences_agent.py` — Add `set_cv_experiences()` method
+
+**Mapping Logic** (`cv_to_agent_mapper.py`):
+```python
+def map_cv_to_collected_data(cv_experiences: list[CVExtractedExperience],
+                              existing_data: list[CollectedData]) -> list[CollectedData]:
+    """
+    Convert CV experiences to CollectedData, deduplicating against
+    any already-collected conversational data.
+    """
+```
+
+- Map `work_type` string → `WorkType` enum key, defaulting to `FORMAL_SECTOR_WAGED_EMPLOYMENT`
+- Mark fields from CV as populated (not None), so agent won't re-ask
+- Set `source="cv"` for provenance tracking
+- Deduplicate using `CollectedData.compare_relaxed()` against existing data
+
+**Integration in `ConversationService.send()`**:
+```python
+# On first turn, check for completed CV uploads
+if is_first_turn and cv_upload_exists:
+    cv_experiences = await cv_repository.get_structured_experiences(user_id)
+    mapped = map_cv_to_collected_data(cv_experiences, state.collected_data)
+    state.collected_data.extend(mapped)
+    # Mark relevant work types as partially explored
+```
+
+**Acceptance Criteria**:
+- [ ] CV experiences appear in `CollectExperiencesAgent` state on first turn
+- [ ] Deduplication prevents double-counting
+- [ ] Provenance field tracks data source ("cv" vs "conversation")
+- [ ] Agent state is serializable/deserializable with new field
+
+---
+
+### Task 3.3: Persona 2 Conversational Flow Adaptation (P0)
+
+**Problem**: When CV data is pre-populated, the `CollectExperiencesAgent` must behave differently — it should acknowledge the CV, confirm extracted info, and only probe for missing details rather than asking everything from scratch.
+
+**What**: Modify prompts and transition logic so the agent recognizes pre-populated CV data.
+
+**Files to Modify**:
+- `backend/app/agent/collect_experiences_agent/_conversation_llm.py` — Add CV-aware prompt variation
+- `backend/app/agent/collect_experiences_agent/collect_experiences_prompt.py` — New prompt section for CV-seeded flow
+- `backend/app/agent/collect_experiences_agent/_transition_decision_tool.py` — Adjust transition thresholds when CV data present
+
+**Prompt Changes** (when CV data detected):
+- Opening: "I see from your CV that you've worked as [title] at [company]. Can you tell me more about what you did day-to-day?" instead of "What jobs have you had?"
+- Skip basic info questions (title, company, dates) for CV-sourced experiences
+- Focus on responsibilities, achievements, and skills not captured in CV
+- Still ask about experience types not found in CV (e.g., volunteer work, informal work)
+
+**Transition Logic Changes**:
+- If all CV experiences have confirmed titles + at least one responsibility, the `END_WORKTYPE` threshold should trigger sooner for CV-covered work types
+- Still explore `unexplored_types` not represented in CV data (e.g., if CV only has formal employment, still ask about self-employment, volunteer work, unpaid work)
+
+**Acceptance Criteria**:
+- [ ] Agent acknowledges CV data in opening turn
+- [ ] Agent skips redundant questions for CV-populated fields
+- [ ] Agent still explores work types not found in CV
+- [ ] Turn count for Persona 2 with CV: ≤15 turns (down from 20-25 without CV)
+- [ ] E2E test: Persona 2 with CV upload completes in fewer turns than without
+
+---
+
+### Task 3.4: CV Confirmation & Edit UI Flow (P1)
+
+**Problem**: Users should be able to review, correct, and supplement CV-extracted experiences before the agent proceeds with skills exploration.
+
+**What**: After CV extraction completes, present a summary to the user in the chat and allow inline corrections.
+
+**Files to Modify**:
+- `frontend-new/src/chat/Chat.tsx` — After CV upload completes, display structured experience cards
+- `backend/app/conversations/experience/routes.py` — Existing PATCH endpoint works for CV-sourced experiences (no change needed, but verify)
+- `backend/app/users/cv/routes.py` — Add `GET /users/{user_id}/cv/{upload_id}/structured` endpoint for structured data
+
+**Flow**:
+1. User uploads CV → polling → extraction completes
+2. Frontend displays: "I found N experiences in your CV:" with structured cards
+3. Each card shows: title, company, dates, location
+4. User can edit inline (uses existing experience PATCH endpoint)
+5. User confirms → conversation proceeds with supplementary questions only
+
+**Acceptance Criteria**:
+- [ ] Structured CV data available via API
+- [ ] Frontend displays experience cards from CV
+- [ ] User can edit CV-extracted experience details
+- [ ] Edits persist and are reflected in agent state
+
+---
 
 ## B4: Qualifications Extraction + Persistence
 
-**Tasks**: TBD
+**Objective**: Extract qualifications (certifications, diplomas, artisan qualifications, trade licenses) from CVs and conversation, persist them in the youth profile, and make them available to the recommendation engine for eligibility filtering.
+
+### Task 4.1: Qualification Entity Model (P0)
+
+**Problem**: `YouthProfile.qualifications` is `list[dict[str, Any]]` — untyped and unused. No service or repository layer exists.
+
+**What**: Create a strongly-typed qualification model, MongoDB collection, and repository.
+
+**Files to Create**:
+- `backend/app/qualifications/types.py` — `QualificationEntity` model
+- `backend/app/qualifications/repository.py` — `QualificationRepository` (MongoDB CRUD)
+- `backend/app/qualifications/service.py` — `QualificationService` (business logic)
+- `backend/app/qualifications/routes.py` — REST API endpoints
+
+**`QualificationEntity` Model**:
+```python
+class QualificationType(str, Enum):
+    CERTIFICATE = "CERTIFICATE"          # Professional certificates (e.g., CompTIA, CCNA)
+    DIPLOMA = "DIPLOMA"                  # Diplomas (e.g., Diploma in Nursing)
+    DEGREE = "DEGREE"                    # University degrees (BSc, MSc, PhD)
+    TRADE_LICENSE = "TRADE_LICENSE"       # Artisan/trade licenses (e.g., electrician license)
+    PROFESSIONAL_LICENSE = "PROFESSIONAL_LICENSE"  # Professional licenses (e.g., CPA, nursing license)
+    TRAINING_COMPLETION = "TRAINING_COMPLETION"    # Training program completions
+    OTHER = "OTHER"
+
+class QualificationEntity(BaseModel):
+    uuid: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    qualification_type: QualificationType
+    name: str                             # e.g., "Certificate in Project Management"
+    institution: Optional[str] = None     # e.g., "Kenya Institute of Management"
+    date_obtained: Optional[str] = None   # ISO date or year string
+    expiry_date: Optional[str] = None     # For licenses that expire
+    level: Optional[str] = None           # e.g., "Level 3", "Grade I"
+    field_of_study: Optional[str] = None  # e.g., "Information Technology"
+    source: str = "conversation"          # "cv" | "conversation"
+```
+
+**MongoDB Collection**: Add `qualifications` to `Collections` class in `database_collections.py`.
+
+**Repository Methods**:
+- `save_qualifications(session_id, qualifications: list[QualificationEntity])`
+- `get_qualifications(session_id) -> list[QualificationEntity]`
+- `update_qualification(session_id, qualification_uuid, updates)`
+- `delete_qualification(session_id, qualification_uuid)`
+
+**API Endpoints** (register in `server.py`):
+- `GET /conversations/{session_id}/qualifications`
+- `POST /conversations/{session_id}/qualifications`
+- `PATCH /conversations/{session_id}/qualifications/{uuid}`
+- `DELETE /conversations/{session_id}/qualifications/{uuid}`
+
+**Acceptance Criteria**:
+- [ ] `QualificationEntity` model with type enum
+- [ ] MongoDB repository with CRUD operations
+- [ ] REST API endpoints functional
+- [ ] `YouthProfile.qualifications` updated to `list[QualificationEntity]` type
+
+---
+
+### Task 4.2: CV Qualifications Extraction (P0)
+
+**Problem**: The CV extraction pipeline only extracts experiences. Qualifications (degrees, certifications, trade licenses) are ignored.
+
+**What**: Add qualifications extraction to the CV parsing pipeline alongside the structured experience extraction (Task 3.1).
+
+**Files to Modify**:
+- `backend/app/users/cv/utils/structured_extractor.py` — Extend to extract qualifications
+- `backend/app/users/cv/service.py` — Store extracted qualifications
+- `backend/app/users/cv/types.py` — Add `CVExtractedQualification` model
+
+**`CVExtractedQualification` Model**:
+```python
+class CVExtractedQualification(BaseModel):
+    name: str
+    qualification_type: str  # maps to QualificationType enum
+    institution: Optional[str] = None
+    date_obtained: Optional[str] = None
+    field_of_study: Optional[str] = None
+```
+
+**LLM Prompt Extension** (in `CVStructuredExtractor`):
+The structured extraction prompt (Task 3.1) already returns both experiences and qualifications in a single LLM call:
+```json
+{
+  "experiences": [...],
+  "qualifications": [
+    {
+      "name": "Diploma in Business Administration",
+      "qualification_type": "DIPLOMA",
+      "institution": "Kenya Institute of Management",
+      "date_obtained": "2019",
+      "field_of_study": "Business Administration"
+    },
+    {
+      "name": "Certified Electrician Grade I",
+      "qualification_type": "TRADE_LICENSE",
+      "institution": "NITA Kenya",
+      "date_obtained": "2021"
+    }
+  ]
+}
+```
+
+**Kenya-Specific Qualification Handling**:
+- Recognize NITA (National Industrial Training Authority) trade test certificates
+- Recognize KNEC (Kenya National Examinations Council) certificates
+- Map common Kenyan qualification levels (Grade I/II/III for artisan trades)
+- Handle Swahili qualification names (e.g., "Cheti cha..." = Certificate of...)
+
+**Acceptance Criteria**:
+- [ ] CV extraction returns both experiences and qualifications in structured format
+- [ ] Kenyan qualification types correctly recognized (NITA, KNEC, trade tests)
+- [ ] Qualifications stored in `user_cv_uploads` record and `qualifications` collection
+- [ ] Unit tests: CVs with qualifications → verified extraction output
+
+---
+
+### Task 4.3: Conversational Qualifications Extraction (P1)
+
+**Problem**: Not all qualifications come from CVs. Persona 1 (informal workers) likely have no CV but may have artisan qualifications, trade licenses, or training completions mentioned verbally.
+
+**What**: Add a lightweight qualifications detection pass to the conversation flow that picks up qualifications mentioned during experience collection.
+
+**Files to Create**:
+- `backend/app/qualifications/extraction_llm.py` — `QualificationsDetector` LLM tool
+
+**Files to Modify**:
+- `backend/app/agent/collect_experiences_agent/_dataextraction_llm.py` — After experience data extraction, run qualifications detection on the same turn
+- `backend/app/agent/collect_experiences_agent/collect_experiences_agent.py` — Store detected qualifications in state
+- `backend/app/agent/collect_experiences_agent/_types.py` — Add `detected_qualifications: list[QualificationEntity]` to `CollectExperiencesAgentState`
+
+**Detection Strategy**:
+- Run as a secondary extraction on each conversation turn (lightweight — ~100 token prompt)
+- Trigger words: "certificate", "diploma", "degree", "license", "qualified", "trained", "certified", "NITA", "Grade I/II/III", "cheti" (Swahili)
+- Only extract when confidence is high — don't over-extract
+- Deduplicate against already-detected qualifications
+
+**Acceptance Criteria**:
+- [ ] Qualifications mentioned in conversation are detected
+- [ ] Detection works for both English and Swahili trigger terms
+- [ ] Artisan/trade qualifications recognized (e.g., "Grade I electrician")
+- [ ] No false positives from casual mentions (e.g., "it was a good experience")
+- [ ] Detected qualifications persisted at end of conversation
+
+---
+
+### Task 4.4: Qualifications → Job Matching Integration (P2)
+
+**Problem**: Qualifications should affect which jobs are recommended. Some jobs require specific certifications or minimum education levels.
+
+**What**: Pass qualifications to the recommendation engine for eligibility filtering.
+
+**Files to Modify**:
+- `backend/app/conversations/service.py` — When transferring data to recommender, include qualifications
+- `backend/app/agent/recommender_advisor_agent/agent.py` — Accept qualifications context
+- `backend/app/database_contracts/db6_youth_database/db6_client.py` — Update `YouthProfile.qualifications` to `list[QualificationEntity]`
+
+**Integration Points**:
+- When `ExploreExperiencesAgentDirector` finishes and hands off to `RecommenderAdvisorAgent`, include qualifications in the context
+- Qualifications act as filters: "requires Grade I trade test" → only recommend if user has it
+- Qualifications act as boosters: "prefers diploma holders" → rank higher if user has relevant diploma
+
+**Acceptance Criteria**:
+- [ ] Qualifications passed to recommendation engine
+- [ ] Jobs requiring specific qualifications are filtered correctly
+- [ ] Qualification-based ranking boost works
+- [ ] `YouthProfile` persists typed qualifications
+
+---
 
 ## C4: Swahili Tests + Evaluation Scripts
 
-**Tasks**: TBD
+**Objective**: Ensure Swahili language flows maintain quality parity with English and are protected by regression tests.
+
+### Task 5.1: Swahili Golden Transcripts (P0)
+
+**What**: Create golden test transcripts for Swahili conversations across both personas.
+
+**Files to Create**:
+- `backend/evaluation_tests/golden_transcripts/swahili/persona_1_simple.json`
+- `backend/evaluation_tests/golden_transcripts/swahili/persona_1_multi_experience.json`
+- `backend/evaluation_tests/golden_transcripts/swahili/persona_1_artisan.json`
+- `backend/evaluation_tests/golden_transcripts/swahili/persona_2_formal.json`
+- `backend/evaluation_tests/golden_transcripts/swahili/persona_2_with_cv.json`
+- `backend/evaluation_tests/golden_transcripts/swahili/persona_2_code_switched.json`
+
+**Transcript Design**:
+- Persona 1 Simple: Informal worker, single experience, pure Swahili (18-22 turns)
+- Persona 1 Multi: Multiple informal experiences, Swahili with some Sheng (30-35 turns)
+- Persona 1 Artisan: Trade worker with NITA qualification, Swahili (20-25 turns)
+- Persona 2 Formal: Formal employment, Swahili, references CV (20-25 turns)
+- Persona 2 CV: Formal with CV upload, Swahili (12-18 turns with CV pre-population)
+- Persona 2 Code-Switched: English-Swahili code-switching throughout (25-30 turns)
+
+### Task 5.2: Evaluation Scripts (P0)
+
+**What**: Build automated evaluation scripts that measure Swahili-specific metrics.
+
+**Files to Create**:
+- `backend/evaluation_tests/swahili_evaluation_runner.py`
+- `backend/evaluation_tests/swahili_metrics.py`
+
+**Metrics to Capture**:
+- Skill discovery accuracy vs English baseline (target: ≥80% parity)
+- Language drift rate (agent responding in wrong language)
+- Swahili synonym mapping hit rate
+- Code-switch handling accuracy
+- Qualification extraction accuracy in Swahili
+
+### Task 5.3: CI Integration (P1)
+
+**What**: Integrate Swahili tests into the existing CI pipeline.
+
+**Files to Modify**:
+- `.github/workflows/golden_transcript_tests.yml` — Add Swahili test jobs
+- `backend/evaluation_tests/check_metrics_thresholds.py` — Add Swahili thresholds
+
+**Thresholds**:
+- Swahili skill overlap vs English: ≥80%
+- Language drift: ≤2% of agent turns
+- Turn count: within 20% of English equivalent
+
+**Acceptance Criteria**:
+- [ ] 6 Swahili golden transcripts created (3 per persona)
+- [ ] Evaluation scripts measure language-specific metrics
+- [ ] CI runs Swahili tests alongside English tests
+- [ ] Regression protection for both languages
+- [ ] Performance benchmarks documented
+
+---
 
 ## Deployment Readiness
 
-**Tasks**: TBD
+**Objective**: Ensure the system is deployable with the Gemini 2.5 Flash model provider and all new M4 features are operationally ready.
+
+### Task 6.1: Infrastructure & Config (P0)
+
+**What**: Update deployment configuration for Gemini model provider and new M4 features.
+
+**Files to Modify**:
+- `backend/app/app_config.py` — Add qualifications config fields, ensure CV config complete
+- `backend/app/server_dependencies/database_collections.py` — Add `qualifications` collection
+- `backend/app/server.py` — Register qualification routes, ensure CV routes enabled
+
+**New Environment Variables**:
+- `BACKEND_QUALIFICATIONS_ENABLED` — Feature flag for qualifications extraction
+- `BACKEND_CV_STRUCTURED_EXTRACTION_ENABLED` — Feature flag for structured CV extraction
+- `BACKEND_GEMINI_API_KEY` — (verify existing) Gemini API key
+- `BACKEND_GEMINI_MODEL_ID` — (verify existing) Model identifier
+
+### Task 6.2: Secrets & Security Review (P1)
+
+**What**: Review secrets management and ensure no PII leaks in new features.
+
+**Deliverables**:
+- CV content: verify files stored encrypted in GCS, never logged
+- Qualifications: no PII beyond education details, stored in MongoDB
+- LLM prompts: verify no CV text forwarded beyond extraction step
+- API endpoints: verify authentication required on all new routes
+- Update `docs/observability-sensitive-data-checklist.md` with M4 additions
+
+### Task 6.3: Deployment Documentation (P1)
+
+**Files to Create**:
+- `docs/deployment-runbook-m4.md` — Step-by-step deployment guide
+
+**Contents**:
+- MongoDB collection creation / index setup for `qualifications`
+- GCS bucket permissions for CV storage
+- Environment variable checklist
+- Feature flag rollout order: structured extraction → qualification extraction → CV-agent integration
+- Rollback procedures for each feature
+- Health check endpoints to verify
+
+**Acceptance Criteria**:
+- [ ] All new environment variables documented
+- [ ] MongoDB indexes defined for new collections
+- [ ] Secrets management reviewed — no PII in logs
+- [ ] Feature flags allow incremental rollout
+- [ ] Deployment runbook covers rollout + rollback
 
 ---
 
 ## Success Criteria
 
 **CV Integration (Persona 2)**:
-- [ ] CV upload feature functional
-- [ ] Conversational flow merges with CV data
-- [ ] Duplicate detection prevents redundant questions
-- [ ] User can edit/confirm CV-extracted information
+- [ ] CV upload → structured extraction pipeline functional
+- [ ] Structured experiences (`CVExtractedExperience`) extracted with title, company, timeline, work_type, responsibilities
+- [ ] Conversational flow merges with CV data — agent acknowledges CV content
+- [ ] Duplicate detection prevents redundant questions (`compare_relaxed` dedup)
+- [ ] User can edit/confirm CV-extracted information via experience cards
+- [ ] Persona 2 with CV completes in ≤15 turns (vs 20-25 without CV)
+- [ ] Provenance tracking: each experience/qualification marked as "cv" or "conversation" sourced
 
 **Qualifications Extraction**:
-- [ ] Certifications extracted
-- [ ] Artisan qualifications recognized
-- [ ] Qualifications stored in youth profile database
-- [ ] Qualifications affect job matching eligibility
+- [ ] `QualificationEntity` model with typed enum (`CERTIFICATE`, `DIPLOMA`, `DEGREE`, `TRADE_LICENSE`, etc.)
+- [ ] Certifications extracted from CVs via `CVStructuredExtractor`
+- [ ] Artisan qualifications recognized (NITA trade tests, Grade I/II/III)
+- [ ] Conversational qualifications detection for Persona 1 (no CV)
+- [ ] Kenya-specific qualifications handled (NITA, KNEC)
+- [ ] Qualifications stored in MongoDB `qualifications` collection
+- [ ] Qualifications affect job matching eligibility (filter + ranking boost)
 
 **Persistence & Data Quality**:
-- [ ] All experiences saved to database
+- [ ] All experiences saved to database with provenance ("cv" | "conversation")
 - [ ] All skills persisted with provenance
-- [ ] All qualifications linked to profile
-- [ ] Data validation ensures completeness
+- [ ] All qualifications linked to `YouthProfile`
+- [ ] Data validation ensures completeness (no null titles, valid enum values)
+- [ ] `DB6Client` implementation persists typed qualifications (not `dict[str, Any]`)
 
 **Swahili Testing**:
-- [ ] Swahili golden transcripts created
-- [ ] Evaluation scripts automated
-- [ ] Regression tests cover both languages
-- [ ] Performance benchmarks documented
+- [ ] 6 Swahili golden transcripts created (3 per persona, including artisan + code-switch variants)
+- [ ] Evaluation scripts measure skill overlap, language drift, mapping hit rate
+- [ ] CI regression tests cover both English and Swahili
+- [ ] Swahili skill discovery ≥80% parity with English baseline
+- [ ] Performance benchmarks documented for Swahili flows
 
 **Deployment Readiness**:
-- [ ] IaC/config updated for chosen model provider
-- [ ] Secrets management configured
-- [ ] Environment variables documented
-- [ ] Deployment runbook created
+- [ ] Gemini 2.5 Flash config verified in deployment environment
+- [ ] MongoDB `qualifications` collection with indexes
+- [ ] GCS bucket configured for CV storage
+- [ ] Feature flags enable incremental rollout (structured extraction → qualifications → CV-agent merge)
+- [ ] Secrets review: no CV content or PII in logs
+- [ ] Deployment runbook with rollout + rollback procedures
 
 ---
 

@@ -258,30 +258,32 @@ class CollectExperiencesAgent(Agent):
         conversation_llm = _ConversationLLM()
         exploring_type = self._state.unexplored_types[0] if len(self._state.unexplored_types) > 0 else None
 
-        conversation_llm_output: ConversationLLMAgentOutput = await conversation_llm.execute(
-            first_time_visit=self._state.first_time_visit,
-            context=context,
-            user_input=user_input,
-            country_of_user=self._state.country_of_user,
-            persona_type=self._state.persona_type,
-            collected_data=collected_data,
-            last_referenced_experience_index=last_referenced_experience_index,
-            exploring_type=exploring_type,
-            unexplored_types=self._state.unexplored_types,
-            explored_types=self._state.explored_types,
-            logger=self.logger)
+        transition_decision_tool = TransitionDecisionTool(self.logger)
+
+        # Both are pure readers of collected_data/context/user_input -- safe to parallelize
+        conversation_llm_output, (transition_decision, transition_reasoning, transition_llm_stats) = await asyncio.gather(
+            conversation_llm.execute(
+                first_time_visit=self._state.first_time_visit,
+                context=context,
+                user_input=user_input,
+                country_of_user=self._state.country_of_user,
+                persona_type=self._state.persona_type,
+                collected_data=collected_data,
+                last_referenced_experience_index=last_referenced_experience_index,
+                exploring_type=exploring_type,
+                unexplored_types=self._state.unexplored_types,
+                explored_types=self._state.explored_types,
+                logger=self.logger),
+            transition_decision_tool.execute(
+                collected_data=collected_data,
+                exploring_type=exploring_type,
+                unexplored_types=self._state.unexplored_types,
+                explored_types=self._state.explored_types,
+                conversation_context=context,
+                user_input=user_input)
+        )
 
         self._state.first_time_visit = False
-
-        transition_decision_tool = TransitionDecisionTool(self.logger)
-        transition_decision, transition_reasoning, transition_llm_stats = await transition_decision_tool.execute(
-            collected_data=collected_data,
-            exploring_type=exploring_type,
-            unexplored_types=self._state.unexplored_types,
-            explored_types=self._state.explored_types,
-            conversation_context=context,
-            user_input=user_input
-        )
 
         conversation_llm_output.llm_stats = data_extraction_llm_stats + conversation_llm_output.llm_stats + transition_llm_stats
         reasoning_text = transition_reasoning.reasoning if transition_reasoning else "No reasoning provided"
@@ -315,32 +317,17 @@ class CollectExperiencesAgent(Agent):
                 return conversation_llm_output
 
             next_exploring_type = self._state.unexplored_types[0] if self._state.unexplored_types else None
-            transition_message: str
             if next_exploring_type is not None:
-                transition_message = (
-                    f"{user_input.message}\n"
-                    f"{t('messages', 'collectExperiences.askAboutType', experience_type=_get_experience_type(next_exploring_type))}"
+                transition_text = t(
+                    'messages', 'collectExperiences.askAboutType',
+                    experience_type=_get_experience_type(next_exploring_type)
                 )
             else:
-                transition_message = (
-                    f"{user_input.message}\n"
-                    f"{t('messages', 'collectExperiences.recapPrompt')}"
-                )
+                transition_text = t('messages', 'collectExperiences.recapPrompt')
 
-            conversation_llm_output = await conversation_llm.execute(
-                first_time_visit=self._state.first_time_visit,
-                context=context,
-                user_input=AgentInput(message=transition_message, is_artificial=True),
-                country_of_user=self._state.country_of_user,
-                persona_type=self._state.persona_type,
-                                                                   collected_data=collected_data,
-                                                                   last_referenced_experience_index=last_referenced_experience_index,
-                                                                   exploring_type=next_exploring_type,
-                unexplored_types=self._state.unexplored_types,
-                explored_types=self._state.explored_types,
-                logger=self.logger)
-
-            conversation_llm_output.llm_stats = data_extraction_llm_stats + conversation_llm_output.llm_stats + transition_llm_stats
+            conversation_llm_output.message_for_user = (
+                f"{conversation_llm_output.message_for_user}\n\n{transition_text}"
+            )
 
         elif transition_decision == TransitionDecision.END_CONVERSATION:
             conversation_llm_output.finished = True
