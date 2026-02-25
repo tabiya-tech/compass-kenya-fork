@@ -130,6 +130,44 @@ class PreferenceSummaryGenerator(BaseModel):
         extra = "forbid"
 
 
+class GateAnalysis(BaseModel):
+    """
+    LLM response model for the GATE (Generative Active Task Elicitation) phase.
+
+    The LLM reviews all vignette Q&As and generates the most informative
+    clarifying question. GATE always runs all 3 interventions — responses feed
+    back into the preference vector and qualitative metadata extraction.
+
+    Inspired by: Li et al. (2023) "Eliciting Human Preferences with Language Models".
+    """
+    reasoning: str = Field(
+        description=(
+            "Analysis of what patterns emerge from the vignette responses so far, "
+            "what trade-offs or preference dimensions haven't been probed yet, "
+            "and why this question will most improve the preference profile"
+        )
+    )
+
+    message: str = Field(
+        description=(
+            "A clarifying question or mini-scenario for the user. Choose the most informative format: "
+            "open-ended ('What matters more to you — X or Y?'), "
+            "yes/no ('Would you take a lower salary for fully remote work?'), "
+            "or a concrete scenario ('Imagine two jobs: A has high pay but long hours, "
+            "B has moderate pay but strict 9-5. Which appeals more?'). "
+            "Must be a genuine question — always generate something meaningful."
+        )
+    )
+
+    finished: bool = Field(
+        default=False,
+        description="Always False — GATE phase completion is managed by turn count"
+    )
+
+    class Config:
+        extra = "forbid"
+
+
 class PreferenceElicitationAgent(Agent):
     """
     Agent that elicits user preferences through vignettes and conversation.
@@ -139,8 +177,10 @@ class PreferenceElicitationAgent(Agent):
     2. EXPERIENCE_QUESTIONS: Ask about past work experiences
     3. VIGNETTES: Present vignette scenarios for preference discovery
     4. FOLLOW_UP: Ask clarifying questions
-    5. WRAPUP: Summarize preferences and confirm
-    6. COMPLETE: Finish the session
+    5. GATE: Generative active task elicitation - clarify inconsistencies (up to 3 questions)
+    6. BWS: Best-Worst Scaling occupation ranking
+    7. WRAPUP: Summarize preferences and confirm
+    8. COMPLETE: Finish the session
 
     Builds a comprehensive PreferenceVector that can be used
     for job/career recommendations.
@@ -194,6 +234,13 @@ class PreferenceElicitationAgent(Agent):
         )
         self._conversation_caller: LLMCaller[ConversationResponse] = LLMCaller[ConversationResponse](
             model_response_type=ConversationResponse
+        )
+
+        # GATE LLM — same low-temperature config, no domain system instructions
+        # (the full vignette history is passed in the prompt each call)
+        self._gate_llm = GeminiGenerativeLLM(config=llm_config)
+        self._gate_caller: LLMCaller[GateAnalysis] = LLMCaller[GateAnalysis](
+            model_response_type=GateAnalysis
         )
 
         # Shared LLM for vignette personalization and context extraction
@@ -280,17 +327,18 @@ class PreferenceElicitationAgent(Agent):
             )
 
         if self._stopping_criterion is None:
-            # Compute prior FIM determinant for ratio-based stopping criterion.
-            # The FIM is initialized as I/prior_variance, so its determinant is
-            # (1/prior_variance)^7. This baseline lets us measure relative info gain.
-            prior_fim_det = (1.0 / self._adaptive_config.prior_variance) ** 7
-
+            # Use absolute FIM determinant threshold (prior_fim_determinant=0).
+            # Ratio mode (prior_fim_det = (1/0.5)^7 = 128) made the effective target
+            # det(FIM) >= threshold * 128, which is unreachable in ≤12 two-option
+            # vignettes across 7 dimensions — max_vignettes was the only thing firing.
+            # Absolute mode with threshold=1.0 fires around vignette 9-10 based on
+            # observed det growth: ~0.085 at v7, ~0.657 at v9, ~1.67 at v10.
             self._stopping_criterion = StoppingCriterion(
                 min_vignettes=self._adaptive_config.min_vignettes,
                 max_vignettes=self._adaptive_config.max_vignettes,
                 det_threshold=self._adaptive_config.fim_det_threshold,
                 max_variance_threshold=self._adaptive_config.max_variance_threshold,
-                prior_fim_determinant=prior_fim_det
+                prior_fim_determinant=0.0
             )
 
     async def _prewarm_next_vignette(self) -> None:
@@ -456,6 +504,8 @@ class PreferenceElicitationAgent(Agent):
                 response, llm_stats = await self._handle_vignettes_phase(msg, context)
             elif self._state.conversation_phase == "FOLLOW_UP":
                 response, llm_stats = await self._handle_follow_up_phase(msg, context)
+            elif self._state.conversation_phase == "GATE":
+                response, llm_stats = await self._handle_gate_phase(msg, context)
             elif self._state.conversation_phase == "WRAPUP":
                 response, llm_stats = await self._handle_wrapup_phase(msg, context)
             elif self._state.conversation_phase == "COMPLETE":
@@ -629,27 +679,16 @@ class PreferenceElicitationAgent(Agent):
             top_10 = bws_utils.get_top_k_occupations(scores, k=10)
             self._state.top_10_occupations = top_10
 
-            # Mark BWS complete and transition to vignettes
+            # Mark BWS complete and transition to wrapup
             self._state.bws_phase_complete = True
-            self._state.conversation_phase = "VIGNETTES"
+            self._state.conversation_phase = "WRAPUP"
 
             # Log completion
             occupation_labels = bws_utils.load_occupation_labels()
             top_labels = [occupation_labels.get(code, code) for code in top_10[:5]]
             self.logger.info(f"BWS phase complete. Top 5 occupations: {top_labels}")
 
-            # Transition message
-            message = (
-                "Perfect! I now have a good sense of the types of work that interest you.\n\n"
-                "Next, I'd like to understand what matters to you **within** these job types. "
-                "I'll show you some job scenarios, and you can tell me which you'd prefer."
-            )
-
-            return ConversationResponse(
-                reasoning="BWS phase complete, transitioning to vignettes",
-                message=message,
-                finished=False
-            ), []
+            return await self._handle_wrapup_phase("", context)
 
         # Show next BWS task
         current_task = tasks[self._state.bws_tasks_completed]
@@ -754,10 +793,10 @@ class PreferenceElicitationAgent(Agent):
                 all_llm_stats=all_llm_stats
             )
 
-        # After 2-3 turns of experience questions, move to BWS (occupation ranking)
+        # After 2-3 turns of experience questions, move to vignettes
         if self._state.conversation_turn_count >= 4:
-            self._state.conversation_phase = "BWS"
-            return await self._handle_bws_phase("", context)  # Start BWS with empty input
+            self._state.conversation_phase = "VIGNETTES"
+            return await self._handle_vignettes_phase("", context)  # Start vignettes with empty input
 
         # Get experiences (from DB6 or snapshot)
         experiences = await self._get_experiences_for_questions()
@@ -999,19 +1038,19 @@ class PreferenceElicitationAgent(Agent):
                     self.logger.info("Setting adaptive_phase_complete=True, will show 2 static_end vignettes")
                     # Continue to select next vignette (will be from static_end)
 
-            # After static_end vignettes complete, move to WRAPUP
+            # After static_end vignettes complete, move to GATE
             # Check: have we shown both static_end vignettes?
             elif self._state.adaptive_phase_complete:
                 static_end_count = sum(1 for v_id in self._state.completed_vignettes if v_id.startswith("static_end"))
                 if static_end_count >= 2:
-                    self.logger.info(f"Static_end vignettes complete ({static_end_count} shown), moving to WRAPUP")
-                    self._state.conversation_phase = "WRAPUP"
-                    return await self._handle_wrapup_phase(user_input, context)
+                    self.logger.info(f"Static_end vignettes complete ({static_end_count} shown), moving to GATE")
+                    self._state.conversation_phase = "GATE"
+                    return await self._handle_gate_phase("", context)
         else:
             # Traditional stopping criterion
             if self._state.can_complete() and len(self._state.completed_vignettes) >= 6:
-                self._state.conversation_phase = "WRAPUP"
-                return await self._handle_wrapup_phase(user_input, context)
+                self._state.conversation_phase = "GATE"
+                return await self._handle_gate_phase("", context)
 
         # Log current state before selecting next vignette
         self.logger.info(
@@ -1054,9 +1093,9 @@ class PreferenceElicitationAgent(Agent):
         )
 
         if next_vignette is None:
-            # No more vignettes, move to wrapup
-            self._state.conversation_phase = "WRAPUP"
-            return await self._handle_wrapup_phase(user_input, context)
+            # No more vignettes, move to GATE
+            self._state.conversation_phase = "GATE"
+            return await self._handle_gate_phase("", context)
 
         # Update state with new vignette
         self._state.current_vignette_id = next_vignette.vignette_id
@@ -1252,6 +1291,160 @@ Keep it conversational, not interrogative.
         # Return to vignettes phase
         self._state.conversation_phase = "VIGNETTES"
         return await self._handle_vignettes_phase(user_input, context)
+
+    async def _handle_gate_phase(
+        self,
+        user_input: str,
+        context: ConversationContext
+    ) -> tuple[ConversationResponse, list[LLMStats]]:
+        """
+        Handle the GATE (Generative Active Task Elicitation) phase.
+
+        Always runs exactly 3 clarifying questions. The LLM reviews all vignette
+        Q&As and generates the most informative question to surface nuances,
+        resolve trade-offs, and refine the preference profile. Each user response
+        also triggers qualitative metadata extraction to update the preference vector.
+
+        Flow:
+          - Entry (user_input=""): ask question 1
+          - User answers → increment counter, extract prefs, ask question 2
+          - User answers → increment counter, extract prefs, ask question 3
+          - User answers → increment counter, extract prefs → transition to BWS
+
+        Args:
+            user_input: User's message (empty on first entry, filled on subsequent calls)
+            context: Conversation context
+
+        Returns:
+            Tuple of (response, LLM stats)
+        """
+        MAX_GATE_INTERVENTIONS = 3
+        all_llm_stats: list[LLMStats] = []
+
+        # gate_interventions_completed tracks how many GATE questions have been ASKED.
+        # It is incremented at the bottom of each call, after generating a question.
+        #
+        # State machine:
+        #   Enter GATE (user_input=""):  completed=0 → ask Q1 → completed becomes 1
+        #   User answers Q1:             completed=1, user_input=<ans> → extract → ask Q2 → completed becomes 2
+        #   User answers Q2:             completed=2, user_input=<ans> → extract → ask Q3 → completed becomes 3
+        #   User answers Q3:             completed=3, user_input=<ans> → extract → transition to BWS
+
+        # Step 1: If the user is responding to a previous GATE question, run metadata extraction
+        if user_input and user_input != "(silence)" and self._state.gate_interventions_completed > 0:
+            await self._update_qualitative_metadata(force=True)
+            self.logger.info(
+                f"GATE: Extracted qualitative prefs from answer to Q{self._state.gate_interventions_completed}"
+            )
+
+        # Step 2: If all questions have been asked and user just answered the last one, go to BWS
+        if self._state.gate_interventions_completed >= MAX_GATE_INTERVENTIONS:
+            self._state.gate_complete = True
+            self._state.conversation_phase = "BWS"
+            self.logger.info(
+                f"GATE complete ({MAX_GATE_INTERVENTIONS}/{MAX_GATE_INTERVENTIONS} done). "
+                "Transitioning to BWS."
+            )
+            return await self._handle_bws_phase("", context)
+
+        # Build a compact summary of all vignette Q&As for the LLM
+        vignette_summary = self._build_vignette_summary_for_gate()
+
+        # Build the full conversation history for additional context
+        conversation_history = self._build_conversation_history_for_extraction(context)
+
+        question_number = self._state.gate_interventions_completed + 1
+
+        gate_prompt = f"""{STD_AGENT_CHARACTER}
+{STD_LANGUAGE_STYLE}
+
+You are conducting the GATE (Generative Active Task Elicitation) phase of a career preference interview.
+The user has just completed a series of vignette scenarios. Your job is to ask {MAX_GATE_INTERVENTIONS} targeted
+clarifying questions to deepen understanding of their preferences — surfacing nuances, resolving
+trade-offs not yet probed, and filling gaps in the preference profile.
+
+This is question {question_number} of {MAX_GATE_INTERVENTIONS}. You MUST generate a meaningful question.
+
+--- VIGNETTE RESPONSES SO FAR ---
+{vignette_summary}
+--- END VIGNETTE RESPONSES ---
+
+--- RECENT CONVERSATION ---
+{conversation_history}
+--- END CONVERSATION ---
+
+Generate question {question_number} of {MAX_GATE_INTERVENTIONS}.
+Choose the MOST informative question that hasn't been addressed yet. Consider:
+- Trade-offs not yet probed (e.g. salary vs autonomy, job security vs career growth)
+- Ambiguities in their choices (did they pick for pay, flexibility, or tasks?)
+- Dimensions where their answers were inconsistent or unclear
+- Preferences not captured by the vignettes (e.g. location, team dynamics, company size)
+
+The question can be open-ended, yes/no, or a mini-scenario presenting two concrete job options.
+Keep it short (1-3 sentences), conversational, and easy to answer.
+
+{get_json_response_instructions()}"""
+
+        try:
+            gate_response, gate_stats = await self._gate_caller.call_llm(
+                llm=self._gate_llm,
+                llm_input=gate_prompt,
+                logger=self.logger
+            )
+            all_llm_stats.extend(gate_stats)
+        except Exception as e:
+            self.logger.warning(f"GATE LLM call failed: {e}. Using fallback question.")
+            gate_response = None
+
+        if gate_response is None:
+            # Fallback questions by number
+            fallbacks = [
+                "What's more important to you — high pay with less stability, or moderate pay with strong job security?",
+                "How do you feel about working in a team versus working independently most of the time?",
+                "If you had to choose, would you prefer a job that's challenging and fast-paced, or one that's steady and predictable?"
+            ]
+            message = fallbacks[self._state.gate_interventions_completed % len(fallbacks)]
+            reasoning = "Fallback GATE question (LLM unavailable)"
+        else:
+            message = gate_response.message
+            reasoning = gate_response.reasoning
+
+        # Increment after asking the question (tracks how many have been asked)
+        self._state.gate_interventions_completed += 1
+
+        self.logger.info(
+            f"GATE question {self._state.gate_interventions_completed}/{MAX_GATE_INTERVENTIONS}: "
+            f"{message[:80]}..."
+        )
+
+        return ConversationResponse(
+            reasoning=reasoning,
+            message=message,
+            finished=False
+        ), all_llm_stats
+
+    def _build_vignette_summary_for_gate(self) -> str:
+        """
+        Build a concise summary of all vignette Q&As for the GATE prompt.
+
+        Returns:
+            Multi-line string with each vignette scenario and user response
+        """
+        if not self._state.vignette_responses:
+            return "(No vignette responses available)"
+
+        parts = []
+        for i, resp in enumerate(self._state.vignette_responses, 1):
+            vignette = self._vignette_engine.get_vignette_by_id(resp.vignette_id)
+            scenario = vignette.scenario_text[:200] if vignette else f"Vignette {resp.vignette_id}"
+            user_answer = (resp.user_reasoning or "").strip()[:300]
+            parts.append(
+                f"Q{i} [{resp.vignette_id}]: {scenario}\n"
+                f"  User chose: {resp.chosen_option_id or 'unclear'}\n"
+                f"  Reasoning: {user_answer}"
+            )
+
+        return "\n\n".join(parts)
 
     async def _handle_wrapup_phase(
         self,
@@ -1795,19 +1988,23 @@ Vignettes Completed: {pv.n_vignettes_completed}
         except Exception as e:
             self.logger.error(f"Failed to sync Bayesian posterior to PreferenceVector: {e}", exc_info=True)
 
-    async def _update_qualitative_metadata(self) -> None:
+    async def _update_qualitative_metadata(self, force: bool = False) -> None:
         """
         Update qualitative metadata from cumulative user responses.
 
         Called periodically (every 3 vignettes) to extract patterns from
         accumulated responses. More responses = better pattern detection.
+
+        Args:
+            force: If True, bypass the throttle guard (used during GATE phase
+                   where vignette_responses count is no longer increasing).
         """
         # Only update if we have enough responses (minimum 3)
         if len(self._state.vignette_responses) < 3:
             return
 
-        # Only update every 3 vignettes to reduce LLM calls
-        if len(self._state.vignette_responses) % 3 != 0:
+        # Only update every 3 vignettes to reduce LLM calls (skipped when forced)
+        if not force and len(self._state.vignette_responses) % 3 != 0:
             return
 
         try:

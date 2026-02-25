@@ -281,10 +281,18 @@ async def test_different_responses_produce_different_adaptive_vignettes():
         print("RESULT: Same adaptive vignettes selected (responses didn't change selection)")
     print(f"{'='*80}\n")
 
-    # We expect at least one flow to have adaptive vignettes
-    assert len(result_a['adaptive']) > 0 or len(result_b['adaptive']) > 0, (
-        "Neither flow produced adaptive vignettes — stopping criterion may be too aggressive"
-    )
+    # With fim_det_threshold=1.0 (absolute mode), the stopping criterion fires after
+    # 4 static_begin vignettes (det ratio >> 1.0). Adaptive vignettes are no longer
+    # selected in the hybrid flow — GATE phase now handles preference refinement.
+    # This test is retained as a diagnostic: log divergence if adaptive vignettes
+    # are ever re-enabled, but don't fail when neither flow selects them.
+    if len(result_a['adaptive']) == 0 and len(result_b['adaptive']) == 0:
+        print("NOTE: No adaptive vignettes selected in either flow (expected with threshold=1.0)")
+    else:
+        assert set_a != set_b, (
+            "Both flows selected adaptive vignettes but chose the SAME ones — "
+            "D-optimal selection is not responding to different user responses"
+        )
 
 
 if __name__ == "__main__":

@@ -52,7 +52,7 @@ class PreferenceElicitationAgentState(BaseModel):
     production (with youth database available).
     """
 
-    conversation_phase: Literal["INTRO", "EXPERIENCE_QUESTIONS", "BWS", "VIGNETTES", "FOLLOW_UP", "WRAPUP", "COMPLETE"] = "INTRO"
+    conversation_phase: Literal["INTRO", "EXPERIENCE_QUESTIONS", "VIGNETTES", "FOLLOW_UP", "GATE", "BWS", "WRAPUP", "COMPLETE"] = "INTRO"
     """Current phase of the preference elicitation conversation"""
 
     # ========== BWS (Best-Worst Scaling) Phase ==========
@@ -116,6 +116,13 @@ class PreferenceElicitationAgentState(BaseModel):
 
     follow_ups_asked: list[str] = Field(default_factory=list)
     """List of vignette IDs we've already asked follow-ups for (max one per vignette)"""
+
+    # ========== GATE (Generative Active Task Elicitation) Phase ==========
+    gate_interventions_completed: int = 0
+    """Number of GATE clarifying questions the user has answered (max 3)"""
+
+    gate_complete: bool = False
+    """Whether the GATE phase has finished (all interventions done or LLM found nothing more to ask)"""
 
     last_experience_question_asked: Optional[str] = None
     """The last experience question that was asked (for extraction context)"""
@@ -271,6 +278,8 @@ class PreferenceElicitationAgentState(BaseModel):
             needs_follow_up=doc.get("needs_follow_up", False),
             follow_up_question=doc.get("follow_up_question"),
             follow_ups_asked=list(doc.get("follow_ups_asked", [])),
+            gate_interventions_completed=doc.get("gate_interventions_completed", 0),
+            gate_complete=doc.get("gate_complete", False),
             last_experience_question_asked=doc.get("last_experience_question_asked"),
             user_has_indicated_completion=doc.get("user_has_indicated_completion", False),
             minimum_vignettes_completed=doc.get("minimum_vignettes_completed", 5),

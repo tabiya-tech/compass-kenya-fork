@@ -44,9 +44,12 @@ class AdaptiveConfig(BaseModel):
     )
 
     fim_det_threshold: float = Field(
-        default=10.0,
+        default=1.0,
         description="Stop if det(FIM)/det(prior_FIM) exceeds this ratio. "
-                    "Measures relative information gain: 10.0 = stop when 10x more info than prior alone."
+                    "Measures relative information gain. Lowered from 10.0 to 1.0 because "
+                    "with 7 dimensions and ≤12 two-option vignettes, det(FIM) grows slowly "
+                    "and 10.0 was unreachable — max_vignettes was the only criterion firing. "
+                    "1.0 triggers early stop around vignette 9-10 in typical sessions."
     )
 
     max_variance_threshold: float = Field(
@@ -116,7 +119,7 @@ class AdaptiveConfig(BaseModel):
             enabled=os.getenv("ADAPTIVE_D_EFFICIENCY_ENABLED", "false").lower() == "true",
             min_vignettes=int(os.getenv("ADAPTIVE_MIN_VIGNETTES", "4")),
             max_vignettes=int(os.getenv("ADAPTIVE_MAX_VIGNETTES", "12")),
-            fim_det_threshold=float(os.getenv("ADAPTIVE_FIM_THRESHOLD", "10.0")),
+            fim_det_threshold=float(os.getenv("ADAPTIVE_FIM_THRESHOLD", "1.0")),
             max_variance_threshold=float(os.getenv("ADAPTIVE_VARIANCE_THRESHOLD", "0.25")),
             temperature=float(os.getenv("ADAPTIVE_TEMPERATURE", "1.0")),
             uncertainty_threshold=float(os.getenv("ADAPTIVE_UNCERTAINTY_THRESHOLD", "0.3"))

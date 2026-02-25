@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 import logging
 
 from app.agent.llm_caller import LLMCaller
+from app.agent.simple_llm_agent.prompt_response_template import get_json_response_instructions
 from common_libs.llm.generative_models import GeminiGenerativeLLM
 from common_libs.llm.models_utils import (
     LLMConfig,
@@ -51,8 +52,64 @@ class QualitativeMetadata(BaseModel):
         extra = "forbid"
 
 
-# System instructions for metadata extraction LLM
-_METADATA_EXTRACTION_PROMPT = """
+# Few-shot examples passed to get_json_response_instructions
+_METADATA_EXAMPLES: list[QualitativeMetadata] = [
+    QualitativeMetadata(
+        decision_patterns={
+            "mentions_family_frequently": True,
+            "uses_hedging_language": True,
+        },
+        tradeoff_willingness={
+            "will_sacrifice_salary_for_flexibility": True,
+            "will_not_compromise_work_life_balance": True,
+        },
+        values_signals={
+            "family_provider": True,
+        },
+        consistency_indicators={
+            "response_consistency": 0.95,
+            "conviction_strength": 0.8,
+            "preference_stability": 0.9,
+        },
+        extracted_constraints={
+            "must_have_work_life_balance": True,
+        },
+        reasoning=(
+            "User mentioned family/kids/children 5 times across responses, always in the context of "
+            "scheduling and time. Explicitly stated they MUST have work-life balance (vignette 5) and "
+            "would sacrifice salary for flexibility (vignette 3). Hedging language ('maybe', 'I think') "
+            "appears twice. All responses align around family-first preference."
+        ),
+    ),
+    QualitativeMetadata(
+        decision_patterns={
+            "career_growth_focused": True,
+            "uses_absolute_language": True,
+        },
+        tradeoff_willingness={
+            "open_to_relocation_for_growth": True,
+        },
+        values_signals={
+            "purpose_driven": True,
+            "autonomy_seeking": True,
+        },
+        consistency_indicators={
+            "response_consistency": 0.85,
+            "conviction_strength": 0.9,
+            "preference_stability": 0.8,
+        },
+        extracted_constraints={},
+        reasoning=(
+            "User mentioned growth/learning/advancement 4 times. Used absolute language ('I will never', "
+            "'I must') twice. Explicitly stated openness to relocation if growth opportunity is good. "
+            "Themes of independence and making an impact recur across 3 responses."
+        ),
+    ),
+]
+
+
+# System instructions for metadata extraction LLM — {json_response_instructions} is filled at init
+_METADATA_EXTRACTION_PROMPT_TEMPLATE = """
 <System Instructions>
 #Role
 You are a behavioral psychologist analyzing HOW people reason about job choices, not WHAT they choose.
@@ -135,75 +192,11 @@ Invalid examples (inferred, not explicit):
 - User chose remote job → DO NOT add "must_work_remotely"
 - User chose high salary → DO NOT add "minimum_salary": X
 
-#Examples of GOOD Extraction
-
-**User responses across 5 vignettes:**
-1. "I'd choose the remote job because commuting would take time away from my kids"
-2. "The flexible hours option is better - I need to pick up my children from school"
-3. "I prefer option A because I value family time over extra money"
-4. "Maybe the first one, I think... family is important to me"
-5. "I MUST have work-life balance, I cannot sacrifice time with my family"
-
-**Good extraction:**
-```json
-{
-    "decision_patterns": {
-        "mentions_family_frequently": true,  // "family/kids/children" appear 5 times
-        "uses_hedging_language": true  // "maybe", "I think" appear 2+ times
-    },
-    "tradeoff_willingness": {
-        "will_sacrifice_salary_for_flexibility": true,  // Vignette 3 explicitly states
-        "will_not_compromise_work_life_balance": true  // Vignette 5 explicitly states
-    },
-    "values_signals": {
-        "family_provider": true  // Strong pattern of family-focused reasoning
-    },
-    "consistency_indicators": {
-        "response_consistency": 0.95,  // All responses align around family/balance
-        "conviction_strength": 0.8,  // Mostly decisive, some hedging
-        "preference_stability": 0.9  // Same preference (family > money) throughout
-    },
-    "extracted_constraints": {
-        "must_have_work_life_balance": true  // Explicitly stated in vignette 5
-    }
-}
-```
-
-#Examples of BAD Extraction (What NOT to do)
-
-**User chose high-salary job:**
-```json
-{
-    "extracted_constraints": {
-        "minimum_salary": 80000  // ❌ WRONG! This is anchored to vignette value
-    }
-}
-```
-
-**User mentioned flexibility once:**
-```json
-{
-    "decision_patterns": {
-        "values_flexibility": true  // ❌ WRONG! Need 3+ mentions for pattern
-    }
-}
-```
-
-**User chose remote job:**
-```json
-{
-    "tradeoff_willingness": {
-        "prefers_remote_work": true  // ❌ WRONG! This is not an explicit tradeoff statement
-    }
-}
-```
-
 #Output Format
-Return a JSON object with the structure defined in QualitativeMetadata.
+{json_response_instructions}
 
 Only include fields where you have POSITIVE evidence (do not include empty dicts).
-
-Always include "reasoning" explaining your extraction logic.
+"reasoning" MUST be a plain string summarising your extraction logic — never a nested object or dict.
 
 #Remember
 - EXPLICIT statements only, never infer
@@ -221,13 +214,17 @@ class MetadataExtractor:
         """Initialize the MetadataExtractor with LLM."""
         self._logger = logging.getLogger(self.__class__.__name__)
 
+        system_instructions = _METADATA_EXTRACTION_PROMPT_TEMPLATE.format(
+            json_response_instructions=get_json_response_instructions(examples=_METADATA_EXAMPLES)
+        )
+
         # Create LLM with metadata extraction instructions
         llm_config = LLMConfig(
             generation_config=LOW_TEMPERATURE_GENERATION_CONFIG | JSON_GENERATION_CONFIG
         )
 
         self._metadata_llm = GeminiGenerativeLLM(
-            system_instructions=_METADATA_EXTRACTION_PROMPT,
+            system_instructions=system_instructions,
             config=llm_config
         )
 

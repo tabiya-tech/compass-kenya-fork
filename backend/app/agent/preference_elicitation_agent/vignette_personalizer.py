@@ -313,8 +313,9 @@ Example Output:
         Returns:
             Generated vignette content
         """
-        # Build context description
-        user_background = self._format_user_context(user_context)
+        # Build context description (pass previous_vignettes so the background
+        # selection instruction can reference what has already been used)
+        user_background = self._format_user_context(user_context, previous_vignettes)
 
         # Build template description
         template_description = self._format_template(template)
@@ -333,7 +334,7 @@ Example Output:
 **Template Trade-Off:**
 {template_description}
 
-**Previously Shown Scenarios (MUST be VERY different):**
+**Previously Shown Scenarios (MUST be VERY different — also use these to identify which backgrounds have already been used):**
 {previous_desc}
 
 **CRITICAL REQUIREMENTS:**
@@ -365,27 +366,49 @@ Generate a personalized vignette that:
 
         return response
 
-    def _format_user_context(self, context: UserContext) -> str:
+    def _format_user_context(
+        self,
+        context: UserContext,
+        previous_vignettes: Optional[list[str]] = None
+    ) -> str:
         """Format user context for LLM prompt."""
         parts = []
 
         if context.current_role:
-            parts.append(f"Current/Recent Role: {context.current_role}")
+            parts.append(f"Most Recent Role: {context.current_role}")
         else:
-            parts.append("Current/Recent Role: Not specified (use general junior-level roles)")
+            parts.append("Most Recent Role: Not specified (use general junior-level roles)")
 
         if context.industry:
-            parts.append(f"Industry: {context.industry}")
+            parts.append(f"Most Recent Industry: {context.industry}")
         else:
-            parts.append("Industry: Not specified (use general industries)")
+            parts.append("Most Recent Industry: Not specified (use general industries)")
 
         parts.append(f"Experience Level: {context.experience_level}")
 
-        if context.key_experiences:
-            parts.append(f"Key Experiences: {', '.join(context.key_experiences)}")
-
         if context.background_summary:
             parts.append(f"Summary: {context.background_summary}")
+
+        if context.all_backgrounds and len(context.all_backgrounds) > 1:
+            parts.append("")
+            parts.append("All Past Experience Contexts (Role | Industry):")
+            for bg in context.all_backgrounds:
+                parts.append(f"  - {bg}")
+            parts.append("")
+
+            if previous_vignettes:
+                parts.append(
+                    "The previous vignette scenarios shown to the user (listed below under "
+                    "'Previously Shown Scenarios') already used specific job backgrounds. "
+                    "MANDATORY: Pick a background from the list above that has NOT been "
+                    "represented in those previous scenarios. "
+                    "Vary the industry, role type, and sector across vignettes."
+                )
+            else:
+                parts.append(
+                    "MANDATORY: Pick ONE background from the list above and base BOTH job "
+                    "scenarios in this vignette on that background. Do not mix backgrounds."
+                )
 
         return "\n".join(parts)
 
