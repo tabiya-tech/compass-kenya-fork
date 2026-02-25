@@ -57,6 +57,8 @@ class BackendServiceConfig:
     enable_cv_upload: Optional[str]
     language_config: str
     global_product_name: Optional[str]
+    matching_service_url: Optional[str]
+    matching_service_api_key: Optional[str]
 
 
 """
@@ -420,6 +422,12 @@ def _deploy_cloud_run_service(
                         gcp.cloudrunv2.ServiceTemplateContainerEnvArgs(
                             name="GLOBAL_ENABLE_CV_UPLOAD",
                             value=backend_service_cfg.enable_cv_upload or "false"),
+                        gcp.cloudrunv2.ServiceTemplateContainerEnvArgs(
+                            name="MATCHING_SERVICE_URL",
+                            value=backend_service_cfg.matching_service_url),
+                        gcp.cloudrunv2.ServiceTemplateContainerEnvArgs(
+                            name="MATCHING_SERVICE_API_KEY",
+                            value=backend_service_cfg.matching_service_api_key),
                         # Add more environment variables here
                     ],
                 )
