@@ -87,9 +87,12 @@ def main():
         global_product_name=getenv("GLOBAL_PRODUCT_NAME", False, False),
         enable_cv_upload=getenv("GLOBAL_ENABLE_CV_UPLOAD", False, False),
 
-        # Matching service (Epic 3)
+        # Matching service (optional)
         matching_service_url=getenv("MATCHING_SERVICE_URL", False, False),
         matching_service_api_key=getenv("MATCHING_SERVICE_API_KEY", True, False),
+
+        # Phase transition behavior (optional)
+        inline_phase_transition=getenv("COMPASS_INLINE_PHASE_TRANSITION", False, False),
     )
 
     # version of the artifacts to deploy
