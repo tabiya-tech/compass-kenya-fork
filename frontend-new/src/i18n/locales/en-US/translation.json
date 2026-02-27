@@ -162,7 +162,8 @@
     "chatMessage": {
       "typingChatMessage": {
         "typing": "Typing",
-        "thinking": "Finding skills related to this experience"
+        "thinking": "Finding skills related to this experience",
+        "thinkingPreferenceElicitation": "Thinking about your response…"
       },
       "conversationConclusionFooter": {
         "youCanNow": "You can now",

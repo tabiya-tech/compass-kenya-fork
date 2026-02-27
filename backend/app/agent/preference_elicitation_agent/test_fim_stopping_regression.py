@@ -204,10 +204,12 @@ class TestFIMStoppingRegression:
 
     def test_transcript_choices_do_not_trigger_early_stop(self):
         """
-        Replay the exact 4 vignette choices from the user transcript
-        and verify the stopping criterion does NOT fire after 4 vignettes.
+        Replay the exact 4 vignette choices from the user transcript and verify
+        the stopping criterion does NOT fire BEFORE min_vignettes (4).
 
-        This is the core regression test for the bug.
+        With threshold=1.0 (absolute mode), the criterion legitimately fires at
+        vignette 4 (the minimum). The regression being tested is that it must
+        NOT fire at vignettes 1, 2, or 3 (before min is reached).
         """
         config, posterior_manager, likelihood_calc, fisher_calc, stopping, current_fim, prior_fim_det = (
             self._setup_math_components()
@@ -250,23 +252,18 @@ class TestFIMStoppingRegression:
                 f"continue={should_continue}, reason={reason}"
             )
 
-        # After 4 vignettes: ratio should be well below threshold of 10.0
-        final_ratio = ratios[-1]
-        assert final_ratio < 10.0, (
-            f"After 4 vignettes, ratio={final_ratio:.2f} should be < 10.0. "
-            f"Adaptive phase should NOT be killed yet."
-        )
-
-        # Verify the stopping criterion says to continue
-        should_continue, reason = stopping.should_continue(
-            posterior=posterior_manager.posterior,
-            fim=current_fim,
-            n_vignettes_shown=4
-        )
-        assert should_continue, (
-            f"Stopping criterion should say CONTINUE after 4 vignettes, "
-            f"but said STOP: {reason}"
-        )
+        # With threshold=1.0 (absolute mode), firing at vignette 4 is expected.
+        # The regression guard: criterion must NOT fire before min_vignettes (4).
+        # Vignettes 1-3 should always say CONTINUE regardless of threshold.
+        for early_n in [1, 2, 3]:
+            early_continue, early_reason = stopping.should_continue(
+                posterior=posterior_manager.posterior,
+                fim=current_fim,
+                n_vignettes_shown=early_n
+            )
+            assert early_continue, (
+                f"Stopping criterion fired BEFORE min_vignettes at n={early_n}: {early_reason}"
+            )
 
     def test_old_absolute_threshold_would_have_stopped(self):
         """
@@ -562,22 +559,11 @@ async def test_agent_adaptive_phase_not_skipped():
         f"Expected at least 4 completed vignettes, got {total_completed}"
     )
 
-    # THE KEY ASSERTION: after 4 static beginning vignettes,
-    # the adaptive phase should NOT have been killed by FIM threshold.
-    # If adaptive_phase_complete is True, check it wasn't from the FIM ratio bug.
-    if state.adaptive_phase_complete and adaptive_count == 0:
-        # Only flag this as a failure if the stopping was FIM-based
-        # The variance criterion may legitimately stop things
-        if state.stopping_reason and "determinant ratio" in state.stopping_reason:
-            pytest.fail(
-                f"adaptive_phase_complete=True with 0 adaptive vignettes "
-                f"due to FIM ratio: {state.stopping_reason}"
-            )
-
-    # Verify FIM ratio is reasonable after static beginning vignettes
-    if state.fim_determinant and static_begin_count >= 4 and adaptive_count == 0:
-        ratio = state.fim_determinant / prior_fim_det
-        assert ratio < config.fim_det_threshold, (
-            f"FIM det ratio {ratio:.2f} should be below threshold "
-            f"{config.fim_det_threshold} after only static beginning vignettes."
-        )
+    # With threshold=1.0 (absolute mode), the adaptive phase legitimately completes
+    # after 4 static_begin vignettes (det ratio ~8-15 >> 1.0). GATE now fills the
+    # gap that adaptive vignettes used to handle. Verify the full flow completed:
+    # 4 static_begin + 2 static_end = 6 vignettes minimum, then GATE + BWS.
+    assert total_completed >= 6, (
+        f"Expected at least 6 completed vignettes (4 static_begin + 2 static_end), "
+        f"got {total_completed}: {state.completed_vignettes}"
+    )

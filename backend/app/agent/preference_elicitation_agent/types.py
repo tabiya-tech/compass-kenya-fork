@@ -488,6 +488,9 @@ class UserContext(BaseModel):
     background_summary: Optional[str] = None
     """Brief summary of professional background"""
 
+    all_backgrounds: list[str] = Field(default_factory=list)
+    """All experience backgrounds as 'Role | Industry' strings, used to rotate vignette contexts"""
+
     class Config:
         extra = "forbid"
 

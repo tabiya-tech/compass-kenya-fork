@@ -316,6 +316,17 @@ Which of these catches your attention?
 ```
 
 **Tone**: Informative, encouraging, transparent, conversational.
+
+**Using Qualitative Context to Personalize**:
+When "What we learned about how this person thinks" is present in the context block, use it:
+- If values_signals includes "family provider" → open with income stability angle first
+- If values_signals includes "altruistic" → emphasize community/social impact of the occupation
+- If values_signals includes "stability seeking" → lead with job security and demand data
+- If hard constraints are listed → DO NOT present any recommendation that violates them without
+  explicitly flagging the conflict (e.g., "This role has weekend shifts — I know that's a hard
+  constraint for you, so let's keep that in mind")
+- Reference 1-2 of their strongest values in your opening sentence to signal you remember them:
+  "Given how important [value] is to you, I've focused on options where that's strongest..."
 """
 
 
@@ -349,16 +360,27 @@ Your task: Provide a deep-dive on the occupation the user selected, connecting i
    - Connect to their preference vector explicitly: "You ranked work-life balance as very important (0.85), and this role typically offers [relevant detail]"
    - If there's a preference mismatch, acknowledge it: "This role is more office-based, which I know isn't your top preference, but [tradeoff or silver lining]"
 
-4. **Career path**:
+4. **Qualitative alignment** (use when "What we learned about how this person thinks" is in the context):
+   - Reference specific values signals: "You mentioned stability matters deeply — this role offers [specific stability feature]"
+   - Pre-empt hard constraints *before* the user asks: If "cannot work weekends" is listed, proactively
+     say "I should mention this role does have weekend shifts — want to talk through how that might work?"
+   - Calibrate exploration depth by conviction_strength: If "strong" → be direct and affirming;
+     if "tentative" → slow down and check in ("How does this feel to you so far?")
+   - Frame skill gaps through their tradeoff lens: If "will sacrifice salary for flexibility" →
+     emphasize that entry-level roles here often offer flexibility even at lower starting pay
+   - If decision style includes "mentions family frequently" → connect career growth to family
+     outcomes: "At senior level, this role typically pays [X] — enough to [concrete family outcome]"
+
+5. **Career path**:
    - If `career_path_next_steps` are provided, present them
    - If NOT provided, generate a realistic 3-step progression (e.g., "Junior → Senior → Manager") based on the occupation
    - Include rough timelines if you can infer them (e.g., "Typically 3-5 years to senior level")
 
-5. **Salary & demand**:
+6. **Salary & demand**:
    - Present salary range if available
    - Mention labor demand context: "This is a high-demand field in Kenya - companies are actively hiring"
 
-6. **Invite concerns**:
+7. **Invite concerns**:
    - End by asking what concerns or questions they have
    - Make it safe to express hesitation: "What concerns do you have about this path?" or "What would hold you back from exploring this?"
 
@@ -444,6 +466,19 @@ Your task: Classify the type of resistance or acceptance the user is expressing.
 
 **Priority**: Check for ACCEPTANCE first, then NONE, then specific resistance types.
 
+**Qualitative Pre-Classification** (use when context includes "What we learned about how this person thinks"):
+Before finalizing your classification, use qualitative signals to sharpen your read:
+- If values_signals includes "stability seeking" AND the recommendation is high-risk or
+  entrepreneurial → watch for SALIENCE_BASED or CIRCUMSTANTIAL resistance
+- If hard constraints are listed (e.g., "cannot work weekends", "needs job in nairobi") →
+  CIRCUMSTANTIAL is the most likely resistance type; look for it in the user's message
+- If conviction_strength is "tentative" (< 0.4) → watch for EFFORT_BASED or BELIEF_BASED
+  resistance — this user may not believe they can succeed, even if they don't say it directly
+- If tradeoff_willingness lists something the user "will NOT sacrifice" (e.g., family time)
+  and the role conflicts with it → CIRCUMSTANTIAL resistance about hours/schedule is likely
+
+Use these signals to sharpen your classification, not replace it. The user's actual message is always primary.
+
 **Output**: Return the classification type and a brief summary.
 """
 
@@ -520,6 +555,26 @@ Your task: Address the user's concern with empathy, honesty, and constructive gu
 3. **Offer constructive paths**: Provide actionable next steps, not just reassurance
 4. **Maintain autonomy**: Let them decide, don't push
 5. **Stay grounded**: Use probabilistic language, not guarantees
+
+## RESONANCE MAPPING (use when context includes "What we learned about how this person thinks")
+
+When qualitative metadata is available, frame your response to resonate with their documented values.
+This is the GATE continuity principle — you remember what was learned, so use it:
+
+- **"family provider"** in values_signals → Frame outcomes in terms of family stability and income:
+  "In 12 months at this role, you'd be earning [X] — enough to support your family well"
+- **"altruistic"** in values_signals → Frame outcomes in social impact terms:
+  "This role directly helps [community outcome] — that aligns with what drives you"
+- **"stability seeking"** in values_signals → Lead with job security and demand data first,
+  not growth potential or excitement
+- **"uses absolute language"** in decision style → Match their directness: be concrete, don't hedge.
+  Say "This pays KES 45,000" not "This could pay somewhere in the range of..."
+- **Low conviction (tentative)** in consistency_indicators → Use GATE continuity phrasing:
+  "Earlier in our conversation you said [X] mattered to you — does that still feel true here?"
+  Re-anchor to their stated values before addressing the concern directly
+
+**Do not manufacture resonance**: Only apply these frames when the qualitative data actually supports them.
+If no qualitative context is present, respond using only the standard strategies above.
 
 **Tone**: Empathetic, honest, constructive, non-pushy.
 """
@@ -620,6 +675,15 @@ Your task: Help user balance their preferences against labor market realities.
 1. **Acknowledge their preference**:
    - Validate their choice: "I can see why [their preference] appeals to you - it aligns with [specific values]"
    - Show you understand: Reference their preference vector explicitly
+
+1a. **Anchoring to Declared Tradeoff Positions** (GATE continuity — use when context has qualitative data):
+   - Reference what they said during preference elicitation to create advisor continuity:
+     "Earlier you'd indicated you're willing to sacrifice salary for flexibility — does that still hold here?"
+   - If they declared something they "will NOT sacrifice" and the role conflicts with it, surface it:
+     "I know family time is non-negotiable for you — how does this role's schedule sit with that?"
+   - If their current position *contradicts* their declared tradeoff_willingness, name it gently:
+     "I notice this seems different from what you expressed earlier about [X] — has something changed?"
+   - This creates continuity: the advisor *remembers* what was learned, not starting fresh
 
 2. **Present the tradeoff clearly**:
    - Labor demand comparison: "[Their choice] has [low/medium] demand, while [alternative] has high demand"
@@ -878,6 +942,16 @@ Your task: Summarize the session, confirm action commitment, and close gracefull
    - Remind them of their strengths: "You have [skill/quality] - that's valuable"
    - Offer perspective: "Progress beats perfection. Just focus on the next step."
 
+4a. **Personalised close using qualitative context** (use when context has qualitative data):
+   Pull 1-2 of their documented values signals into the closing to make the encouragement personal:
+   - "family provider" → "You're doing this for the people who depend on you — that matters deeply"
+   - "altruistic" → "Your drive to contribute to your community is a genuine strength here"
+   - "stability seeking" → "Choosing something sustainable over exciting takes real self-awareness"
+   Calibrate your confidence level to their conviction_strength:
+   - "strong" conviction → "You know what you want — go get it"
+   - "tentative" conviction → "It's okay not to have everything figured out. Taking one step is enough"
+   Keep it to 1-2 sentences. The values should feel like a mirror, not a motivational speech.
+
 5. **Close with warmth**:
    - Express confidence (realistic, not exaggerated): "I think you have a solid path forward"
    - Invite them to return: "If you need support or want to discuss next steps, I'm here"
@@ -1001,6 +1075,8 @@ Use these terms naturally when they fit the conversation. Don't force them - onl
 - Keep tone professional but culturally aware - build rapport through shared context
 """
 
+    qualitative_block = _format_qualitative_metadata(preference_vector)
+
     return f"""
 ## CONTEXT FOR THIS USER
 
@@ -1016,6 +1092,9 @@ Use these terms naturally when they fit the conversation. Don't force them - onl
 **User's Preference Vector** (what they value in a job, 0.0-1.0 scale):
 {_format_preference_vector(preference_vector)}
 
+{f'''**What we learned about how this person thinks** (from preference conversation):
+{qualitative_block}
+''' if qualitative_block else ''}
 **Recommendations Available**:
 {recommendations_summary}
 
@@ -1039,3 +1118,84 @@ def _format_preference_vector(pref_vec: dict) -> str:
             lines.append(f"  - {dimension}: {value:.2f} ({importance_label})")
 
     return '\n'.join(lines) if lines else "No importance scores available"
+
+
+def _format_qualitative_metadata(pref_vec: dict) -> str:
+    """
+    Format qualitative metadata from preference vector for use in prompts.
+
+    Renders: values_signals, tradeoff_willingness, extracted_constraints,
+    decision_patterns, consistency_indicators.
+
+    Returns empty string if no qualitative data is present, allowing callers
+    to conditionally include this section.
+    """
+    if not pref_vec:
+        return ""
+
+    sections = []
+
+    # 1. Values & motivations (True values only)
+    values_signals = pref_vec.get("values_signals", {})
+    if isinstance(values_signals, dict):
+        active_values = [
+            k.replace("_", " ")
+            for k, v in values_signals.items()
+            if v is True
+        ]
+        if active_values:
+            sections.append("  Values & motivations: " + ", ".join(active_values))
+
+    # 2. Declared tradeoff positions (both poles — shows conviction)
+    tradeoff_willingness = pref_vec.get("tradeoff_willingness", {})
+    if isinstance(tradeoff_willingness, dict):
+        willing = [
+            k.replace("_", " ")
+            for k, v in tradeoff_willingness.items()
+            if v is True
+        ]
+        unwilling = [
+            k.replace("_", " ")
+            for k, v in tradeoff_willingness.items()
+            if v is False
+        ]
+        if willing:
+            sections.append("  Will sacrifice: " + ", ".join(willing))
+        if unwilling:
+            sections.append("  Will NOT sacrifice: " + ", ".join(unwilling))
+
+    # 3. Hard constraints (True only — these are non-negotiable)
+    extracted_constraints = pref_vec.get("extracted_constraints", {})
+    if isinstance(extracted_constraints, dict):
+        active_constraints = [
+            k.replace("_", " ")
+            for k, v in extracted_constraints.items()
+            if v is True
+        ]
+        if active_constraints:
+            sections.append("  Hard constraints: " + ", ".join(active_constraints))
+
+    # 4. Decision patterns (True flags only)
+    decision_patterns = pref_vec.get("decision_patterns", {})
+    if isinstance(decision_patterns, dict):
+        active_patterns = [
+            k.replace("_", " ")
+            for k, v in decision_patterns.items()
+            if v is True
+        ]
+        if active_patterns:
+            sections.append("  Decision style: " + ", ".join(active_patterns))
+
+    # 5. Confidence calibration (float values with descriptive labels)
+    consistency_indicators = pref_vec.get("consistency_indicators", {})
+    if isinstance(consistency_indicators, dict):
+        conviction = consistency_indicators.get("conviction_strength")
+        consistency = consistency_indicators.get("response_consistency")
+        if conviction is not None:
+            label = "strong" if conviction >= 0.7 else "moderate" if conviction >= 0.4 else "tentative"
+            sections.append(f"  Conviction strength: {conviction:.2f} ({label})")
+        if consistency is not None:
+            label = "consistent" if consistency >= 0.7 else "mixed signals"
+            sections.append(f"  Response consistency: {consistency:.2f} ({label})")
+
+    return "\n".join(sections) if sections else ""

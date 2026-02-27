@@ -105,7 +105,7 @@ def format_bws_question(task: Dict, task_number: int, total_tasks: int = 12) -> 
     # Build question
     if task_number == 1:
         intro = (
-            "Great! Now I'd like to understand which types of work interest you most.\n\n"
+            "Great! Now that I understand what matters to you in a job, let's figure out which broad career areas interest you most.\n\n"
             "I'll show you groups of job types. For each group, tell me:\n"
             "• Which type of job would you **most** like to have?\n"
             "• Which would you **least** like to have?\n\n"

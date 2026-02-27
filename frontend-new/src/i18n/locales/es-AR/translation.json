@@ -121,7 +121,8 @@
     "chatMessage": {
       "typingChatMessage": {
         "typing": "Escribiendo",
-        "thinking": "La IA está pensando, por favor esperá"
+        "thinking": "La IA está pensando, por favor esperá",
+        "thinkingPreferenceElicitation": "Pensando en tu respuesta…"
       },
       "conversationConclusionFooter": {
         "youCanNow": "Ahora puedes",

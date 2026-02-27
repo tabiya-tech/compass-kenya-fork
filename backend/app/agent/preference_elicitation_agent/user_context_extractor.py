@@ -48,6 +48,11 @@ class ExtractedUserContext(BaseModel):
         description="Brief 1-2 sentence summary of professional background"
     )
 
+    all_backgrounds: list[str] = Field(
+        default_factory=list,
+        description="ALL experience backgrounds as 'Role | Industry' strings (one per past experience, newest first)"
+    )
+
 
 class UserContextExtractor:
     """
@@ -79,10 +84,11 @@ You are analyzing a user's work experience to extract key context for personaliz
 
 Extract the following information:
 1. **Current Role**: Their most recent or current job title/role
-2. **Industry**: The industry/sector they work in or are most familiar with
+2. **Industry**: The industry/sector of their most recent role
 3. **Experience Level**: Assess as 'entry' (0-1 years), 'junior' (1-3 years), 'mid' (3-7 years), 'senior' (7-15 years), or 'expert' (15+ years)
 4. **Key Experiences**: List of notable employers or roles (max 3)
 5. **Background Summary**: A brief 1-2 sentence summary of their professional background
+6. **All Backgrounds**: For EVERY experience listed, extract one string in the format "Job Title | Industry". Include all experiences, not just recent ones. This is used to vary career scenarios across conversations.
 
 Be concise and focus on information that would help personalize job scenarios.
 If information is unclear or missing, make reasonable inferences based on what's available.
@@ -96,10 +102,11 @@ For Kenyan context, recognize local companies and roles:
 Output Schema:
 You must return a JSON object with exactly these fields:
 - current_role (string or null): Most recent job title (e.g., "Software Developer", "Teacher")
-- industry (string or null): Industry/sector (e.g., "Technology", "Education", "Retail")
+- industry (string or null): Industry/sector of most recent role (e.g., "Technology", "Education", "Retail")
 - experience_level (string): One of: "entry", "junior", "mid", "senior", or "expert"
 - key_experiences (array of strings): List of notable employers or roles (max 3)
 - background_summary (string or null): Brief 1-2 sentence summary of their background
+- all_backgrounds (array of strings): One "Role | Industry" string per experience, newest first (e.g., ["Software Developer | Technology", "Sales Associate | Retail", "Teacher | Education"])
 
 Example Output:
 {
@@ -107,7 +114,8 @@ Example Output:
   "industry": "Technology",
   "experience_level": "junior",
   "key_experiences": ["TechCorp Kenya", "Freelance Web Designer", "Local Retail Store"],
-  "background_summary": "A junior software developer transitioning into freelance web design after initial experience in retail and corporate tech."
+  "background_summary": "A junior software developer transitioning into freelance web design after initial experience in retail and corporate tech.",
+  "all_backgrounds": ["Freelance Web Designer | Technology", "Sales Associate | Retail", "Shop Assistant | Retail"]
 }
 """
 
@@ -154,7 +162,8 @@ Example Output:
                 industry=extracted.industry,
                 experience_level=extracted.experience_level,  # type: ignore
                 key_experiences=extracted.key_experiences,
-                background_summary=extracted.background_summary
+                background_summary=extracted.background_summary,
+                all_backgrounds=extracted.all_backgrounds
             )
 
             self._logger.info(

@@ -200,7 +200,7 @@ class TestFormatBWSQuestion:
         message = bws_utils.format_bws_question(task, task_number=1, total_tasks=12)
 
         assert "Question 1 of 12" in message
-        assert "I'd like to understand which types of work interest you most" in message
+        assert "which broad career areas interest you most" in message
         assert "**most**" in message
         assert "**least**" in message
         assert "A." in message  # Should have letter labels

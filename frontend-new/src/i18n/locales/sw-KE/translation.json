@@ -162,7 +162,8 @@
     "chatMessage": {
       "typingChatMessage": {
         "typing": "Inaandika",
-        "thinking": "Inatafuta ujuzi unaohusiana na uzoefu huu"
+        "thinking": "Inatafuta ujuzi unaohusiana na uzoefu huu",
+        "thinkingPreferenceElicitation": "Inafikiria jibu lako…"
       },
       "conversationConclusionFooter": {
         "youCanNow": "Sasa unaweza",
