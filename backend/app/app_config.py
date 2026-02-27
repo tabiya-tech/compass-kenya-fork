@@ -102,6 +102,13 @@ class ApplicationConfig(BaseModel):
     API key for authenticating with the matching service (Epic 3).
     """
 
+    inline_phase_transition: bool = False
+    """
+    When True, phase transitions skip the artificial (silence) re-invocation loop.
+    The next user message will be routed deterministically via sub-phase instead.
+    Corresponds to the COMPASS_INLINE_PHASE_TRANSITION environment variable.
+    """
+
     @model_validator(mode='after')
     def check_cv_upload_configurations(self) -> "ApplicationConfig":
         # Check that the CV upload configurations are valid.

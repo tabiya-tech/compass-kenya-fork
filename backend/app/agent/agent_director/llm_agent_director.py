@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 from app.agent.agent import Agent
@@ -278,7 +277,7 @@ class LLMAgentDirector(AbstractAgentDirector):
                     self._state.current_phase = new_phase
                     phase_ctx_var.set(new_phase.value if new_phase else ":none:")
 
-                    if os.environ.get("COMPASS_INLINE_PHASE_TRANSITION") == "1":
+                    if get_application_config().inline_phase_transition:
                         # Inline transition: skip the (silence) loop re-invocation.
                         # The next user message will be routed deterministically via sub-phase.
                         transitioned_to_new_phase = False
