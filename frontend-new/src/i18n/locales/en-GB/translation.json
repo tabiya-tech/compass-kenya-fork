@@ -121,7 +121,8 @@
     "chatMessage": {
       "typingChatMessage": {
         "typing": "Typing",
-        "thinking": "Please wait, I'm thinking"
+        "thinking": "Please wait, I'm thinking",
+        "thinkingPreferenceElicitation": "Thinking about your response…"
       },
       "conversationConclusionFooter": {
         "youCanNow": "You can now",

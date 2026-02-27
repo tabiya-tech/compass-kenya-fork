@@ -186,13 +186,17 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
   const addOrRemoveTypingMessage = (userIsTyping: boolean) => {
     if (userIsTyping) {
       // Only add typing message if it doesn't already exist
+      const thinkingMessage =
+        currentPhase.phase === ConversationPhase.PREFERENCE_ELICITATION
+          ? t("chat.chatMessage.typingChatMessage.thinkingPreferenceElicitation")
+          : undefined;
       setMessages((prevMessages) => {
         // check if the last message is a typing message
         const lastMessage = prevMessages[prevMessages.length - 1];
         const hasTypingMessage = lastMessage?.type === CONVERSATION_CONCLUSION_CHAT_MESSAGE_TYPE;
 
         if (!hasTypingMessage) {
-          return [...prevMessages, generateTypingMessage()];
+          return [...prevMessages, generateTypingMessage(undefined, thinkingMessage)];
         }
         return prevMessages;
       });

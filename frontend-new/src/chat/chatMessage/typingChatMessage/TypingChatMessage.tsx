@@ -24,6 +24,7 @@ export const TYPING_CHAT_MESSAGE_TYPE = `typing-message-${uniqueId}`;
 
 export interface TypingChatMessageProps {
   waitBeforeThinking?: number;
+  thinkingMessage?: string;
 }
 
 const dotAnimation = keyframes`
@@ -42,7 +43,10 @@ const textVariants = {
   visible: { opacity: 1, y: 0 },
 };
 
-const TypingChatMessage: React.FC<TypingChatMessageProps> = ({ waitBeforeThinking = WAIT_BEFORE_THINKING }) => {
+const TypingChatMessage: React.FC<TypingChatMessageProps> = ({
+  waitBeforeThinking = WAIT_BEFORE_THINKING,
+  thinkingMessage,
+}) => {
   const { t } = useTranslation();
   const [displayText, setDisplayText] = useState(t(UI_TEXT_KEYS.TYPING));
 
@@ -50,7 +54,7 @@ const TypingChatMessage: React.FC<TypingChatMessageProps> = ({ waitBeforeThinkin
     // Change text after waitBeforeThinking duration
     const textChangeTimer = setTimeout(
       () => {
-        setDisplayText(t(UI_TEXT_KEYS.THINKING));
+        setDisplayText(thinkingMessage ?? t(UI_TEXT_KEYS.THINKING));
       },
       waitBeforeThinking,
       t

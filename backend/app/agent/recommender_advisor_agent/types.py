@@ -159,8 +159,8 @@ class EssentialSkillMatch(BaseModel):
     """Match between a job's required skill and user's skill."""
     job_skill_id: str = Field(description="Required skill ID from job/occupation")
     job_skill_label: str = Field(description="Required skill name")
-    best_user_skill_id: str = Field(description="User's matching skill ID")
-    best_user_skill_label: str = Field(description="User's matching skill name")
+    best_user_skill_id: Optional[str] = Field(default=None, description="User's matching skill ID (None if no match)")
+    best_user_skill_label: Optional[str] = Field(default=None, description="User's matching skill name (None if no match)")
     similarity: float = Field(ge=0.0, le=1.0, description="Cosine similarity score")
     meets_threshold: bool = Field(description="Whether similarity meets minimum threshold")
 
@@ -618,17 +618,35 @@ class Node2VecRecommendations(BaseModel):
 
         # Extract raw data
         youth_id = jasmin_data.get("user_id", "unknown")
-        opportunities = jasmin_data.get("opportunity_recommendations", [])
+        raw_opportunities = jasmin_data.get("opportunity_recommendations", [])
         skill_gaps = jasmin_data.get("skill_gap_recommendations", [])
-        occupations = jasmin_data.get("occupation_recommendations", [])  # Empty for now
+        raw_occupations = jasmin_data.get("occupation_recommendations", [])
+
+        # Map occupation fields: service uses occupation_label, not occupation/occupation_id/occupation_code
+        mapped_occupations = []
+        for occ in raw_occupations:
+            mapped = dict(occ)
+            mapped.setdefault("occupation", mapped.pop("occupation_label", mapped.get("uuid", "Unknown")))
+            mapped.setdefault("occupation_id", mapped.get("uuid", "unknown"))
+            mapped.setdefault("occupation_code", mapped.get("uuid", "unknown"))
+            mapped.setdefault("description", mapped.pop("occupation_description", None))
+            mapped_occupations.append(mapped)
+
+        # Map opportunity fields: service uses URL instead of originUuid
+        mapped_opportunities = []
+        for opp in raw_opportunities:
+            mapped = dict(opp)
+            mapped.setdefault("originUuid", mapped.pop("URL", mapped.get("uuid", "unknown")))
+            mapped.pop("opportunity_description", None)  # extra field not in model
+            mapped_opportunities.append(mapped)
 
         # Convert skill gaps to training recommendations
         trainings = convert_skill_gaps_to_trainings(skill_gaps)
 
         return cls(
             youth_id=youth_id,
-            occupation_recommendations=occupations,
-            opportunity_recommendations=opportunities,
+            occupation_recommendations=mapped_occupations,
+            opportunity_recommendations=mapped_opportunities,
             skillstraining_recommendations=trainings,
             skill_gap_recommendations=skill_gaps,  # Keep raw data for reference
             algorithm_version=jasmin_data.get("algorithm_version", "node2vec_v1"),
