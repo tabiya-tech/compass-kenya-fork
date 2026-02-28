@@ -20,7 +20,7 @@ class AgentsConfig:
     Swahili support is handled via mapping/normalization layer instead of model upgrade.
     """
 
-    fast_model: Final[Model] = "gemini-2.5-flash"
+    fast_model: Final[Model] = "gemini-2.5-flash-lite"
     """
     The fast LLM model name to use.
     
