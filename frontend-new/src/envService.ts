@@ -19,6 +19,7 @@ export enum EnvVariables {
   FRONTEND_ENABLE_METRICS = "FRONTEND_ENABLE_METRICS",
   FRONTEND_METRICS_CONFIG = "FRONTEND_METRICS_CONFIG",
   GLOBAL_ENABLE_CV_UPLOAD = "GLOBAL_ENABLE_CV_UPLOAD",
+  FRONTEND_ENABLE_NEW_SESSION = "FRONTEND_ENABLE_NEW_SESSION",
   FRONTEND_FEATURES = "FRONTEND_FEATURES",
   FRONTEND_DISABLE_SOCIAL_AUTH = "FRONTEND_DISABLE_SOCIAL_AUTH",
   FRONTEND_SUPPORTED_LOCALES = "FRONTEND_SUPPORTED_LOCALES",
@@ -187,6 +188,11 @@ export const getFeatures = () => {
 
 export const getCvUploadEnabled = () => {
   return getEnv(EnvVariables.GLOBAL_ENABLE_CV_UPLOAD);
+};
+
+export const getNewSessionEnabled = () => {
+  const value = getEnv(EnvVariables.FRONTEND_ENABLE_NEW_SESSION);
+  return value.toLowerCase() === "true";
 };
 
 export const getSocialAuthDisabled = () => {

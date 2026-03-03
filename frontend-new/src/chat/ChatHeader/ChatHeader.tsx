@@ -24,12 +24,12 @@ import MetricsService from "src/metrics/metricsService";
 import { EventType } from "src/metrics/types";
 import { ConversationPhase } from "src/chat/chatProgressbar/types";
 import LanguageContextMenu from "src/i18n/languageContextMenu/LanguageContextMenu";
-import { getProductName } from "src/envService";
+import { getProductName, getNewSessionEnabled } from "src/envService";
 import { getAppIconUrl } from "src/envService";
 
 export type ChatHeaderProps = {
   notifyOnLogout: () => void;
-  startNewConversation: () => void;
+  startNewConversation?: () => void;
   experiencesExplored: number;
   exploredExperiencesNotification: boolean;
   setExploredExperiencesNotification: React.Dispatch<SetStateAction<boolean>>;
@@ -56,8 +56,8 @@ export const DATA_TEST_ID = {
 
 export const MENU_ITEM_ID = {
   SETTINGS_SELECTOR: `settings-selector-${uniqueId}`,
-  LOGOUT_BUTTON: `logout-button-${uniqueId}`,
   START_NEW_CONVERSATION: `start-new-conversation-${uniqueId}`,
+  LOGOUT_BUTTON: `logout-button-${uniqueId}`,
   REPORT_BUG_BUTTON: `report-bug-button-${uniqueId}`,
   REGISTER: `register-${uniqueId}`,
 };
@@ -257,14 +257,19 @@ const ChatHeader: React.FC<Readonly<ChatHeaderProps>> = ({
     t,
   ]);
 
+  const newSessionEnabled = getNewSessionEnabled();
   const contextMenuItems: MenuItemConfig[] = useMemo(
     () => [
-      {
-        id: MENU_ITEM_ID.START_NEW_CONVERSATION,
-        text: t("common.buttons.startNewConversation").toLowerCase(),
-        disabled: !isOnline,
-        action: startNewConversation,
-      },
+      ...(newSessionEnabled && startNewConversation
+        ? [
+            {
+              id: MENU_ITEM_ID.START_NEW_CONVERSATION,
+              text: t("common.buttons.startNewConversation").toLowerCase(),
+              disabled: !isOnline,
+              action: startNewConversation,
+            },
+          ]
+        : []),
       // Temporarily removed "Settings" menu item; not useful to users at the moment.
       // Will be added back once it has meaningful functionality.
       // {
@@ -310,7 +315,7 @@ const ChatHeader: React.FC<Readonly<ChatHeaderProps>> = ({
         action: handleLogout,
       },
     ],
-    [isAnonymous, isOnline, startNewConversation, sentryEnabled, handleLogout, t, feedbackFormLabels]
+    [isAnonymous, isOnline, sentryEnabled, handleLogout, t, feedbackFormLabels, newSessionEnabled, startNewConversation]
   );
 
   const productName = getProductName();

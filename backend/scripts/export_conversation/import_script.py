@@ -11,8 +11,9 @@ from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
 
 from app.application_state import ApplicationStateStore, ApplicationState
+from app.users.generate_session_id import generate_new_session_id
 from app.users.repositories import UserPreferenceRepository
-from app.users.sessions import SessionsService
+from app.users.types import UserPreferencesRepositoryUpdateRequest
 from _common import StoreType, create_store, get_db_connection
 from common_libs.logging.log_utilities import setup_logging_config
 from scripts.export_conversation.constants import SCRIPT_DIR, DEFAULT_EXPORTS_DIR
@@ -188,13 +189,12 @@ async def import_conversation(
             logger.error(f"No state found for session {source_session_id}")
             return False
 
-        # Create a new session for the target user
         user_repository = UserPreferenceRepository(target_db)
-        session_service = SessionsService(user_repository)
-
-        # get the new session on the target user preferences with new session id.
-        new_user_preferences = await session_service.new_session(target_user_id)
-        target_new_session_id = new_user_preferences.sessions[0]
+        target_new_session_id = generate_new_session_id()
+        await user_repository.update_user_preference(
+            target_user_id,
+            UserPreferencesRepositoryUpdateRequest(sessions=[target_new_session_id]),
+        )
 
         # Update session ID in the state
         state.session_id = target_new_session_id

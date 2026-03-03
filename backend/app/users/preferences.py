@@ -19,7 +19,8 @@ from app.users.repositories import UserPreferenceRepository
 from app.users.sensitive_personal_data.routes import get_sensitive_personal_data_service
 from app.users.sensitive_personal_data.service import ISensitivePersonalDataService
 from app.users.sensitive_personal_data.types import SensitivePersonalDataRequirement
-from app.users.sessions import generate_new_session_id, SessionsService
+from app.users.generate_session_id import generate_new_session_id
+from app.users.sessions import SessionsService
 from app.users.types import UserPreferencesUpdateRequest, UserPreferences, \
     CreateUserPreferencesRequest, UserPreferencesRepositoryUpdateRequest, UsersPreferencesResponse
 

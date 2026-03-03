@@ -20,7 +20,7 @@ import { ConversationMessageSender, ConversationResponse } from "./ChatService/C
 import { nanoid } from "nanoid";
 
 const CONVERSATION_HISTORY_URL = getBackendUrl() + "/conversations/:session_id/messages";
-const NEW_SESSION_URL = getBackendUrl() + "/users/preferences/new-session";
+const USER_PREFERENCES_URL = getBackendUrl() + "/users/preferences";
 
 // Generate a timestamp relative to now
 const getTimestamp = (minutesAgo: number) => new Date(Date.now() - minutesAgo * 60 * 1000).toISOString();
@@ -31,11 +31,11 @@ const meta: Meta<typeof Chat> = {
   parameters: {
     mockData: [
       {
-        url: NEW_SESSION_URL + "?user_id=1",
+        url: USER_PREFERENCES_URL + "?user_id=1",
         method: "GET",
-        status: 201,
+        status: 200,
         response: {
-          user_id: nanoid(),
+          user_id: "1",
           language: Language.en,
           sessions: [1],
           user_feedback_answered_questions: {},
@@ -144,7 +144,7 @@ const meta: Meta<typeof Chat> = {
       // Mock UserPreferencesService
       const mockUserPreferencesService = UserPreferencesService.getInstance();
       // @ts-ignore
-      mockUserPreferencesService.getNewSession = async (userId: string) => ({
+      mockUserPreferencesService.getUserPreferences = async (userId: string) => ({
         user_id: userId,
         language: Language.en,
         sessions: [123],

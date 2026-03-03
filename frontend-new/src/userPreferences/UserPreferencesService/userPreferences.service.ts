@@ -186,29 +186,43 @@ export default class UserPreferencesService {
   }
 
   /**
-   * Get a new session ID from the chat service.
-   * @returns {Promise<UserPreference>} The user preferences object
-   * @throws {RestAPIError} If the user preferences are invalid
+   * Gets a new session for the user
+   * @returns {Promise<UserPreference>} The user preferences object with the new session
+   * @throws {RestAPIError} If the new session could not be created
    */
   async getNewSession(userId: string): Promise<UserPreference> {
     const serviceName = UserPreferencesService.serviceName;
     const serviceFunction = "getNewSession";
     const method = "GET";
     const qualifiedURL = `${this.userPreferencesEndpointUrl}/new-session?user_id=${userId}`;
-
     const errorFactory = getRestAPIErrorFactory("UserPreferencesService", "getNewSession", method, qualifiedURL);
 
     const response = await customFetch(qualifiedURL, {
       method: method,
-      headers: { "Content-Type": "application/json" },
-      expectedStatusCode: StatusCodes.CREATED,
-      serviceName,
-      serviceFunction,
-      failureMessage: `Failed to generate new session`,
+      headers: {
+        "Content-Type": "application/json",
+      },
+      expectedStatusCode: [StatusCodes.CREATED],
+      serviceName: serviceName,
+      serviceFunction: serviceFunction,
+      failureMessage: `Failed to get new session for user with id ${userId}`,
       expectedContentType: "application/json",
+      retryOnFailedToFetch: true,
     });
 
-    return await this.parseJsonResponse(response, userId, errorFactory);
+    const userPreferences = await this.parseJsonResponse(response, userId, errorFactory);
+
+    const clientId = this.getClientID();
+
+    // If the user preferences do not have a client_id, we will set it to the current client ID.
+    // Or if the client_id has changed.
+    // This can happen if the user is opening the app on a different device or browser.
+    // We will update the user preferences with the current client ID.
+    if (!userPreferences.client_id || userPreferences.client_id !== clientId) {
+      await this.updateUserPreferences({ user_id: userId, client_id: clientId });
+    }
+
+    return userPreferences;
   }
 
   /**
