@@ -49,7 +49,7 @@ class QualitativeMetadata(BaseModel):
     """Chain of thought for metadata extraction"""
 
     class Config:
-        extra = "forbid"
+        extra = "ignore"
 
 
 # Few-shot examples passed to get_json_response_instructions
@@ -268,6 +268,9 @@ Analyze the user's reasoning across {len(all_user_responses)} vignette responses
                 llm_input=prompt,
                 logger=self._logger
             )
+            if result is None:
+                self._logger.warning("Metadata extraction returned None after all retries, using empty metadata")
+                return QualitativeMetadata()
             self._logger.info(f"Extracted metadata: {result.model_dump_json(indent=2)}")
             return result
         except Exception as e:
