@@ -80,9 +80,9 @@ class RecommenderAdvisorAgentState(BaseModel):
         description="Preference vector from Epic 2"
     )
     
-    bws_occupation_scores: Optional[dict[str, float]] = Field(
+    bws_scores: Optional[dict[str, float]] = Field(
         default=None,
-        description="BWS occupation ranking scores from Epic 2 (occupation -> score)"
+        description="BWS ranking scores from Epic 2 (code → score, works for occupations or tasks)"
     )
     
     # === NODE2VEC RECOMMENDATIONS ===
@@ -261,6 +261,12 @@ class RecommenderAdvisorAgentState(BaseModel):
                 for c in data["concerns_raised"]
             ]
         
+        # Backward compatibility: rename bws_occupation_scores → bws_scores
+        if "bws_occupation_scores" in data and "bws_scores" not in data:
+            data["bws_scores"] = data.pop("bws_occupation_scores")
+        elif "bws_occupation_scores" in data:
+            data.pop("bws_occupation_scores")
+
         return cls(**data)
     
     def should_pivot_to_training(self) -> bool:

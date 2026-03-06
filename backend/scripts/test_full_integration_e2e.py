@@ -314,7 +314,7 @@ async def run_state_preparation_test(state: ApplicationState, result: E2ETestRes
     # Let's clear the recommender state first
     state.recommender_advisor_agent_state.skills_vector = None
     state.recommender_advisor_agent_state.preference_vector = None
-    state.recommender_advisor_agent_state.bws_occupation_scores = None
+    state.recommender_advisor_agent_state.bws_scores = None
 
     logger.info("Cleared recommender state to test auto-initialization")
 
@@ -352,10 +352,10 @@ async def run_state_preparation_test(state: ApplicationState, result: E2ETestRes
     else:
         logger.info(f"✅ Preference vector loaded (confidence: {rec_state.preference_vector.confidence_score:.2f})")
 
-    if rec_state.bws_occupation_scores is None:
+    if rec_state.bws_scores is None:
         result.add_warning("BWS scores not loaded (optional)")
     else:
-        logger.info(f"✅ BWS scores loaded: {len(rec_state.bws_occupation_scores)} occupations")
+        logger.info(f"✅ BWS scores loaded: {len(rec_state.bws_scores)} items")
 
     if rec_state.youth_id is None:
         result.add_error("Youth ID not set")
@@ -447,7 +447,7 @@ async def run_recommendation_interface_test(state: ApplicationState, result: E2E
             province="Nairobi County",
             preference_vector=rec_state.preference_vector,
             skills_vector=rec_state.skills_vector,
-            bws_occupation_scores=rec_state.bws_occupation_scores
+            bws_scores=rec_state.bws_scores
         )
 
         logger.info("✅ RecommendationInterface returned successfully")
