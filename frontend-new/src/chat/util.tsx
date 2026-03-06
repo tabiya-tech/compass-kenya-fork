@@ -1,6 +1,8 @@
 import { nanoid } from "nanoid";
 import { IChatMessage } from "src/chat/Chat.types";
 import { ConversationMessageSender, MessageReaction } from "./ChatService/ChatService.types";
+import BWSTaskMessage, { BWS_TASK_MESSAGE_TYPE } from "src/chat/chatMessage/bwsTaskMessage/BWSTaskMessage";
+import { BWSTaskMessageProps, BWSTaskMetadata } from "src/chat/chatMessage/bwsTaskMessage/BWSTaskMessage.types";
 import { CurrentPhase } from "src/chat/chatProgressbar/types";
 import { InvalidConversationPhasePercentage } from "./errors";
 import UserChatMessage, {
@@ -242,6 +244,27 @@ export const parseConversationPhase = (newPhase: CurrentPhase, previousPhase?: C
   }
 
   return validPhase;
+};
+
+export const generateBWSTaskMessage = (
+  messageId: string,
+  metadata: BWSTaskMetadata,
+  onSubmit: (taskId: string, bestWaId: string, worstWaId: string) => void
+): IChatMessage<BWSTaskMessageProps> => {
+  const payload: BWSTaskMessageProps = {
+    taskId: metadata.task_id,
+    taskNumber: metadata.task_number,
+    totalTasks: metadata.total_tasks,
+    alternatives: metadata.alternatives,
+    onSubmit,
+  };
+  return {
+    type: BWS_TASK_MESSAGE_TYPE,
+    message_id: messageId,
+    sender: ConversationMessageSender.COMPASS,
+    payload,
+    component: (props: BWSTaskMessageProps) => <BWSTaskMessage {...props} />,
+  };
 };
 
 export const formatExperiencesToMessage = (experiences: string[] | null): string => {

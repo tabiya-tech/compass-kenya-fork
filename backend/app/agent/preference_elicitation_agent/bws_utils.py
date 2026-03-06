@@ -1,5 +1,5 @@
 """
-Simple utilities for Best-Worst Scaling (BWS) occupation ranking.
+Simple utilities for Best-Worst Scaling (BWS) occupation/WA-task ranking.
 
 Uses straightforward counting: score = count(best) - count(worst)
 """
@@ -11,11 +11,36 @@ from collections import defaultdict
 
 
 def load_bws_tasks() -> List[Dict]:
-    """Load static BWS tasks from config."""
+    """Load static BWS tasks from config (now WA-element based)."""
     config_path = Path(__file__).parent / "config" / "static_bws_tasks.json"
     with open(config_path) as f:
         data = json.load(f)
     return data["tasks"]
+
+
+# Alias for clarity
+def load_wa_tasks() -> List[Dict]:
+    """Load 8 static WA-element BWS tasks."""
+    return load_bws_tasks()
+
+
+def load_wa_items() -> List[Dict]:
+    """
+    Load full WA item data from ONET source.
+
+    Returns:
+        List of dicts with WA_Element_ID, WA_Element_Name,
+        WA_Element_Name_simplified, WA_Element_Name_swahili
+    """
+    config_path = Path(__file__).parent / "config" / "onet_wa_tasks.json"
+    with open(config_path) as f:
+        return json.load(f)
+
+
+def load_wa_labels() -> Dict[str, str]:
+    """Load WA_Element_ID → WA_Element_Name_simplified mapping."""
+    items = load_wa_items()
+    return {item["WA_Element_ID"]: item["WA_Element_Name_simplified"] for item in items}
 
 
 def load_occupation_labels() -> Dict[str, str]:
@@ -39,9 +64,9 @@ def load_occupation_groups() -> List[Dict]:
     return occupations
 
 
-def compute_occupation_scores(bws_responses: List[dict]) -> Dict[str, float]:
+def compute_bws_scores(bws_responses: List[dict]) -> Dict[str, float]:
     """
-    Compute simple scores for each occupation.
+    Compute simple scores for each item (occupation or task).
 
     Score = count(chosen as best) - count(chosen as worst)
 
@@ -50,7 +75,7 @@ def compute_occupation_scores(bws_responses: List[dict]) -> Dict[str, float]:
             Format: [{"best": "21", "worst": "41", ...}, ...]
 
     Returns:
-        Dict mapping occupation code → score
+        Dict mapping code → score
     """
     scores = defaultdict(float)
 
@@ -66,28 +91,28 @@ def compute_occupation_scores(bws_responses: List[dict]) -> Dict[str, float]:
     return dict(scores)
 
 
-def get_top_k_occupations(occupation_scores: Dict[str, float], k: int = 10) -> List[str]:
+def get_top_k_bws(bws_scores: Dict[str, float], k: int = 10) -> List[str]:
     """
-    Get top-k occupations by score.
+    Get top-k items by score.
 
     Args:
-        occupation_scores: Dict mapping occupation code → score
-        k: Number of top occupations to return
+        bws_scores: Dict mapping code → score
+        k: Number of top items to return
 
     Returns:
-        List of occupation codes, sorted by score (descending)
+        List of codes, sorted by score (descending)
     """
-    sorted_occs = sorted(
-        occupation_scores.items(),
+    sorted_items = sorted(
+        bws_scores.items(),
         key=lambda x: x[1],
         reverse=True
     )
-    return [code for code, score in sorted_occs[:k]]
+    return [code for code, score in sorted_items[:k]]
 
 
 def format_bws_question(task: Dict, task_number: int, total_tasks: int = 12) -> str:
     """
-    Format a BWS task as a conversational question.
+    Format a BWS task as a conversational question (occupation-based, legacy).
 
     Args:
         task: BWS task dict with "occupations" list
@@ -136,23 +161,64 @@ def format_bws_question(task: Dict, task_number: int, total_tasks: int = 12) -> 
     return question
 
 
+def format_bws_wa_question(task: Dict, task_number: int, total_tasks: int = 8) -> str:
+    """
+    Format a WA-element BWS task as a conversational question.
+
+    Args:
+        task: BWS task dict with "items" list of WA_Element_IDs
+        task_number: Current task number (1-indexed)
+        total_tasks: Total number of tasks
+
+    Returns:
+        Formatted question string
+    """
+    wa_labels = load_wa_labels()
+    items = task["items"]
+
+    if task_number == 1:
+        intro = (
+            "Great! Now that I understand what matters to you in a job, "
+            "let's figure out which work activities interest you most.\n\n"
+            "I'll show you groups of work activities. For each group, tell me:\n"
+            "• Which activity would you **most** enjoy doing at work?\n"
+            "• Which would you **least** enjoy?\n\n"
+        )
+    else:
+        intro = ""
+
+    question = f"{intro}**Question {task_number} of {total_tasks}**\n\n"
+    question += "Here are 5 work activities:\n\n"
+
+    for i, wa_id in enumerate(items, 1):
+        label = wa_labels.get(wa_id, wa_id)
+        question += f"{chr(64+i)}. **{label}**\n\n"
+
+    question += "Which would you **most** enjoy? And which would you **least** enjoy?\n"
+    question += "\n_Example: \"Most: B, Least: D\" or \"I prefer C and dislike A\"_"
+
+    return question
+
+
 def parse_bws_response(user_message: str, task_occupations: List[str]) -> Tuple[str, str]:
     """
     Parse user's BWS response to extract best and worst choices.
 
+    Works with any item ID format (occupation codes or WA_Element_IDs).
+
     Handles formats like:
     - Structured JSON: {"type": "bws_response", "best": "22", "worst": "91"}
+    - Structured JSON: {"type": "bws_response", "best": "4.A.4.b.4", "worst": "4.A.3.a.1"}
     - Plain text: "Most: B, Least: D"
     - Plain text: "most 3 least 1"
     - Plain text: "I prefer C and dislike A"
-    - Plain text: "Best: Teaching, Worst: Driving"
 
     Args:
         user_message: User's message (plain text or JSON string)
-        task_occupations: List of occupation codes in this task (for validation)
+        task_occupations: List of item IDs in this task (occupation codes or WA_Element_IDs)
 
     Returns:
-        Tuple of (best_occupation_code, worst_occupation_code)
+        Tuple of (best_item_id, worst_item_id)
 
     Raises:
         ValueError: If unable to parse response
@@ -171,7 +237,7 @@ def parse_bws_response(user_message: str, task_occupations: List[str]) -> Tuple[
                 return best, worst
             else:
                 raise ValueError(
-                    f"Invalid occupation codes. Expected codes from: {task_occupations}"
+                    f"Invalid item codes. Expected codes from: {task_occupations}"
                 )
     except (json.JSONDecodeError, KeyError):
         # Not JSON or invalid structure - fall through to text parsing

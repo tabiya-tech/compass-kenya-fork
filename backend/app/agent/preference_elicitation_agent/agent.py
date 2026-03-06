@@ -621,10 +621,10 @@ class PreferenceElicitationAgent(Agent):
         context: ConversationContext
     ) -> tuple[ConversationResponse, list[LLMStats]]:
         """
-        Handle the Best-Worst Scaling (BWS) occupation ranking phase.
+        Handle the Best-Worst Scaling (BWS) work activity ranking phase.
 
-        This phase shows 12 tasks where users pick best and worst occupations
-        from sets of 5, building a ranking over all 40 occupation groups.
+        This phase shows 8 tasks where users pick best and worst ONET work
+        activities (WA elements) from sets of 5, covering all 37 WA items.
 
         Args:
             user_input: User's message
@@ -633,32 +633,32 @@ class PreferenceElicitationAgent(Agent):
         Returns:
             Tuple of (ConversationResponse, LLMStats)
         """
-        # Load BWS tasks
-        tasks = bws_utils.load_bws_tasks()
+        # Load BWS tasks (WA-element based)
+        tasks = bws_utils.load_wa_tasks()
         total_tasks = len(tasks)
 
         # Parse previous response if this isn't the first task
         if self._state.bws_tasks_completed > 0 and user_input.strip():
             try:
-                # Get the previous task's occupations
+                # Get the previous task's items (WA_Element_IDs)
                 prev_task = tasks[self._state.bws_tasks_completed - 1]
-                prev_occupations = prev_task["occupations"]
+                prev_items = prev_task["items"]
 
                 # Parse user's choice
-                best_occ, worst_occ = bws_utils.parse_bws_response(user_input, prev_occupations)
+                best_item, worst_item = bws_utils.parse_bws_response(user_input, prev_items)
 
                 # Save response
                 self._state.bws_responses.append({
                     "task_id": self._state.bws_tasks_completed - 1,
-                    "alts": prev_occupations,
-                    "best": best_occ,
-                    "worst": worst_occ,
+                    "alts": prev_items,
+                    "best": best_item,
+                    "worst": worst_item,
                     "timestamp": datetime.now(timezone.utc).isoformat()
                 })
 
                 self.logger.info(
                     f"BWS Task {self._state.bws_tasks_completed}/{total_tasks} completed: "
-                    f"best={best_occ}, worst={worst_occ}"
+                    f"best={best_item}, worst={worst_item}"
                 )
 
             except ValueError as e:
@@ -671,22 +671,45 @@ class PreferenceElicitationAgent(Agent):
 
         # Check if BWS phase is complete
         if self._state.bws_tasks_completed >= total_tasks:
-            # Compute occupation scores
-            scores = bws_utils.compute_occupation_scores(self._state.bws_responses)
-            self._state.occupation_scores = scores
+            # Compute WA item scores
+            scores = bws_utils.compute_bws_scores(self._state.bws_responses)
+            self._state.bws_scores = scores
 
-            # Get top 10
-            top_10 = bws_utils.get_top_k_occupations(scores, k=10)
-            self._state.top_10_occupations = top_10
+            # Get top 8
+            top_8 = bws_utils.get_top_k_bws(scores, k=8)
+            self._state.top_10_bws = top_8
 
             # Mark BWS complete and transition to wrapup
             self._state.bws_phase_complete = True
             self._state.conversation_phase = "WRAPUP"
 
-            # Log completion
-            occupation_labels = bws_utils.load_occupation_labels()
-            top_labels = [occupation_labels.get(code, code) for code in top_10[:5]]
-            self.logger.info(f"BWS phase complete. Top 5 occupations: {top_labels}")
+            # Log completion (counting scores)
+            wa_labels = bws_utils.load_wa_labels()
+            top_labels = [wa_labels.get(wa_id, wa_id) for wa_id in top_8[:5]]
+            self.logger.info(f"BWS phase complete. Top 5 tasks: {top_labels}")
+
+            # HB scoring — runs alongside counting, failure is non-fatal
+            try:
+                from app.agent.preference_elicitation_agent.bws_hb import run_hb_bws
+                all_wa_ids = list(bws_utils.load_wa_labels().keys())
+                hb_result = run_hb_bws(self._state.bws_responses, all_wa_ids, k=8)
+                self._state.hb_scores = {
+                    item.wa_id: {
+                        "mean":    item.mean,
+                        "sd":      item.sd,
+                        "ci_low":  item.ci_low,
+                        "ci_high": item.ci_high,
+                        "rank":    item.rank,
+                    }
+                    for item in hb_result.items
+                }
+                hb_top_labels = [wa_labels.get(wa_id, wa_id) for wa_id in hb_result.top_k[:5]]
+                self.logger.info(
+                    f"HB scoring complete (converged={hb_result.converged}). "
+                    f"Top 5 (HB): {hb_top_labels}"
+                )
+            except Exception as e:
+                self.logger.warning(f"HB scoring failed (counting scores still valid): {e}")
 
             return await self._handle_wrapup_phase("", context)
 
@@ -694,26 +717,21 @@ class PreferenceElicitationAgent(Agent):
         current_task = tasks[self._state.bws_tasks_completed]
         task_number = self._state.bws_tasks_completed + 1
 
-        message = bws_utils.format_bws_question(current_task, task_number, total_tasks)
+        message = bws_utils.format_bws_wa_question(current_task, task_number, total_tasks)
 
-        # Build metadata for structured UI rendering
-        occupation_groups = bws_utils.load_occupation_groups()
-        occupation_map = {occ["code"]: occ for occ in occupation_groups}
+        # Build metadata for structured UI rendering (matches frontend BWSTaskMetadata type)
+        wa_labels = bws_utils.load_wa_labels()
 
-        occupations_metadata = []
-        for occ_code in current_task["occupations"]:
-            occ_data = occupation_map.get(occ_code, {})
-            occupations_metadata.append({
-                "code": occ_code,
-                "label": occ_data.get("label", f"Occupation {occ_code}"),
-                "description": occ_data.get("description", "")
-            })
+        alternatives = [
+            {"wa_id": wa_id, "label": wa_labels.get(wa_id, wa_id)}
+            for wa_id in current_task["items"]
+        ]
 
         metadata = {
-            "interaction_type": "bws_task",
+            "task_id": str(self._state.bws_tasks_completed),
             "task_number": task_number,
             "total_tasks": total_tasks,
-            "occupations": occupations_metadata
+            "alternatives": alternatives,
         }
 
         self._state.bws_tasks_completed += 1
