@@ -4,7 +4,7 @@ Full Hybrid Preference Elicitation — Interactive Test.
 
 Combines everything into one script:
   • Full agent conversation flow
-      INTRO → EXPERIENCE_QUESTIONS → VIGNETTES → [FOLLOW_UP] → GATE (3 Qs) → BWS (12 tasks) → WRAPUP
+      INTRO → EXPERIENCE_QUESTIONS → VIGNETTES → [FOLLOW_UP] → GATE (3 Qs) → BWS (8 tasks) → WRAPUP
   • Vignette personalization
       Offline D-optimal vignettes rewritten by LLM for the user's background
   • Bayesian math panels shown live after every vignette
@@ -89,7 +89,7 @@ PHASE_META = {
     "VIGNETTES":            ("🎭", "green",        "Vignette Scenarios"),
     "FOLLOW_UP":            ("🔍", "yellow",       "Follow-Up Probe"),
     "GATE":                 ("🔑", "magenta",      "GATE Clarification (3 Qs)"),
-    "BWS":                  ("⚖️",  "orange1",      "Best-Worst Scaling (12 tasks)"),
+    "BWS":                  ("⚖️",  "orange1",      "Best-Worst Scaling (8 tasks)"),
     "WRAPUP":               ("📋", "green",        "Wrap-Up Summary"),
     "COMPLETE":             ("✅", "bright_green", "Complete"),
 }
@@ -415,7 +415,7 @@ def display_state_info(state: PreferenceElicitationAgentState):
     gate_status = "[green]✓ Complete[/]" if state.gate_complete else f"{state.gate_interventions_completed}/3 asked"
     t.add_row("GATE Progress", gate_status)
 
-    bws_status = "[green]✓ Complete[/]" if state.bws_phase_complete else f"{state.bws_tasks_completed}/12"
+    bws_status = "[green]✓ Complete[/]" if state.bws_phase_complete else f"{state.bws_tasks_completed}/8"
     t.add_row("BWS Progress", bws_status)
 
     if BAYESIAN_AVAILABLE and state.fisher_information_matrix is not None:
@@ -437,56 +437,94 @@ def display_state_info(state: PreferenceElicitationAgentState):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# HB display helper
+# ─────────────────────────────────────────────────────────────────────────────
+
+def display_hb_scores(state: PreferenceElicitationAgentState):
+    """Display HB utility scores table if available."""
+    if not state.hb_scores:
+        return
+
+    wa_labels = bws_utils.load_wa_labels()
+    t = Table(
+        title="HB Utility Scores (Bayesian estimates)",
+        box=box.ROUNDED,
+        show_lines=True,
+    )
+    t.add_column("#",              style="bold",    width=4,  justify="right")
+    t.add_column("WA_Element_ID",  style="dim",     width=16)
+    t.add_column("Work Activity",  style="cyan",    width=44)
+    t.add_column("Mean",           style="yellow",  width=8,  justify="right")
+    t.add_column("SD",             style="magenta", width=6,  justify="right")
+    t.add_column("95% CI",         style="green",   width=20, justify="center")
+
+    # Sort by rank
+    sorted_items = sorted(state.hb_scores.items(), key=lambda x: x[1]["rank"])
+    for wa_id, scores in sorted_items:
+        label  = wa_labels.get(wa_id, wa_id)
+        mean   = scores["mean"]
+        sd     = scores["sd"]
+        ci_low = scores["ci_low"]
+        ci_hi  = scores["ci_high"]
+        rank   = scores["rank"]
+        t.add_row(
+            str(rank),
+            wa_id,
+            label,
+            f"{mean:+.2f}",
+            f"{sd:.2f}",
+            f"[{ci_low:+.2f}, {ci_hi:+.2f}]",
+        )
+    console.print(t)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # BWS UI
 # ─────────────────────────────────────────────────────────────────────────────
 
 def display_bws_task(metadata: dict) -> str:
     """Render a BWS task and collect best/worst selection. Returns JSON string."""
-    task_num    = metadata.get("task_number", 0)
-    total       = metadata.get("total_tasks", 12)
-    occupations = metadata.get("occupations", [])
+    task_num = metadata.get("task_number", 0)
+    total    = metadata.get("total_tasks", 8)
+    items    = metadata.get("items", [])
 
     t = Table(
         title=f"[bold]BWS Task {task_num} of {total}[/]",
         box=box.ROUNDED,
         header_style="bold cyan",
     )
-    t.add_column("Option",   style="bold yellow", width=8)
-    t.add_column("Job Type", style="bold white",  width=40)
-    t.add_column("Examples", style="dim",         width=50)
+    t.add_column("Option",        style="bold yellow", width=8)
+    t.add_column("Work Activity", style="bold white",  width=60)
 
-    occ_map: dict[str, str] = {}
-    for i, occ in enumerate(occupations):
+    item_map: dict[str, str] = {}
+    for i, item in enumerate(items):
         letter = chr(65 + i)
-        occ_map[letter] = occ["code"]
-        label = occ["label"].title() if occ["label"].isupper() else occ["label"]
-        t.add_row(letter, label, occ.get("description", ""))
+        item_map[letter] = item["id"]
+        t.add_row(letter, item["label"])
     console.print(t)
 
     console.print("\n[bold]Select your preferences:[/]")
     while True:
-        most = console.input("[bold green]Which would you MOST like to do? (A-E): [/]").strip().upper()
-        if most in occ_map:
+        most = console.input("[bold green]Which would you MOST enjoy? (A-E): [/]").strip().upper()
+        if most in item_map:
             break
         print_error("Please enter a letter between A and E")
 
     while True:
-        least = console.input("[bold red]Which would you LEAST like to do? (A-E): [/]").strip().upper()
-        if least in occ_map:
+        least = console.input("[bold red]Which would you LEAST enjoy? (A-E): [/]").strip().upper()
+        if least in item_map:
             if least != most:
                 break
             print_error("You cannot pick the same option for both MOST and LEAST")
         else:
             print_error("Please enter a letter between A and E")
 
-    most_label  = next(o["label"] for o in occupations if o["code"] == occ_map[most])
-    least_label = next(o["label"] for o in occupations if o["code"] == occ_map[least])
-    most_label  = most_label.title()  if most_label.isupper()  else most_label
-    least_label = least_label.title() if least_label.isupper() else least_label
+    most_label  = next(o["label"] for o in items if o["id"] == item_map[most])
+    least_label = next(o["label"] for o in items if o["id"] == item_map[least])
     print_success(f"Most preferred:  {most} — {most_label}")
     print_success(f"Least preferred: {least} — {least_label}")
 
-    return json.dumps({"type": "bws_response", "best": occ_map[most], "worst": occ_map[least]})
+    return json.dumps({"type": "bws_response", "best": item_map[most], "worst": item_map[least]})
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -572,7 +610,7 @@ async def run_full_hybrid_session(use_adaptive: bool = True):
            "• Stopping criterion checked live after each vignette\n"
            if use_adaptive else "") +
         "• GATE asks 3 targeted clarifying questions after vignettes\n"
-        "• BWS ranks 12 occupation groups best-to-worst\n\n"
+        "• BWS ranks 37 work activities across 8 tasks\n\n"
         "[dim]Commands during chat:  quit | state | preferences | logs[/]",
         style="blue", box=box.ROUNDED,
     ))
@@ -707,25 +745,20 @@ async def run_full_hybrid_session(use_adaptive: bool = True):
                     print_agent(output.message_for_user)
 
                     # Build BWS task metadata from state
-                    tasks = bws_utils.load_bws_tasks()
+                    tasks = bws_utils.load_wa_tasks()
                     current_task_idx = state.bws_tasks_completed - 1  # already incremented
                     if 0 <= current_task_idx < len(tasks):
-                        current_task      = tasks[current_task_idx]
-                        occupation_groups = bws_utils.load_occupation_groups()
-                        occ_map_all       = {o["code"]: o for o in occupation_groups}
-                        occupations_meta  = [
-                            {
-                                "code":        code,
-                                "label":       occ_map_all.get(code, {}).get("label", f"Occupation {code}"),
-                                "description": occ_map_all.get(code, {}).get("description", ""),
-                            }
-                            for code in current_task["occupations"]
+                        current_task = tasks[current_task_idx]
+                        wa_labels    = bws_utils.load_wa_labels()
+                        items_meta   = [
+                            {"id": wa_id, "label": wa_labels.get(wa_id, wa_id)}
+                            for wa_id in current_task["items"]
                         ]
                         bws_meta = {
                             "interaction_type": "bws_task",
                             "task_number":      current_task_idx + 1,
                             "total_tasks":      len(tasks),
-                            "occupations":      occupations_meta,
+                            "items":            items_meta,
                         }
                         bws_response = display_bws_task(bws_meta)
                         bws_input    = AgentInput(message=bws_response, is_artificial=False)
@@ -794,12 +827,176 @@ async def run_full_hybrid_session(use_adaptive: bool = True):
             print_section("Personalization Log")
             display_personalization_logs(agent)
 
+        if state.hb_scores:
+            print_section("HB Utility Scores")
+            display_hb_scores(state)
+
         print_section("Session Stats")
         console.print(session_stats.get_summary_table())
         console.print(
             "\n[dim italic]Tokens include: conversation LLM + preference extractor + "
             "GATE LLM + metadata extractor + vignette personalizer.[/]"
         )
+
+    except Exception as exc:
+        print_error(f"Setup failed: {exc}")
+        import traceback
+        traceback.print_exc()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BWS-only session (skip INTRO / VIGNETTES / GATE)
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def run_bws_only_session():
+    """
+    Jump straight into the BWS phase — skips INTRO, EXPERIENCE_QUESTIONS,
+    VIGNETTES, FOLLOW_UP, and GATE by pre-setting state.
+    """
+    print_header("BWS Phase — Direct Test")
+    console.print(Panel(
+        "Skips to BWS immediately.\n\n"
+        "• 8 tasks × 5 ONET work activities\n"
+        "• Scores keyed by WA_Element_ID\n"
+        "• Final top-8 printed at the end\n\n"
+        "[dim]Commands: quit | state[/]",
+        style="orange1", box=box.ROUNDED,
+    ))
+
+    session_stats = SessionStats()
+
+    try:
+        agent = PreferenceElicitationAgent(
+            use_offline_with_personalization=False,
+        )
+
+        state = PreferenceElicitationAgentState(
+            session_id=99999,
+            use_db6_for_fresh_data=False,
+            use_adaptive_selection=False,
+            # Skip straight to BWS
+            conversation_phase="BWS",
+            gate_complete=True,
+        )
+        agent.set_state(state)
+        print_success("State initialized — phase set to BWS, GATE marked complete")
+
+        conversation_history = ConversationHistory()
+        turn_index = 0
+
+        while True:
+            if turn_index == 0:
+                user_message = ""
+                print_info("Starting BWS phase (first turn is automatic)...")
+            else:
+                raw = get_user_input("You: ")
+                if raw.lower() == "quit":
+                    print_info("Ending session...")
+                    break
+                elif raw.lower() == "state":
+                    display_state_info(state)
+                    continue
+                user_message = raw
+                print_user(user_message)
+
+            agent_input = AgentInput(message=user_message, is_artificial=(turn_index == 0))
+            context = ConversationContext(
+                all_history=conversation_history,
+                history=conversation_history,
+                summary="",
+            )
+
+            try:
+                with console.status("[bold green]Agent is thinking...", spinner="dots"):
+                    output = await agent.execute(agent_input, context)
+
+                current_phase = state.conversation_phase
+                print_phase_banner(current_phase)
+
+                if current_phase == "BWS" and not state.bws_phase_complete:
+                    print_agent(output.message_for_user)
+
+                    tasks = bws_utils.load_wa_tasks()
+                    current_task_idx = state.bws_tasks_completed - 1
+                    if 0 <= current_task_idx < len(tasks):
+                        current_task = tasks[current_task_idx]
+                        wa_labels    = bws_utils.load_wa_labels()
+                        items_meta   = [
+                            {"id": wa_id, "label": wa_labels.get(wa_id, wa_id)}
+                            for wa_id in current_task["items"]
+                        ]
+                        bws_meta = {
+                            "interaction_type": "bws_task",
+                            "task_number":      current_task_idx + 1,
+                            "total_tasks":      len(tasks),
+                            "items":            items_meta,
+                        }
+                        bws_response = display_bws_task(bws_meta)
+                        bws_input    = AgentInput(message=bws_response, is_artificial=False)
+
+                        with console.status("[bold green]Recording BWS response...", spinner="dots"):
+                            output = await agent.execute(bws_input, context)
+
+                        in_t  = sum(s.prompt_token_count for s in output.llm_stats)
+                        out_t = sum(s.response_token_count for s in output.llm_stats)
+                        session_stats.add_turn(in_t, out_t, output.agent_response_time_in_sec,
+                                               state.conversation_phase)
+                        turn_index += 1
+                        conversation_history.turns.append(
+                            ConversationTurn(index=turn_index, input=bws_input, output=output)
+                        )
+                else:
+                    print_agent(output.message_for_user)
+
+                in_t    = sum(s.prompt_token_count  for s in output.llm_stats)
+                out_t   = sum(s.response_token_count for s in output.llm_stats)
+                latency = output.agent_response_time_in_sec
+                session_stats.add_turn(in_t, out_t, latency, current_phase)
+
+                conversation_history.turns.append(
+                    ConversationTurn(index=turn_index, input=agent_input, output=output)
+                )
+                turn_index += 1
+
+                if output.finished or state.bws_phase_complete:
+                    print_success("BWS phase complete!")
+                    break
+
+            except Exception as exc:
+                print_error(f"Error during turn: {exc}")
+                import traceback
+                traceback.print_exc()
+                break
+
+        # ── Final BWS results ────────────────────────────────────────────────
+        print_header("BWS Results")
+
+        if state.bws_scores:
+            wa_labels = bws_utils.load_wa_labels()
+            t = Table(title="BWS Scores (all items)", box=box.ROUNDED, show_lines=True)
+            t.add_column("WA_Element_ID",  style="dim",    width=16)
+            t.add_column("Work Activity",  style="cyan",   width=50)
+            t.add_column("Score",          style="yellow", justify="right", width=8)
+            for wa_id, score in sorted(state.bws_scores.items(), key=lambda x: -x[1]):
+                t.add_row(wa_id, wa_labels.get(wa_id, wa_id), f"{score:+.0f}")
+            console.print(t)
+
+        if state.top_10_bws:
+            wa_labels = bws_utils.load_wa_labels()
+            t2 = Table(title="Top 8 Work Activities", box=box.ROUNDED)
+            t2.add_column("#",             style="bold",   width=4)
+            t2.add_column("WA_Element_ID", style="dim",    width=16)
+            t2.add_column("Work Activity", style="cyan",   width=50)
+            for rank, wa_id in enumerate(state.top_10_bws, 1):
+                t2.add_row(str(rank), wa_id, wa_labels.get(wa_id, wa_id))
+            console.print(t2)
+
+        if state.hb_scores:
+            print_section("HB Utility Scores")
+            display_hb_scores(state)
+
+        print_section("Session Stats")
+        console.print(session_stats.get_summary_table())
 
     except Exception as exc:
         print_error(f"Setup failed: {exc}")
@@ -835,10 +1032,14 @@ async def main():
     mode_choice = display_menu([
         "Hybrid + Adaptive Bayesian  (personalization + live posterior/FIM panels)",
         "Hybrid only                 (personalization, no Bayesian panels)",
+        "BWS only                    (skip straight to BWS phase — fast testing)",
     ])
 
     try:
-        await run_full_hybrid_session(use_adaptive=(mode_choice == 1))
+        if mode_choice == 3:
+            await run_bws_only_session()
+        else:
+            await run_full_hybrid_session(use_adaptive=(mode_choice == 1))
     except KeyboardInterrupt:
         print_info("\nInterrupted. Exiting.")
     except Exception as exc:
