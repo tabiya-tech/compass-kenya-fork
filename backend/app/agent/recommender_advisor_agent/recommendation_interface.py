@@ -217,7 +217,7 @@ class RecommendationInterface:
         province: Optional[str] = None,
         preference_vector: Optional[PreferenceVector] = None,
         skills_vector: Optional[dict] = None,
-        bws_occupation_scores: Optional[dict[str, float]] = None,
+        bws_scores: Optional[dict[str, float]] = None,
     ) -> Node2VecRecommendations:
         """
         Generate recommendations for a user.
@@ -230,7 +230,7 @@ class RecommendationInterface:
             province: User's province/state (required by matching service)
             preference_vector: Preference vector from Epic 2
             skills_vector: Skills vector from Epic 4
-            bws_occupation_scores: BWS occupation ranking from Epic 2
+            bws_scores: BWS ranking from Epic 2
 
         Returns:
             Node2VecRecommendations object (in agent format)
@@ -262,7 +262,7 @@ class RecommendationInterface:
                     youth_id=youth_id,
                     preference_vector=preference_vector,
                     skills_vector=skills_vector,
-                    bws_scores=bws_occupation_scores
+                    bws_scores=bws_scores
                 )
 
                 # Convert Jasmin's format to agent format

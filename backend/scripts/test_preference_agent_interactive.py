@@ -291,8 +291,8 @@ def display_state_info(state: PreferenceElicitationAgentState):
     # BWS progress
     bws_status = "[green]✓ Complete[/]" if state.bws_phase_complete else f"{state.bws_tasks_completed}/12"
     table.add_row("BWS Progress", bws_status)
-    if state.bws_phase_complete and state.top_10_occupations:
-        table.add_row("Top Occupations", f"{len(state.top_10_occupations)} ranked")
+    if state.bws_phase_complete and state.top_10_bws:
+        table.add_row("Top BWS Rankings", f"{len(state.top_10_bws)} ranked")
 
     console.print(table)
 

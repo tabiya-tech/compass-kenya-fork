@@ -54,7 +54,7 @@ class IntroPhaseHandler(BasePhaseHandler):
                 province=state.province,
                 preference_vector=state.preference_vector,
                 skills_vector=state.skills_vector,
-                bws_occupation_scores=state.bws_occupation_scores,
+                bws_scores=state.bws_scores,
             )
             self.logger.info(
                 f"Generated recommendations for {state.youth_id}: "

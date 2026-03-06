@@ -196,7 +196,7 @@ async def check_recommendations(user_id: str):
             province="Nairobi County",
             skills_vector=user_data['skills_vector'],
             preference_vector=user_data['preferences'],
-            bws_occupation_scores=None
+            bws_scores=None
         )
 
         print("\n✅ Recommendations Generated Successfully!")

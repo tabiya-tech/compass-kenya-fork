@@ -381,13 +381,13 @@ class ConversationService(IConversationService):
                     )
 
             # Extract BWS occupation scores from preference elicitation
-            if rec_state.bws_occupation_scores is None:
+            if rec_state.bws_scores is None:
                 pref_state = state.preference_elicitation_agent_state
-                if pref_state.occupation_scores:
-                    rec_state.bws_occupation_scores = pref_state.occupation_scores
+                if pref_state.bws_scores:
+                    rec_state.bws_scores = pref_state.bws_scores
                     self._logger.info(
-                        f"Loaded BWS occupation scores for recommender: "
-                        f"{len(pref_state.occupation_scores)} occupations"
+                        f"Loaded BWS scores for recommender: "
+                        f"{len(pref_state.bws_scores)} items"
                     )
 
             # Set youth_id (use session_id as fallback)
