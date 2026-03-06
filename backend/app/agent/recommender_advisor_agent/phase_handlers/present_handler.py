@@ -99,9 +99,16 @@ class PresentPhaseHandler(BasePhaseHandler):
         occupations = state.recommendations.occupation_recommendations[:5]
 
         if not occupations:
+            # Fall back to opportunity recommendations if no occupations are available
+            opportunities = state.recommendations.opportunity_recommendations[:5]
+            if opportunities:
+                self.logger.info(
+                    f"No occupation recommendations available; presenting {len(opportunities)} opportunity recommendations instead"
+                )
+                return await self._present_opportunities(user_input, state, context, opportunities)
             return ConversationResponse(
-                reasoning="No occupation recommendations",
-                message="I couldn't find suitable occupation recommendations. Let me try a different approach.",
+                reasoning="No occupation or opportunity recommendations available",
+                message="I couldn't find suitable career recommendations at this time. Let me try a different approach.",
                 finished=False
             ), []
 
@@ -216,6 +223,49 @@ class PresentPhaseHandler(BasePhaseHandler):
         response.metadata = metadata
 
         return response, all_llm_stats
+
+    async def _present_opportunities(
+        self,
+        user_input: str,
+        state: RecommenderAdvisorAgentState,
+        context: ConversationContext,
+        opportunities: list
+    ) -> tuple[ConversationResponse, list[LLMStats]]:
+        """Present job opportunity recommendations when no occupation recommendations are available."""
+        recs_summary = self._build_opportunities_summary(opportunities)
+
+        skills_list = self._extract_skills_list(state)
+        pref_vec_dict = state.preference_vector.model_dump() if state.preference_vector else {}
+        conv_history = ConversationHistoryFormatter.format_to_string(context)
+
+        context_block = build_context_block(
+            skills=skills_list,
+            preference_vector=pref_vec_dict,
+            recommendations_summary=recs_summary,
+            conversation_history=conv_history,
+            country_of_user=state.country_of_user
+        )
+
+        full_prompt = context_block + PRESENT_RECOMMENDATIONS_PROMPT + get_json_response_instructions()
+        response, llm_stats = await self._call_llm(full_prompt, user_input, context)
+        return response, llm_stats
+
+    def _build_opportunities_summary(self, opportunities: list) -> str:
+        """Build a summary of job opportunity recommendations for LLM context."""
+        lines = [
+            "**NOTE: No occupation career-path recommendations are available. "
+            "Present the following job opportunity (posting) recommendations instead.**\n",
+            "**Job Opportunities**:"
+        ]
+        for i, opp in enumerate(opportunities, 1):
+            lines.append(f"{i}. **{opp.opportunity_title}** (Rank: {opp.rank})")
+            lines.append(f"   - Location: {opp.location}")
+            if opp.final_score is not None:
+                lines.append(f"   - Match Score: {opp.final_score:.0%}")
+            eligible_label = "Yes" if opp.is_eligible else "No"
+            lines.append(f"   - Eligible: {eligible_label}")
+            lines.append("")
+        return '\n'.join(lines)
 
     def _build_detailed_recommendations_summary(self, occupations: list) -> str:
         """Build a detailed summary of occupation recommendations for LLM context."""
