@@ -188,28 +188,31 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
   }, [currentUserId]);
 
   // Depending on the typing state, add or remove the typing message from the messages list
-  const addOrRemoveTypingMessage = useCallback((userIsTyping: boolean) => {
-    if (userIsTyping) {
-      // Only add typing message if it doesn't already exist
-      const thinkingMessage =
-        currentPhase.phase === ConversationPhase.PREFERENCE_ELICITATION
-          ? t("chat.chatMessage.typingChatMessage.thinkingPreferenceElicitation")
-          : undefined;
-      setMessages((prevMessages) => {
-        // check if the last message is a typing message
-        const lastMessage = prevMessages[prevMessages.length - 1];
-        const hasTypingMessage = lastMessage?.type === CONVERSATION_CONCLUSION_CHAT_MESSAGE_TYPE;
+  const addOrRemoveTypingMessage = useCallback(
+    (userIsTyping: boolean) => {
+      if (userIsTyping) {
+        // Only add typing message if it doesn't already exist
+        const thinkingMessage =
+          currentPhase.phase === ConversationPhase.PREFERENCE_ELICITATION
+            ? t("chat.chatMessage.typingChatMessage.thinkingPreferenceElicitation")
+            : undefined;
+        setMessages((prevMessages) => {
+          // check if the last message is a typing message
+          const lastMessage = prevMessages[prevMessages.length - 1];
+          const hasTypingMessage = lastMessage?.type === CONVERSATION_CONCLUSION_CHAT_MESSAGE_TYPE;
 
-        if (!hasTypingMessage) {
-          return [...prevMessages, generateTypingMessage(undefined, thinkingMessage)];
-        }
-        return prevMessages;
-      });
-    } else {
-      // filter out the typing message
-      setMessages((prevMessages) => prevMessages.filter((message) => !message.type.startsWith("typing-message-")));
-    }
-  }, [currentPhase.phase, t]);
+          if (!hasTypingMessage) {
+            return [...prevMessages, generateTypingMessage(undefined, thinkingMessage)];
+          }
+          return prevMessages;
+        });
+      } else {
+        // filter out the typing message
+        setMessages((prevMessages) => prevMessages.filter((message) => !message.type.startsWith("typing-message-")));
+      }
+    },
+    [currentPhase.phase, t]
+  );
 
   const recordChatResponseMetrics = useCallback(
     ({
@@ -790,7 +793,11 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
                 return generateUserMessage(message.message, message.sent_at);
               }
               if (message.message_type === "BWS_TASK" && message.metadata) {
-                return generateBWSTaskMessage(message.message_id, message.metadata, (t, b, w) => handleBWSSubmitRef.current?.(t, b, w) ?? Promise.resolve());
+                return generateBWSTaskMessage(
+                  message.message_id,
+                  message.metadata,
+                  (t, b, w) => handleBWSSubmitRef.current?.(t, b, w) ?? Promise.resolve()
+                );
               }
               return generateCompassMessage(message.message_id, message.message, message.sent_at, message.reaction);
             });
