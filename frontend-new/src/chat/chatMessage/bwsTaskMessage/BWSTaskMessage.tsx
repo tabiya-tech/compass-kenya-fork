@@ -48,8 +48,7 @@ const BWSTaskMessage: React.FC<BWSTaskMessageProps> = ({ taskId, taskNumber, tot
 
   const getLetter = (idx: number): Letter => LETTERS[idx];
 
-  const getAlternativeByLetter = (letter: Letter): BWSAlternative | undefined =>
-    alternatives[LETTERS.indexOf(letter)];
+  const getAlternativeByLetter = (letter: Letter): BWSAlternative | undefined => alternatives[LETTERS.indexOf(letter)];
 
   // Compose the task description text shown in the top box
   const descriptionLines = alternatives.map((alt, idx) => `${getLetter(idx)}. ${alt.label}`).join("\n");

@@ -145,7 +145,9 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
   const initializingRef = useRef(false);
   const [initialized, setInitialized] = useState<boolean>(false);
   // Stable ref for handleBWSSubmit — avoids a circular dep between sendMessage and handleBWSSubmit
-  const handleBWSSubmitRef = useRef<((taskId: string, bestWaId: string, worstWaId: string) => Promise<void>) | null>(null);
+  const handleBWSSubmitRef = useRef<((taskId: string, bestWaId: string, worstWaId: string) => Promise<void>) | null>(
+    null
+  );
 
   // Experiences that have been processed
   const exploredExperiencesCount = useMemo(
@@ -677,7 +679,13 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
           const isConclusionMessage = response.conversation_completed && idx === response.messages.length - 1;
           if (!isConclusionMessage) {
             if (messageItem.message_type === "BWS_TASK" && messageItem.metadata) {
-              addMessageToChat(generateBWSTaskMessage(messageItem.message_id, messageItem.metadata, (t, b, w) => handleBWSSubmitRef.current?.(t, b, w) ?? Promise.resolve()));
+              addMessageToChat(
+                generateBWSTaskMessage(
+                  messageItem.message_id,
+                  messageItem.metadata,
+                  (t, b, w) => handleBWSSubmitRef.current?.(t, b, w) ?? Promise.resolve()
+                )
+              );
             } else {
               addMessageToChat(
                 generateCompassMessage(
