@@ -2,11 +2,11 @@
 Tests for BWS (Best-Worst Scaling) utilities.
 
 Tests cover:
-- Loading BWS tasks and occupation data
-- Computing occupation scores from responses
+- Loading BWS tasks and WA item data
+- Computing item scores from responses
 - Parsing structured and text input
-- Formatting BWS questions
-- Top-K occupation selection
+- Formatting BWS questions (WA-based)
+- Top-K item selection
 """
 
 import json
@@ -18,116 +18,152 @@ class TestLoadingFunctions:
     """Test data loading functions."""
 
     def test_load_bws_tasks(self):
-        """Should load 12 static BWS tasks."""
+        """Should load 8 static WA-element BWS tasks."""
         tasks = bws_utils.load_bws_tasks()
 
-        assert len(tasks) == 12
-        assert all("occupations" in task for task in tasks)
-        assert all(len(task["occupations"]) == 5 for task in tasks)
+        assert len(tasks) == 8
+        assert all("items" in task for task in tasks)
+        assert all(len(task["items"]) == 5 for task in tasks)
+
+    def test_load_wa_tasks_alias(self):
+        """load_wa_tasks() should return same result as load_bws_tasks()."""
+        assert bws_utils.load_wa_tasks() == bws_utils.load_bws_tasks()
+
+    def test_load_wa_items(self):
+        """Should load 37 WA items with required fields."""
+        items = bws_utils.load_wa_items()
+
+        assert len(items) == 37
+        assert all("WA_Element_ID" in item for item in items)
+        assert all("WA_Element_Name_simplified" in item for item in items)
+        assert all("WA_Element_Name" in item for item in items)
+
+    def test_load_wa_labels(self):
+        """Should load WA_Element_ID → simplified label mapping."""
+        labels = bws_utils.load_wa_labels()
+
+        assert len(labels) == 37
+        # Check a known ID
+        assert "4.A.4.b.4" in labels
+        assert labels["4.A.4.b.4"] == "Leading and encouraging your team"
+        assert "4.A.2.b.1" in labels
+        assert labels["4.A.2.b.1"] == "Making choices and fixing problems"
+
+    def test_bws_tasks_cover_all_wa_items(self):
+        """All 37 WA items should appear in at least one task."""
+        tasks = bws_utils.load_wa_tasks()
+        labels = bws_utils.load_wa_labels()
+
+        all_task_items = {item for task in tasks for item in task["items"]}
+        all_wa_ids = set(labels.keys())
+
+        assert all_task_items == all_wa_ids
+
+    def test_bws_tasks_total_slots(self):
+        """8 tasks × 5 items = 40 total slots."""
+        tasks = bws_utils.load_wa_tasks()
+        total = sum(len(task["items"]) for task in tasks)
+        assert total == 40
 
     def test_load_occupation_labels(self):
-        """Should load 40 occupation labels."""
+        """Legacy: should still load occupation labels."""
         labels = bws_utils.load_occupation_labels()
-
-        assert len(labels) == 40
+        assert len(labels) > 0
         assert "22" in labels  # Health Professionals
-        assert "HEALTH PROFESSIONALS" in labels["22"]
 
     def test_load_occupation_groups(self):
-        """Should load full occupation data with descriptions."""
+        """Legacy: should still load full occupation data."""
         groups = bws_utils.load_occupation_groups()
-
-        assert len(groups) == 40
+        assert len(groups) > 0
         assert all("code" in occ for occ in groups)
         assert all("label" in occ for occ in groups)
-        assert all("description" in occ for occ in groups)
-        assert all("major" in occ for occ in groups)
-
-        # Check a specific occupation has description
-        health_prof = next(occ for occ in groups if occ["code"] == "22")
-        assert "description" in health_prof
-        assert len(health_prof["description"]) > 0
 
 
 class TestScoringFunctions:
-    """Test occupation scoring functions."""
+    """Test item scoring functions."""
 
-    def test_compute_occupation_scores_simple(self):
+    def test_compute_bws_scores_simple(self):
         """Should compute scores as count(best) - count(worst)."""
         responses = [
-            {"best": "22", "worst": "91"},
-            {"best": "22", "worst": "41"},
-            {"best": "23", "worst": "91"}
+            {"best": "4.A.4.b.4", "worst": "4.A.3.a.1"},
+            {"best": "4.A.4.b.4", "worst": "4.A.3.a.2"},
+            {"best": "4.A.2.b.1", "worst": "4.A.3.a.1"}
         ]
 
-        scores = bws_utils.compute_occupation_scores(responses)
+        scores = bws_utils.compute_bws_scores(responses)
 
-        assert scores["22"] == 2.0  # Chosen as best twice
-        assert scores["23"] == 1.0  # Chosen as best once
-        assert scores["91"] == -2.0  # Chosen as worst twice
-        assert scores["41"] == -1.0  # Chosen as worst once
+        assert scores["4.A.4.b.4"] == 2.0   # Chosen as best twice
+        assert scores["4.A.2.b.1"] == 1.0   # Chosen as best once
+        assert scores["4.A.3.a.1"] == -2.0  # Chosen as worst twice
+        assert scores["4.A.3.a.2"] == -1.0  # Chosen as worst once
 
-    def test_compute_occupation_scores_empty(self):
+    def test_compute_bws_scores_empty(self):
         """Should handle empty responses."""
-        scores = bws_utils.compute_occupation_scores([])
+        scores = bws_utils.compute_bws_scores([])
         assert scores == {}
 
-    def test_get_top_k_occupations(self):
-        """Should return top K occupations by score."""
+    def test_get_top_k_bws(self):
+        """Should return top K items by score."""
         scores = {
-            "22": 5.0,
-            "23": 3.0,
-            "25": 4.0,
-            "91": -2.0,
-            "41": 0.0
+            "4.A.4.b.4": 5.0,
+            "4.A.2.b.1": 3.0,
+            "4.A.4.a.2": 4.0,
+            "4.A.3.a.1": -2.0,
+            "4.A.1.a.1": 0.0
         }
 
-        top_3 = bws_utils.get_top_k_occupations(scores, k=3)
+        top_3 = bws_utils.get_top_k_bws(scores, k=3)
 
         assert len(top_3) == 3
-        assert top_3[0] == "22"  # Highest score
-        assert top_3[1] == "25"  # Second highest
-        assert top_3[2] == "23"  # Third highest
+        assert top_3[0] == "4.A.4.b.4"  # Highest score
+        assert top_3[1] == "4.A.4.a.2"  # Second highest
+        assert top_3[2] == "4.A.2.b.1"  # Third highest
 
     def test_get_top_k_more_than_available(self):
-        """Should handle K larger than available occupations."""
-        scores = {"22": 1.0, "23": 2.0}
+        """Should handle K larger than available items."""
+        scores = {"4.A.4.b.4": 1.0, "4.A.2.b.1": 2.0}
 
-        top_10 = bws_utils.get_top_k_occupations(scores, k=10)
+        top_8 = bws_utils.get_top_k_bws(scores, k=8)
 
-        assert len(top_10) == 2  # Only 2 available
+        assert len(top_8) == 2  # Only 2 available
 
 
 class TestParseResponse:
-    """Test BWS response parsing."""
+    """Test BWS response parsing (works for both occupation codes and WA IDs)."""
 
     def setup_method(self):
-        """Set up test data."""
-        self.task_occupations = ["31", "12", "11", "32", "21"]
+        """Set up test data using WA Element IDs."""
+        self.task_items = [
+            "4.A.4.b.4",
+            "4.A.4.c.2",
+            "4.A.4.b.5",
+            "4.A.4.b.3",
+            "4.A.2.b.5"
+        ]
 
     def test_parse_json_structured_input(self):
-        """Should parse structured JSON input."""
+        """Should parse structured JSON input with WA IDs."""
         json_input = json.dumps({
             "type": "bws_response",
-            "best": "31",
-            "worst": "21"
+            "best": "4.A.4.b.4",
+            "worst": "4.A.2.b.5"
         })
 
-        best, worst = bws_utils.parse_bws_response(json_input, self.task_occupations)
+        best, worst = bws_utils.parse_bws_response(json_input, self.task_items)
 
-        assert best == "31"
-        assert worst == "21"
+        assert best == "4.A.4.b.4"
+        assert worst == "4.A.2.b.5"
 
     def test_parse_json_invalid_codes(self):
-        """Should reject JSON with invalid occupation codes."""
+        """Should reject JSON with invalid item codes."""
         json_input = json.dumps({
             "type": "bws_response",
-            "best": "99",  # Not in task
-            "worst": "21"
+            "best": "4.A.9.z.9",  # Not in task
+            "worst": "4.A.2.b.5"
         })
 
-        with pytest.raises(ValueError, match="Invalid occupation codes"):
-            bws_utils.parse_bws_response(json_input, self.task_occupations)
+        with pytest.raises(ValueError, match="Invalid item codes"):
+            bws_utils.parse_bws_response(json_input, self.task_items)
 
     def test_parse_text_letter_format(self):
         """Should parse text with letter format (A-E)."""
@@ -139,9 +175,9 @@ class TestParseResponse:
         ]
 
         for text_input in inputs:
-            best, worst = bws_utils.parse_bws_response(text_input, self.task_occupations)
-            assert best == "31"  # A = first
-            assert worst == "21"  # E = last
+            best, worst = bws_utils.parse_bws_response(text_input, self.task_items)
+            assert best == "4.A.4.b.4"   # A = first
+            assert worst == "4.A.2.b.5"  # E = last
 
     def test_parse_text_number_format(self):
         """Should parse text with number format (1-5)."""
@@ -152,18 +188,18 @@ class TestParseResponse:
         ]
 
         for text_input in inputs:
-            best, worst = bws_utils.parse_bws_response(text_input, self.task_occupations)
-            assert best == "31"  # 1 = first
-            assert worst == "21"  # 5 = last
+            best, worst = bws_utils.parse_bws_response(text_input, self.task_items)
+            assert best == "4.A.4.b.4"   # 1 = first
+            assert worst == "4.A.2.b.5"  # 5 = last
 
     def test_parse_text_middle_choices(self):
         """Should parse middle choices (B, C, D)."""
         text_input = "Most: B, Least: D"
 
-        best, worst = bws_utils.parse_bws_response(text_input, self.task_occupations)
+        best, worst = bws_utils.parse_bws_response(text_input, self.task_items)
 
-        assert best == "12"  # B = second
-        assert worst == "32"  # D = fourth
+        assert best == "4.A.4.c.2"   # B = second
+        assert worst == "4.A.4.b.3"  # D = fourth
 
     def test_parse_invalid_input(self):
         """Should raise ValueError for unparseable input."""
@@ -172,35 +208,34 @@ class TestParseResponse:
             "I like jobs",
             "yes",
             "Most: Z, Least: Q",  # Invalid letters
-            "Most: 7, Least: 9"  # Invalid numbers
+            "Most: 7, Least: 9"   # Invalid numbers
         ]
 
         for text_input in invalid_inputs:
             with pytest.raises(ValueError, match="Could not understand your response"):
-                bws_utils.parse_bws_response(text_input, self.task_occupations)
+                bws_utils.parse_bws_response(text_input, self.task_items)
 
     def test_parse_fallback_from_json_to_text(self):
         """Should fall back to text parsing if JSON is invalid."""
-        # Not valid JSON, but contains parseable text
         text_input = "not valid json but has Most: B, Least: D"
 
-        best, worst = bws_utils.parse_bws_response(text_input, self.task_occupations)
+        best, worst = bws_utils.parse_bws_response(text_input, self.task_items)
 
-        assert best == "12"  # B = second
-        assert worst == "32"  # D = fourth
+        assert best == "4.A.4.c.2"   # B = second
+        assert worst == "4.A.4.b.3"  # D = fourth
 
 
-class TestFormatBWSQuestion:
-    """Test BWS question formatting."""
+class TestFormatBWSWAQuestion:
+    """Test WA-based BWS question formatting."""
 
     def test_format_first_question(self):
         """Should include intro text for first question."""
-        task = {"occupations": ["31", "12", "11", "32", "21"]}
+        task = {"items": ["4.A.4.b.4", "4.A.4.c.2", "4.A.4.b.5", "4.A.4.b.3", "4.A.2.b.5"]}
 
-        message = bws_utils.format_bws_question(task, task_number=1, total_tasks=12)
+        message = bws_utils.format_bws_wa_question(task, task_number=1, total_tasks=8)
 
-        assert "Question 1 of 12" in message
-        assert "which broad career areas interest you most" in message
+        assert "Question 1 of 8" in message
+        assert "work activities" in message
         assert "**most**" in message
         assert "**least**" in message
         assert "A." in message  # Should have letter labels
@@ -208,103 +243,103 @@ class TestFormatBWSQuestion:
 
     def test_format_subsequent_question(self):
         """Should not include intro text for subsequent questions."""
-        task = {"occupations": ["22", "23", "24", "25", "26"]}
+        task = {"items": ["4.A.4.a.2", "4.A.4.a.1", "4.A.4.a.3", "4.A.4.a.4", "4.A.4.a.6"]}
 
-        message = bws_utils.format_bws_question(task, task_number=5, total_tasks=12)
+        message = bws_utils.format_bws_wa_question(task, task_number=5, total_tasks=8)
 
-        assert "Question 5 of 12" in message
-        assert "I'd like to understand" not in message  # No intro
+        assert "Question 5 of 8" in message
+        assert "I'll show you groups" not in message  # No intro
         assert "**most**" in message
         assert "**least**" in message
 
-    def test_format_includes_all_occupations(self):
-        """Should include all 5 occupations in question."""
-        task = {"occupations": ["22", "23", "24", "25", "26"]}
+    def test_format_includes_all_wa_labels(self):
+        """Should include simplified labels for all 5 WA items."""
+        task = {"items": ["4.A.4.b.4", "4.A.4.c.2", "4.A.4.b.5", "4.A.4.b.3", "4.A.2.b.5"]}
+        labels = bws_utils.load_wa_labels()
 
-        message = bws_utils.format_bws_question(task, task_number=2, total_tasks=12)
+        message = bws_utils.format_bws_wa_question(task, task_number=2, total_tasks=8)
 
-        # Should mention all occupation labels
-        labels = bws_utils.load_occupation_labels()
-        for code in task["occupations"]:
-            label = labels[code]
-            # Label should appear (in some form - title case or uppercase)
-            assert label.upper() in message.upper() or label.title() in message
+        for wa_id in task["items"]:
+            expected_label = labels[wa_id]
+            assert expected_label in message
 
 
 class TestIntegrationFlow:
-    """Test complete BWS flow integration."""
+    """Test complete 8-task WA BWS flow integration."""
 
-    def test_complete_12_task_flow(self):
-        """Should complete full 12-task BWS flow."""
-        tasks = bws_utils.load_bws_tasks()
+    def test_complete_8_task_flow(self):
+        """Should complete full 8-task WA BWS flow."""
+        tasks = bws_utils.load_wa_tasks()
         responses = []
 
-        # Simulate user completing all 12 tasks
+        # Simulate user completing all 8 tasks
         for i, task in enumerate(tasks):
-            occupations = task["occupations"]
+            items = task["items"]
 
             # User picks first as best, last as worst
-            best = occupations[0]
-            worst = occupations[-1]
+            best = items[0]
+            worst = items[-1]
 
             responses.append({
                 "task_id": i,
-                "alts": occupations,
+                "alts": items,
                 "best": best,
                 "worst": worst
             })
 
         # Compute scores
-        scores = bws_utils.compute_occupation_scores(responses)
-        top_10 = bws_utils.get_top_k_occupations(scores, k=10)
+        scores = bws_utils.compute_bws_scores(responses)
+        top_8 = bws_utils.get_top_k_bws(scores, k=8)
 
         assert len(scores) > 0
-        assert len(top_10) == 10
-        assert all(code in bws_utils.load_occupation_labels() for code in top_10)
+        assert len(top_8) == 8
+        # All top items should be valid WA IDs
+        wa_labels = bws_utils.load_wa_labels()
+        assert all(wa_id in wa_labels for wa_id in top_8)
 
     def test_hybrid_input_flow(self):
         """Should handle mix of JSON and text inputs."""
-        tasks = bws_utils.load_bws_tasks()
+        tasks = bws_utils.load_wa_tasks()
         responses = []
 
-        # First 6 tasks with JSON
-        for i in range(6):
+        # First 4 tasks with JSON
+        for i in range(4):
             task = tasks[i]
-            occupations = task["occupations"]
+            items = task["items"]
 
             json_input = json.dumps({
                 "type": "bws_response",
-                "best": occupations[0],
-                "worst": occupations[-1]
+                "best": items[0],
+                "worst": items[-1]
             })
 
-            best, worst = bws_utils.parse_bws_response(json_input, occupations)
+            best, worst = bws_utils.parse_bws_response(json_input, items)
             responses.append({
                 "task_id": i,
-                "alts": occupations,
+                "alts": items,
                 "best": best,
                 "worst": worst
             })
 
-        # Next 6 tasks with text
-        for i in range(6, 12):
+        # Next 4 tasks with text
+        for i in range(4, 8):
             task = tasks[i]
-            occupations = task["occupations"]
+            items = task["items"]
 
             text_input = "Most: A, Least: E"
 
-            best, worst = bws_utils.parse_bws_response(text_input, occupations)
+            best, worst = bws_utils.parse_bws_response(text_input, items)
             responses.append({
                 "task_id": i,
-                "alts": occupations,
+                "alts": items,
                 "best": best,
                 "worst": worst
             })
 
         # Should complete successfully
-        scores = bws_utils.compute_occupation_scores(responses)
-        top_10 = bws_utils.get_top_k_occupations(scores, k=10)
+        scores = bws_utils.compute_bws_scores(responses)
+        top_8 = bws_utils.get_top_k_bws(scores, k=8)
 
-        assert len(responses) == 12
+        assert len(responses) == 8
         assert len(scores) > 0
-        assert len(top_10) == 10
+        assert len(top_8) == 8

@@ -2,61 +2,55 @@
   "tasks": [
     {
       "task_id": 0,
-      "occupations": ["11", "21", "41", "61", "91"]
+      "theme": "Leadership & People Management",
+      "items": ["4.A.4.b.4", "4.A.4.c.2", "4.A.4.b.5", "4.A.4.b.3", "4.A.2.b.5"]
     },
     {
       "task_id": 1,
-      "occupations": ["22", "31", "51", "71", "81"]
+      "theme": "Communication & Relationships",
+      "items": ["4.A.4.a.2", "4.A.4.a.1", "4.A.4.a.3", "4.A.4.a.4", "4.A.4.a.6"]
     },
     {
       "task_id": 2,
-      "occupations": ["12", "31", "62", "82", "92"]
+      "theme": "Analysis & Problem Solving",
+      "items": ["4.A.2.b.1", "4.A.2.a.4", "4.A.1.a.1", "4.A.2.a.1", "4.A.2.a.2"]
     },
     {
       "task_id": 3,
-      "occupations": ["23", "42", "52", "72", "93"]
+      "theme": "Creative & Strategic Thinking",
+      "items": ["4.A.2.b.4", "4.A.2.b.2", "4.A.2.b.3", "4.A.2.b.6", "4.A.1.a.2"]
     },
     {
       "task_id": 4,
-      "occupations": ["13", "32", "53", "83", "94"]
+      "theme": "Selling, Advising & Helping",
+      "items": ["4.A.4.a.6", "4.A.4.b.6", "4.A.4.a.7", "4.A.4.a.5", "4.A.4.a.8"]
     },
     {
       "task_id": 5,
-      "occupations": ["24", "32", "43", "63", "73"]
+      "theme": "Physical & Operational Work",
+      "items": ["4.A.3.a.3", "4.A.3.a.1", "4.A.3.a.4", "4.A.3.a.2", "4.A.3.b.4"]
     },
     {
       "task_id": 6,
-      "occupations": ["11", "25", "34", "51", "91"]
+      "theme": "Administration & Records",
+      "items": ["4.A.3.b.6", "4.A.4.c.1", "4.A.4.c.3", "4.A.1.b.2", "4.A.2.a.3"]
     },
     {
       "task_id": 7,
-      "occupations": ["14", "41", "61", "74", "95"]
-    },
-    {
-      "task_id": 8,
-      "occupations": ["26", "35", "52", "62", "81"]
-    },
-    {
-      "task_id": 9,
-      "occupations": ["12", "33", "44", "75", "96"]
-    },
-    {
-      "task_id": 10,
-      "occupations": ["21", "54", "63", "83", "92"]
-    },
-    {
-      "task_id": 11,
-      "occupations": ["13", "42", "53", "71", "82"]
+      "theme": "Mixed / Cross-cutting",
+      "items": ["4.A.3.b.1", "4.A.1.b.3", "4.A.1.b.1", "4.A.1.a.2", "4.A.2.b.3"]
     }
   ],
   "metadata": {
-    "n_tasks": 12,
+    "n_tasks": 8,
     "alts_per_task": 5,
-    "total_occupations": 40,
+    "total_unique_items": 37,
+    "total_slots": 40,
+    "repeated_items": ["4.A.4.a.6", "4.A.2.b.3", "4.A.1.a.2"],
     "coverage_stats": {
       "min": 1,
       "max": 2,
-      "avg": 1.5
+      "avg": 1.08
     }
   }
 }
