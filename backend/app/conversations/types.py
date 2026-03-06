@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import Literal, Optional
 
 from pydantic import BaseModel, field_serializer, field_validator, Field
 from enum import Enum
@@ -55,6 +56,12 @@ class ConversationMessage(BaseModel):
     """The sender of the message, either USER or COMPASS"""
     reaction: MessageReaction | None = None
     """Optional reaction to the message"""
+
+    message_type: Literal["TEXT", "BWS_TASK"] = "TEXT"
+    """Type of message — TEXT for normal chat, BWS_TASK for interactive BWS card"""
+
+    metadata: Optional[dict] = None
+    """Structured payload for interactive message types (e.g. BWS task alternatives)"""
 
     @field_serializer('sent_at')
     def serialize_sent_at(self, value: datetime) -> str:

@@ -5,6 +5,7 @@ import ChatList from "src/chat/chatList/ChatList";
 import { IChatMessage } from "src/chat/Chat.types";
 import {
   CANCELLABLE_CV_TYPING_CHAT_MESSAGE_TYPE,
+  generateBWSTaskMessage,
   generateCancellableCVTypingMessage,
   generateCompassMessage,
   generateConversationConclusionMessage,
@@ -143,6 +144,8 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
 
   const initializingRef = useRef(false);
   const [initialized, setInitialized] = useState<boolean>(false);
+  // Stable ref for handleBWSSubmit — avoids a circular dep between sendMessage and handleBWSSubmit
+  const handleBWSSubmitRef = useRef<((taskId: string, bestWaId: string, worstWaId: string) => Promise<void>) | null>(null);
 
   // Experiences that have been processed
   const exploredExperiencesCount = useMemo(
@@ -637,11 +640,13 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
 
   // Goes to the chat service to send a message
   const sendMessage = useCallback(
-    async (userMessage: string, sessionId: number) => {
+    async (userMessage: string, sessionId: number, displayMessage?: string) => {
       setAiIsTyping(true);
-      if (userMessage) {
+      // displayMessage="" suppresses the bubble; undefined = use userMessage as display
+      const chatText = displayMessage !== undefined ? displayMessage : userMessage;
+      if (chatText) {
         // optimistically add the user's message for a more responsive feel
-        const message = generateUserMessage(userMessage, new Date().toISOString());
+        const message = generateUserMessage(chatText, new Date().toISOString());
         addMessageToChat(message);
       }
 
@@ -671,14 +676,18 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
         response.messages.forEach((messageItem, idx) => {
           const isConclusionMessage = response.conversation_completed && idx === response.messages.length - 1;
           if (!isConclusionMessage) {
-            addMessageToChat(
-              generateCompassMessage(
-                messageItem.message_id,
-                messageItem.message,
-                messageItem.sent_at,
-                messageItem.reaction
-              )
-            );
+            if (messageItem.message_type === "BWS_TASK" && messageItem.metadata) {
+              addMessageToChat(generateBWSTaskMessage(messageItem.message_id, messageItem.metadata, (t, b, w) => handleBWSSubmitRef.current?.(t, b, w) ?? Promise.resolve()));
+            } else {
+              addMessageToChat(
+                generateCompassMessage(
+                  messageItem.message_id,
+                  messageItem.message,
+                  messageItem.sent_at,
+                  messageItem.reaction
+                )
+              );
+            }
           }
         });
         // Handle the conclusion message and skills ranking flow for new messages
@@ -772,6 +781,9 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
               if (message.sender === ConversationMessageSender.USER) {
                 return generateUserMessage(message.message, message.sent_at);
               }
+              if (message.message_type === "BWS_TASK" && message.metadata) {
+                return generateBWSTaskMessage(message.message_id, message.metadata, handleBWSSubmit);
+              }
               return generateCompassMessage(message.message_id, message.message, message.sent_at, message.reaction);
             });
 
@@ -843,6 +855,18 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
     },
     [sendMessage, activeSessionId]
   );
+
+  // Handles BWS task card submission — encodes the selection as JSON and sends via the normal message path
+  const handleBWSSubmit = useCallback(
+    async (taskId: string, bestWaId: string, worstWaId: string) => {
+      const payload = JSON.stringify({ type: "bws_response", task_id: taskId, best: bestWaId, worst: worstWaId });
+      // Pass "" as displayMessage to suppress the raw JSON from appearing in the chat
+      await sendMessage(payload, activeSessionId!, "");
+    },
+    [sendMessage, activeSessionId]
+  );
+  // Keep the ref current so sendMessage/initializeChat can use it without a circular dep
+  handleBWSSubmitRef.current = handleBWSSubmit;
 
   /**
    * --- Callbacks for child components ---

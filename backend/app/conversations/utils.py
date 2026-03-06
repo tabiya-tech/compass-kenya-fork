@@ -61,12 +61,19 @@ async def filter_conversation_history(history: 'ConversationHistory', reactions_
                 compass_reaction = reaction
                 reactions_for_session.pop(i)
                 break
+        # Determine message_type from metadata interaction_type if present
+        _output_metadata = turn.output.metadata if hasattr(turn.output, 'metadata') else None
+        _message_type = "TEXT"
+        if _output_metadata and _output_metadata.get("task_id") is not None and "alternatives" in _output_metadata:
+            _message_type = "BWS_TASK"
         messages.append(ConversationMessage(
             message_id=turn.output.message_id,
             message=turn.output.message_for_user,
             sent_at=turn.output.sent_at.astimezone(timezone.utc).isoformat(),
             sender=ConversationMessageSender.COMPASS,
-            reaction=_convert_to_message_reaction(compass_reaction)
+            reaction=_convert_to_message_reaction(compass_reaction),
+            message_type=_message_type,
+            metadata=_output_metadata,
         ))
     return messages
 
@@ -88,11 +95,17 @@ async def get_messages_from_conversation_manager(context: 'ConversationContext',
     messages = []
     for turn in context.all_history.turns[from_index:]:
         turn.output.sent_at = datetime.now(timezone.utc)
+        _output_metadata = turn.output.metadata if hasattr(turn.output, 'metadata') else None
+        _message_type = "TEXT"
+        if _output_metadata and _output_metadata.get("task_id") is not None and "alternatives" in _output_metadata:
+            _message_type = "BWS_TASK"
         messages.append(ConversationMessage(
             message_id=turn.output.message_id,
             message=turn.output.message_for_user,
             sent_at=turn.output.sent_at.astimezone(timezone.utc).isoformat(),
             sender=ConversationMessageSender.COMPASS,
+            message_type=_message_type,
+            metadata=_output_metadata,
         ))
     return messages
 

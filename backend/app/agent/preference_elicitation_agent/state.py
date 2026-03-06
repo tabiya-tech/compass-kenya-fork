@@ -68,14 +68,27 @@ class PreferenceElicitationAgentState(BaseModel):
     Format: [{"task_id": 0, "alts": ["11","21","31","41","51"], "best": "21", "worst": "41"}, ...]
     """
 
-    occupation_scores: Optional[dict[str, float]] = None
+    bws_scores: Optional[dict[str, float]] = None
     """
-    Simple scoring for each occupation (code → score).
+    Simple BWS scoring for each item (code → score).
     Score = count(best) - count(worst)
+    Works for both occupation codes (e.g. "21") and task/WA codes (e.g. "4.A.4.b.4").
     """
 
-    top_10_occupations: list[str] = Field(default_factory=list)
-    """Top 10 occupation codes ranked by BWS scores"""
+    hb_scores: Optional[dict[str, Any]] = None
+    """
+    HB utility scores per WA item. Structure:
+    {
+      "4.A.3.b.1": {"mean": 0.82, "sd": 0.31, "ci_low": 0.21, "ci_high": 1.43, "rank": 1},
+      ...
+    }
+    Stored as plain dict for MongoDB serialisation.
+    Produced by bws_hb.run_hb_bws() after BWS phase completes.
+    Complements bws_scores (count-based) with continuous utility estimates.
+    """
+
+    top_10_bws: list[str] = Field(default_factory=list)
+    """Top 10 codes ranked by BWS scores (occupation or task codes)"""
 
     completed_vignettes: list[str] = Field(default_factory=list)
     """List of vignette IDs that have been completed"""
@@ -256,8 +269,9 @@ class PreferenceElicitationAgentState(BaseModel):
             bws_phase_complete=doc.get("bws_phase_complete", False),
             bws_tasks_completed=doc.get("bws_tasks_completed", 0),
             bws_responses=list(doc.get("bws_responses", [])),
-            occupation_scores=doc.get("occupation_scores"),
-            top_10_occupations=list(doc.get("top_10_occupations", [])),
+            bws_scores=doc.get("bws_scores") or doc.get("occupation_scores"),
+            hb_scores=doc.get("hb_scores"),
+            top_10_bws=list(doc.get("top_10_bws") or doc.get("top_10_occupations", [])),
             completed_vignettes=doc.get("completed_vignettes", []),
             current_vignette_id=doc.get("current_vignette_id"),
             vignette_responses=[
