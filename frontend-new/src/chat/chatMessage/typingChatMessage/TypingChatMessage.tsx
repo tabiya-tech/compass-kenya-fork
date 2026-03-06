@@ -63,7 +63,7 @@ const TypingChatMessage: React.FC<TypingChatMessageProps> = ({
     return () => {
       clearTimeout(textChangeTimer);
     };
-  }, [waitBeforeThinking, t]);
+  }, [waitBeforeThinking, t, thinkingMessage]);
 
   return (
     <AnimatePresence mode="wait" initial={false}>

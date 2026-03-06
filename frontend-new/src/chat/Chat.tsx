@@ -188,7 +188,7 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
   }, [currentUserId]);
 
   // Depending on the typing state, add or remove the typing message from the messages list
-  const addOrRemoveTypingMessage = (userIsTyping: boolean) => {
+  const addOrRemoveTypingMessage = useCallback((userIsTyping: boolean) => {
     if (userIsTyping) {
       // Only add typing message if it doesn't already exist
       const thinkingMessage =
@@ -209,7 +209,7 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
       // filter out the typing message
       setMessages((prevMessages) => prevMessages.filter((message) => !message.type.startsWith("typing-message-")));
     }
-  };
+  }, [currentPhase.phase, t]);
 
   const recordChatResponseMetrics = useCallback(
     ({
@@ -790,7 +790,7 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
                 return generateUserMessage(message.message, message.sent_at);
               }
               if (message.message_type === "BWS_TASK" && message.metadata) {
-                return generateBWSTaskMessage(message.message_id, message.metadata, handleBWSSubmit);
+                return generateBWSTaskMessage(message.message_id, message.metadata, (t, b, w) => handleBWSSubmitRef.current?.(t, b, w) ?? Promise.resolve());
               }
               return generateCompassMessage(message.message_id, message.message, message.sent_at, message.reaction);
             });
@@ -971,7 +971,7 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
   // add a message when the compass is typing
   useEffect(() => {
     addOrRemoveTypingMessage(aiIsTyping);
-  }, [aiIsTyping]);
+  }, [aiIsTyping, addOrRemoveTypingMessage]);
 
   // Fetch experiences when the active session id changes
   // And when not currentPhase is not `INITIALIZING`.
