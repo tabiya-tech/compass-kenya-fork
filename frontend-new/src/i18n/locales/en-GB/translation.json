@@ -124,6 +124,13 @@
         "thinking": "Please wait, I'm thinking",
         "thinkingPreferenceElicitation": "Thinking about your response…"
       },
+      "bwsTaskMessage": {
+        "whichWouldYouPrefer": "Which would you prefer?",
+        "most": "Most:",
+        "least": "Least:",
+        "submit": "Submit",
+        "submitted": "Submitted"
+      },
       "conversationConclusionFooter": {
         "youCanNow": "You can now",
         "viewAndDownloadCv": "View and Download your CV",

@@ -165,6 +165,13 @@
         "thinking": "Inatafuta ujuzi unaohusiana na uzoefu huu",
         "thinkingPreferenceElicitation": "Inafikiria jibu lako…"
       },
+      "bwsTaskMessage": {
+        "whichWouldYouPrefer": "Ungependa ipi?",
+        "most": "Zaidi:",
+        "least": "Kidogo:",
+        "submit": "Wasilisha",
+        "submitted": "Imewasilishwa"
+      },
       "conversationConclusionFooter": {
         "youCanNow": "Sasa unaweza",
         "viewAndDownloadCv": "Tazama na Pakua CV yako",
