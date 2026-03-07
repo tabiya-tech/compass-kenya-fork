@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Box, Button, Tooltip, Typography, LinearProgress, useTheme } from "@mui/material";
 import { BWSAlternative, BWSTaskMessageProps } from "./BWSTaskMessage.types";
 import { ConversationMessageSender } from "src/chat/ChatService/ChatService.types";
@@ -21,6 +22,7 @@ const LETTERS = ["A", "B", "C", "D", "E"] as const;
 type Letter = (typeof LETTERS)[number];
 
 const BWSTaskMessage: React.FC<BWSTaskMessageProps> = ({ taskId, taskNumber, totalTasks, alternatives, onSubmit }) => {
+  const { t } = useTranslation();
   const theme = useTheme();
   const [best, setBest] = useState<string | null>(null);
   const [worst, setWorst] = useState<string | null>(null);
@@ -85,7 +87,7 @@ const BWSTaskMessage: React.FC<BWSTaskMessageProps> = ({ taskId, taskNumber, tot
             variant="body2"
             sx={{ mt: theme.fixedSpacing(theme.tabiyaSpacing.xs), fontWeight: 600, color: theme.palette.text.primary }}
           >
-            Which would you prefer?
+            {t("chat.chatMessage.bwsTaskMessage.whichWouldYouPrefer")}
           </Typography>
         </Box>
 
@@ -124,7 +126,7 @@ const BWSTaskMessage: React.FC<BWSTaskMessageProps> = ({ taskId, taskNumber, tot
           }}
         >
           <Typography variant="body2" sx={{ fontWeight: 600, minWidth: 48, color: theme.palette.text.primary }}>
-            Most:
+            {t("chat.chatMessage.bwsTaskMessage.most")}
           </Typography>
           {LETTERS.map((letter) => {
             const alt = getAlternativeByLetter(letter);
@@ -185,7 +187,7 @@ const BWSTaskMessage: React.FC<BWSTaskMessageProps> = ({ taskId, taskNumber, tot
           }}
         >
           <Typography variant="body2" sx={{ fontWeight: 600, minWidth: 48, color: theme.palette.text.primary }}>
-            Least:
+            {t("chat.chatMessage.bwsTaskMessage.least")}
           </Typography>
           {LETTERS.map((letter) => {
             const alt = getAlternativeByLetter(letter);
@@ -252,7 +254,7 @@ const BWSTaskMessage: React.FC<BWSTaskMessageProps> = ({ taskId, taskNumber, tot
             },
           }}
         >
-          {submitted ? "Submitted" : "Submit"}
+          {submitted ? t("chat.chatMessage.bwsTaskMessage.submitted") : t("chat.chatMessage.bwsTaskMessage.submit")}
         </Button>
       </Box>
     </MessageContainer>

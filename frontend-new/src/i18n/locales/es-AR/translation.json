@@ -124,6 +124,13 @@
         "thinking": "La IA está pensando, por favor esperá",
         "thinkingPreferenceElicitation": "Pensando en tu respuesta…"
       },
+      "bwsTaskMessage": {
+        "whichWouldYouPrefer": "¿Cuál preferirías?",
+        "most": "Más:",
+        "least": "Menos:",
+        "submit": "Enviar",
+        "submitted": "Enviado"
+      },
       "conversationConclusionFooter": {
         "youCanNow": "Ahora puedes",
         "viewAndDownloadCv": "Ver y descargar tu CV",

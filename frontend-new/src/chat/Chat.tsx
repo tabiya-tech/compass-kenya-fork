@@ -38,7 +38,6 @@ import { lazyWithPreload } from "src/utils/preloadableComponent/PreloadableCompo
 import ChatProgressBar from "./chatProgressbar/ChatProgressBar";
 import { ConversationPhase, CurrentPhase, defaultCurrentPhase } from "./chatProgressbar/types";
 import { CompassChatMessageProps } from "./chatMessage/compassChatMessage/CompassChatMessage";
-import { CONVERSATION_CONCLUSION_CHAT_MESSAGE_TYPE } from "./chatMessage/conversationConclusionChatMessage/ConversationConclusionChatMessage";
 import { SkillsRankingService } from "src/features/skillsRanking/skillsRankingService/skillsRankingService";
 import { useSkillsRanking } from "src/features/skillsRanking/hooks/useSkillsRanking";
 import cvService from "src/CV/CVService/CVService";
@@ -197,9 +196,8 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
             ? t("chat.chatMessage.typingChatMessage.thinkingPreferenceElicitation")
             : undefined;
         setMessages((prevMessages) => {
-          // check if the last message is a typing message
           const lastMessage = prevMessages[prevMessages.length - 1];
-          const hasTypingMessage = lastMessage?.type === CONVERSATION_CONCLUSION_CHAT_MESSAGE_TYPE;
+          const hasTypingMessage = lastMessage?.type?.startsWith("typing-message-") ?? false;
 
           if (!hasTypingMessage) {
             return [...prevMessages, generateTypingMessage(undefined, thinkingMessage)];
