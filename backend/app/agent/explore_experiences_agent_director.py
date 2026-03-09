@@ -21,6 +21,7 @@ from app.countries import Country
 from app.vector_search.esco_entities import SkillEntity
 from app.i18n.translation_service import t
 from app.vector_search.vector_search_dependencies import SearchServices
+from app.conversations.streaming import ConversationStreamingSink
 
 
 class ConversationPhase(Enum):
@@ -344,6 +345,11 @@ class ExploreExperiencesAgentDirector(Agent):
         """
 
         self._state = state
+
+    def set_streaming_sink(self, sink: ConversationStreamingSink | None) -> None:
+        super().set_streaming_sink(sink)
+        self._collect_experiences_agent.set_streaming_sink(sink)
+        self._exploring_skills_agent.set_streaming_sink(sink)
 
     def __init__(self, *,
                  conversation_manager: ConversationMemoryManager,

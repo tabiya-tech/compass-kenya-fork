@@ -1,7 +1,7 @@
 from datetime import datetime
 from http import HTTPStatus
 from typing import Generator
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 import pytest_mock
@@ -10,6 +10,7 @@ from app.conversations.reactions.routes import get_user_preferences_repository
 from app.conversations.types import ConversationResponse, ConversationMessage, ConversationInput, \
     ConversationMessageSender, ConversationPhaseResponse, CurrentConversationPhaseResponse
 from app.conversations.constants import MAX_MESSAGE_LENGTH
+from app.conversations.streaming import format_sse_event
 from app.conversations.routes import get_conversation_service, add_conversation_routes
 from app.conversations.service import IConversationService, ConversationAlreadyConcludedError
 from app.users.auth import UserInfo
@@ -23,6 +24,11 @@ from app.users.types import UserPreferencesRepositoryUpdateRequest, UserPreferen
 from common_libs.test_utilities.mock_auth import MockAuth, UnauthenticatedMockAuth
 
 TestClientWithMocks = tuple[TestClient, IConversationService, IUserPreferenceRepository, UserInfo | None]
+
+
+async def _stream_events(*events: str):
+    for event in events:
+        yield event
 
 
 def get_mock_user_preferences(session_id: int):
@@ -44,6 +50,9 @@ def _create_test_client_with_mocks(auth) -> TestClientWithMocks:
     class MockConversationService(IConversationService):
         async def send(self, user_id: str, session_id: int, user_input: str, clear_memory: bool, filter_pii: bool,
                        city: str | None = None, province: str | None = None):
+            raise NotImplementedError
+
+        async def stream_send(self, user_id: str, session_id: int, user_input: str, clear_memory: bool, filter_pii: bool):
             raise NotImplementedError
 
         async def get_history_by_session_id(self, user_id: str, session_id: int):
@@ -133,38 +142,40 @@ class TestConversationsRoutes:
         # AND the user has a valid session
         given_session_id = 123
 
-        # AND a ConversationService that will return a valid conversation response
-        expected_response = ConversationResponse(
-            messages=[
-                ConversationMessage(
-                    message_id="foo_id",
-                    message=given_user_message.user_input,
-                    sender=ConversationMessageSender.USER,
-                    sent_at=datetime.now().isoformat()
-                ),
-                ConversationMessage(
-                    message_id="bar_id",
-                    message="Hello, I'm compass",
-                    sender=ConversationMessageSender.COMPASS,
-                    sent_at=datetime.now().isoformat()
-                ),
-            ],
-            conversation_completed=False,
-            conversation_conducted_at=datetime.now().isoformat(),
-            experiences_explored=0,
-            current_phase=ConversationPhaseResponse(
+        # AND a ConversationService that will return a valid SSE stream
+        expected_turn_completed = {
+            "conversation_completed": False,
+            "conversation_conducted_at": datetime.now().isoformat(),
+            "experiences_explored": 0,
+            "current_phase": ConversationPhaseResponse(
                 percentage=0,
                 phase=CurrentConversationPhaseResponse.INTRO
-            )
+            ).model_dump(mode="json"),
+        }
+        expected_message = ConversationMessage(
+            message_id="bar_id",
+            message="Hello, I'm compass",
+            sender=ConversationMessageSender.COMPASS,
+            sent_at=datetime.now().isoformat()
         )
+        expected_stream = "".join([
+            format_sse_event("message_started", {
+                "message_id": expected_message.message_id,
+                "sender": "COMPASS",
+                "message_type": "TEXT",
+                "metadata": None,
+            }),
+            format_sse_event("message_completed", expected_message.model_dump(mode="json")),
+            format_sse_event("turn_completed", expected_turn_completed),
+        ])
 
         # AND mock the repository and service responses
         mocked_preferences_repository.get_user_preference_by_user_id = AsyncMock(
             return_value=get_mock_user_preferences(given_session_id))
         preferences_spy = mocker.spy(mocked_preferences_repository, "get_user_preference_by_user_id")
 
-        mocked_service.send = AsyncMock(return_value=expected_response)
-        service_spy = mocker.spy(mocked_service, "send")
+        mocked_service.stream_send = Mock(return_value=_stream_events(expected_stream))
+        service_spy = mocker.spy(mocked_service, "stream_send")
 
         # WHEN a POST request where the session_id is in the Path
         response = client.post(
@@ -175,8 +186,9 @@ class TestConversationsRoutes:
         # THEN the response is CREATED
         assert response.status_code == HTTPStatus.CREATED
 
-        # AND the response is the expected response
-        assert response.json() == expected_response.model_dump()
+        # AND the response is an SSE stream with the expected payload
+        assert response.headers["content-type"].startswith("text/event-stream")
+        assert response.text == expected_stream
 
         # AND the user preferences repository was called with the correct user_id
         preferences_spy.assert_called_once_with(mocked_user.user_id)
@@ -280,11 +292,16 @@ class TestConversationsRoutes:
         # AND the user has a valid session
         given_session_id = 123
 
-        # AND a ConversationService that will raise a ConversationAlreadyConcludedError
+        # AND a ConversationService that will emit an SSE error event
         mocked_preferences_repository.get_user_preference_by_user_id = AsyncMock(
             return_value=get_mock_user_preferences(given_session_id))
-        send_spy = mocker.spy(mocked_service, "send")
-        send_spy.side_effect = ConversationAlreadyConcludedError(given_session_id)
+        expected_stream = format_sse_event("error", {
+            "code": "conversation_already_concluded",
+            "message": str(ConversationAlreadyConcludedError(given_session_id)),
+            "recoverable": False,
+        })
+        mocked_service.stream_send = Mock(return_value=_stream_events(expected_stream))
+        stream_spy = mocker.spy(mocked_service, "stream_send")
 
         # WHEN a POST request where the session_id is in the Path
         response = client.post(
@@ -292,11 +309,12 @@ class TestConversationsRoutes:
             json=given_user_message.model_dump(),
         )
 
-        # THEN the response is BAD_REQUEST
-        assert response.status_code == HTTPStatus.BAD_REQUEST
+        # THEN the response is CREATED and contains an SSE error payload
+        assert response.status_code == HTTPStatus.CREATED
+        assert response.text == expected_stream
 
         # AND the conversation service was called with the correct arguments
-        send_spy.assert_called_once_with(
+        stream_spy.assert_called_once_with(
             mocked_user.user_id,
             given_session_id,
             given_user_message.user_input,
@@ -319,11 +337,16 @@ class TestConversationsRoutes:
         # AND the user has a valid session
         given_session_id = 123
 
-        # AND a ConversationService that will raise an unexpected error
+        # AND a ConversationService that will emit an unexpected SSE error event
         mocked_preferences_repository.get_user_preference_by_user_id = AsyncMock(
             return_value=get_mock_user_preferences(given_session_id))
-        send_spy = mocker.spy(mocked_service, "send")
-        send_spy.side_effect = Exception("Unexpected error")
+        expected_stream = format_sse_event("error", {
+            "code": "unexpected_failure",
+            "message": "Oops! something went wrong",
+            "recoverable": False,
+        })
+        mocked_service.stream_send = Mock(return_value=_stream_events(expected_stream))
+        stream_spy = mocker.spy(mocked_service, "stream_send")
 
         # WHEN a POST request where the session_id is in the Path
         response = client.post(
@@ -331,11 +354,12 @@ class TestConversationsRoutes:
             json=given_user_message.model_dump(),
         )
 
-        # THEN the response is INTERNAL_SERVER_ERROR
-        assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+        # THEN the response is CREATED and contains an SSE error payload
+        assert response.status_code == HTTPStatus.CREATED
+        assert response.text == expected_stream
 
         # AND the conversation service was called with the correct arguments
-        send_spy.assert_called_once_with(
+        stream_spy.assert_called_once_with(
             mocked_user.user_id,
             given_session_id,
             given_user_message.user_input,
