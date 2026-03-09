@@ -1,8 +1,11 @@
 """
 This module contains the service layer for handling conversations.
 """
+import asyncio
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
+from contextlib import suppress
 from datetime import datetime, timezone
 
 from app.agent.agent_director.abstract_agent_director import ConversationPhase
@@ -16,6 +19,7 @@ from app.conversations.reactions.repository import IReactionRepository
 from app.conversations.types import ConversationResponse
 from app.conversations.utils import get_messages_from_conversation_manager, filter_conversation_history, \
     get_total_explored_experiences, get_current_conversation_phase_response
+from app.conversations.streaming import ConversationStreamingSink
 from app.sensitive_filter import sensitive_filter
 from app.metrics.application_state_metrics_recorder.recorder import IApplicationStateMetricsRecorder
 from app.job_preferences.service import IJobPreferencesService
@@ -65,6 +69,20 @@ class IConversationService(ABC):
         raise NotImplementedError()
 
     @abstractmethod
+    async def stream_send(
+        self,
+        user_id: str,
+        session_id: int,
+        user_input: str,
+        clear_memory: bool,
+        filter_pii: bool,
+    ) -> AsyncIterator[str]:
+        """
+        Stream a conversation turn over SSE while preserving the same final conversation state.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     async def get_history_by_session_id(self, user_id: str, session_id: int) -> ConversationResponse:
         """
         Get all the messages for this session so far
@@ -94,6 +112,72 @@ class ConversationService(IConversationService):
 
     async def send(self, user_id: str, session_id: int, user_input: str, clear_memory: bool,
                    filter_pii: bool) -> ConversationResponse:
+        return await self._execute_turn(
+            user_id=user_id,
+            session_id=session_id,
+            user_input=user_input,
+            clear_memory=clear_memory,
+            filter_pii=filter_pii,
+            stream_sink=None,
+        )
+
+    async def stream_send(
+        self,
+        user_id: str,
+        session_id: int,
+        user_input: str,
+        clear_memory: bool,
+        filter_pii: bool,
+    ) -> AsyncIterator[str]:
+        stream_sink = ConversationStreamingSink()
+
+        async def _run_streamed_turn() -> None:
+            try:
+                await self._execute_turn(
+                    user_id=user_id,
+                    session_id=session_id,
+                    user_input=user_input,
+                    clear_memory=clear_memory,
+                    filter_pii=filter_pii,
+                    stream_sink=stream_sink,
+                )
+            except ConversationAlreadyConcludedError as e:
+                await stream_sink.emit_error(
+                    code="conversation_already_concluded",
+                    message=str(e),
+                    recoverable=False,
+                )
+            except Exception:
+                self._logger.exception("Unexpected failure during SSE turn execution")
+                await stream_sink.emit_error(
+                    code="unexpected_failure",
+                    message="Oops! something went wrong",
+                    recoverable=False,
+                )
+            finally:
+                await stream_sink.close()
+
+        task = asyncio.create_task(_run_streamed_turn())
+        try:
+            async for chunk in stream_sink.iter_sse():
+                yield chunk
+            await task
+        finally:
+            if not task.done():
+                task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
+
+    async def _execute_turn(
+        self,
+        *,
+        user_id: str,
+        session_id: int,
+        user_input: str,
+        clear_memory: bool,
+        filter_pii: bool,
+        stream_sink: ConversationStreamingSink | None,
+    ) -> ConversationResponse:
         if clear_memory:
             await self._application_state_metrics_recorder.delete_state(session_id)
         if filter_pii:
@@ -180,28 +264,44 @@ class ConversationService(IConversationService):
             )
             user_language_ctx_var.set(default_locale)
 
-        await self._agent_director.execute(user_input=user_input)
-        # get the context again after updating the history
-        context = await self._conversation_memory_manager.get_conversation_context()
-        response = await get_messages_from_conversation_manager(context, from_index=current_index)
+        self._agent_director.set_streaming_sink(stream_sink)
+        self._conversation_memory_manager.set_streaming_sink(stream_sink)
+        try:
+            if stream_sink is not None:
+                await stream_sink.emit_turn_started(
+                    session_id=session_id,
+                    user_message_id=user_input.message_id,
+                    current_phase=get_current_conversation_phase_response(state, self._logger).model_dump(mode="json"),
+                )
 
-        # Save preference vector to JobPreferences if preference elicitation just completed
-        if self._should_save_preference_vector(state):
-            await self._save_preference_vector_to_job_preferences(state)
+            await self._agent_director.execute(user_input=user_input)
+            # get the context again after updating the history
+            context = await self._conversation_memory_manager.get_conversation_context()
+            response = await get_messages_from_conversation_manager(context, from_index=current_index)
 
-        # get the date when the conversation was conducted
-        state.agent_director_state.conversation_conducted_at = datetime.now(timezone.utc)
+            # Save preference vector to JobPreferences if preference elicitation just completed
+            if self._should_save_preference_vector(state):
+                await self._save_preference_vector_to_job_preferences(state)
 
-        # save the state, before responding to the user
-        await self._application_state_metrics_recorder.save_state(state, user_id)
+            # get the date when the conversation was conducted
+            state.agent_director_state.conversation_conducted_at = datetime.now(timezone.utc)
 
-        return ConversationResponse(
-            messages=response,
-            conversation_completed=state.agent_director_state.current_phase == ConversationPhase.ENDED,
-            conversation_conducted_at=state.agent_director_state.conversation_conducted_at,
-            experiences_explored=get_total_explored_experiences(state),
-            current_phase=get_current_conversation_phase_response(state, self._logger)
-        )
+            # save the state, before responding to the user
+            await self._application_state_metrics_recorder.save_state(state, user_id)
+
+            conversation_response = ConversationResponse(
+                messages=response,
+                conversation_completed=state.agent_director_state.current_phase == ConversationPhase.ENDED,
+                conversation_conducted_at=state.agent_director_state.conversation_conducted_at,
+                experiences_explored=get_total_explored_experiences(state),
+                current_phase=get_current_conversation_phase_response(state, self._logger)
+            )
+            if stream_sink is not None:
+                await stream_sink.emit_turn_completed(conversation_response)
+            return conversation_response
+        finally:
+            self._agent_director.set_streaming_sink(None)
+            self._conversation_memory_manager.set_streaming_sink(None)
 
     async def get_history_by_session_id(self, user_id: str, session_id: int) -> ConversationResponse:
         state = await self._application_state_metrics_recorder.get_state(session_id)
