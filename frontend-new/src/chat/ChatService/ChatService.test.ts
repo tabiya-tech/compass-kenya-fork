@@ -4,10 +4,14 @@ import { StatusCodes } from "http-status-codes";
 import { RestAPIError } from "src/error/restAPIError/RestAPIError";
 import { setupAPIServiceSpy } from "src/_test_utilities/fetchSpy";
 import ErrorConstants from "src/error/restAPIError/RestAPIError.constants";
+import { ConversationResponse } from "./ChatService.types";
+import { ConversationPhase } from "src/chat/chatProgressbar/types";
 import {
   generateTestChatResponses,
   generateTestHistory,
 } from "src/chat/ChatService/_test_utilities/generateTestChatResponses";
+
+const serializeSSEEvent = (event: string, data: unknown) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 
 describe("ChatService", () => {
   let givenApiServerUrl: string = "/path/to/api";
@@ -43,11 +47,32 @@ describe("ChatService", () => {
       // GIVEN some message specification to send
       const givenMessage = "Hello";
       // AND the send message REST API will respond with OK and some message response
-      const expectedRootMessageResponse = generateTestChatResponses();
+      const expectedMessages = generateTestChatResponses();
+      const expectedRootMessageResponse: ConversationResponse = {
+        messages: expectedMessages,
+        conversation_completed: false,
+        conversation_conducted_at: null,
+        experiences_explored: 0,
+        current_phase: {
+          phase: ConversationPhase.INTRO,
+          percentage: 0,
+          current: null,
+          total: null,
+        },
+      };
+      const sseResponseBody = [
+        ...expectedMessages.map((message) => serializeSSEEvent("message_completed", message)),
+        serializeSSEEvent("turn_completed", {
+          conversation_completed: expectedRootMessageResponse.conversation_completed,
+          conversation_conducted_at: expectedRootMessageResponse.conversation_conducted_at,
+          experiences_explored: expectedRootMessageResponse.experiences_explored,
+          current_phase: expectedRootMessageResponse.current_phase,
+        }),
+      ].join("");
       const fetchSpy = setupAPIServiceSpy(
         StatusCodes.CREATED,
-        expectedRootMessageResponse,
-        "application/json;charset=UTF-8"
+        sseResponseBody,
+        "text/event-stream;charset=UTF-8"
       );
 
       // WHEN the sendMessage function is called with the given arguments
@@ -66,7 +91,7 @@ describe("ChatService", () => {
         serviceName: "ChatService",
         serviceFunction: "sendMessage",
         failureMessage: `Failed to send message with session id ${givenSessionId}`,
-        expectedContentType: "application/json",
+        expectedContentType: "text/event-stream",
       });
 
       // AND returns the message response
@@ -107,8 +132,8 @@ describe("ChatService", () => {
       async (_description, givenResponse) => {
         // GIVEN some message specification to send
         const givenMessage = "Hello";
-        // AND the send message REST API will respond with OK and some response that does conform to the messageResponseSchema even if it states that it is application/json
-        setupAPIServiceSpy(StatusCodes.CREATED, givenResponse, "application/json;charset=UTF-8");
+        // AND the send message REST API will respond with an invalid SSE payload
+        setupAPIServiceSpy(StatusCodes.CREATED, givenResponse, "text/event-stream;charset=UTF-8");
 
         // WHEN the sendMessage function is called with the given arguments
         const givenSessionId = 1234;

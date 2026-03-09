@@ -162,9 +162,85 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
     setMessages((prevMessages) => [...prevMessages, message]);
   }, []);
 
+  const upsertMessageInChat = useCallback((message: IChatMessage<any>) => {
+    setMessages((prevMessages) => {
+      const existingIndex = prevMessages.findIndex((msg) => msg.message_id === message.message_id);
+      if (existingIndex === -1) {
+        return [...prevMessages, message];
+      }
+      const nextMessages = [...prevMessages];
+      nextMessages[existingIndex] = message;
+      return nextMessages;
+    });
+  }, []);
+
+  const pendingDeltasRef = useRef<Map<string, string>>(new Map());
+  const rafIdRef = useRef<number | null>(null);
+
+  const flushPendingDeltas = useCallback(() => {
+    rafIdRef.current = null;
+    const pending = pendingDeltasRef.current;
+    if (pending.size === 0) {
+      return;
+    }
+    const snapshot = new Map(pending);
+    pending.clear();
+
+    setMessages((prevMessages) =>
+      prevMessages.map((message) => {
+        const delta = snapshot.get(message.message_id);
+        if (!delta || !message.type.startsWith("compass-message-")) {
+          return message;
+        }
+        return {
+          ...message,
+          payload: {
+            ...(message.payload as CompassChatMessageProps),
+            message: ((message.payload as CompassChatMessageProps).message ?? "") + delta,
+          },
+        };
+      })
+    );
+  }, []);
+
+  const appendTextToCompassMessage = useCallback(
+    (messageId: string, delta: string) => {
+      if (!delta) {
+        return;
+      }
+      const pending = pendingDeltasRef.current;
+      pending.set(messageId, (pending.get(messageId) ?? "") + delta);
+
+      if (rafIdRef.current === null) {
+        rafIdRef.current = requestAnimationFrame(flushPendingDeltas);
+      }
+    },
+    [flushPendingDeltas]
+  );
+
   const removeMessageFromChat = useCallback((messageId: string) => {
     setMessages((prevMessages) => prevMessages.filter((msg) => msg.message_id !== messageId));
   }, []);
+
+  const createChatMessageFromConversationMessage = useCallback(
+    (messageItem: ConversationMessage): IChatMessage<any> => {
+      if (messageItem.message_type === "BWS_TASK" && messageItem.metadata) {
+        return generateBWSTaskMessage(
+          messageItem.message_id,
+          messageItem.metadata,
+          (t, b, w) => handleBWSSubmitRef.current?.(t, b, w) ?? Promise.resolve()
+        );
+      }
+
+      return generateCompassMessage(
+        messageItem.message_id,
+        messageItem.message,
+        messageItem.sent_at,
+        messageItem.reaction
+      );
+    },
+    []
+  );
 
   const { showSkillsRanking } = useSkillsRanking(addMessageToChat, removeMessageFromChat);
 
@@ -655,10 +731,36 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
 
       const startTimeMs = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
       const previousExploredExperiences = exploredExperiences;
+      let sawAssistantEvent = false;
+
+      const markAssistantEvent = () => {
+        if (sawAssistantEvent) {
+          return;
+        }
+        sawAssistantEvent = true;
+        setAiIsTyping(false);
+      };
 
       try {
         // Send the user's message
-        const response = await ChatService.getInstance().sendMessage(sessionId, userMessage);
+        const response = await ChatService.getInstance().sendMessage(sessionId, userMessage, {
+          onMessageStarted: (event) => {
+            markAssistantEvent();
+            if (event.message_type === "BWS_TASK") {
+              return;
+            }
+
+            upsertMessageInChat(generateCompassMessage(event.message_id, "", new Date().toISOString(), null));
+          },
+          onMessageDelta: (event) => {
+            markAssistantEvent();
+            appendTextToCompassMessage(event.message_id, event.delta);
+          },
+          onMessageCompleted: (messageItem) => {
+            markAssistantEvent();
+            upsertMessageInChat(createChatMessageFromConversationMessage(messageItem));
+          },
+        });
         const endTimeMs = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
         const durationMs = Math.round(endTimeMs - startTimeMs);
         recordChatResponseMetrics({
@@ -676,32 +778,19 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
           await fetchExperiences();
         }
 
-        response.messages.forEach((messageItem, idx) => {
-          const isConclusionMessage = response.conversation_completed && idx === response.messages.length - 1;
-          if (!isConclusionMessage) {
-            if (messageItem.message_type === "BWS_TASK" && messageItem.metadata) {
-              addMessageToChat(
-                generateBWSTaskMessage(
-                  messageItem.message_id,
-                  messageItem.metadata,
-                  (t, b, w) => handleBWSSubmitRef.current?.(t, b, w) ?? Promise.resolve()
-                )
-              );
-            } else {
-              addMessageToChat(
-                generateCompassMessage(
-                  messageItem.message_id,
-                  messageItem.message,
-                  messageItem.sent_at,
-                  messageItem.reaction
-                )
-              );
+        if (!sawAssistantEvent) {
+          response.messages.forEach((messageItem, idx) => {
+            const isConclusionMessage = response.conversation_completed && idx === response.messages.length - 1;
+            if (!isConclusionMessage) {
+              upsertMessageInChat(createChatMessageFromConversationMessage(messageItem));
             }
-          }
-        });
+          });
+        }
+
         // Handle the conclusion message and skills ranking flow for new messages
         if (response.conversation_completed && response.messages.length) {
           const lastMessage = response.messages[response.messages.length - 1];
+          removeMessageFromChat(lastMessage.message_id);
 
           if (SkillsRankingService.getInstance().isSkillsRankingFeatureEnabled()) {
             // Check if skill ranking is already completed
@@ -741,10 +830,14 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
     },
     [
       addMessageToChat,
+      appendTextToCompassMessage,
+      createChatMessageFromConversationMessage,
       exploredExperiences,
       fetchExperiences,
       activeSessionId,
+      removeMessageFromChat,
       showSkillsRanking,
+      upsertMessageInChat,
       recordChatResponseMetrics,
     ]
   );

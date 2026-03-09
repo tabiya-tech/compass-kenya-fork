@@ -3,7 +3,49 @@ import { StatusCodes } from "http-status-codes";
 import { customFetch } from "src/utils/customFetch/customFetch";
 import ErrorConstants from "src/error/restAPIError/RestAPIError.constants";
 import { getBackendUrl } from "src/envService";
-import { ConversationResponse } from "./ChatService.types";
+import {
+  ConversationMessage,
+  ConversationResponse,
+  ErrorEventData,
+  MessageDeltaEventData,
+  MessageStartedEventData,
+  SendMessageStreamHandlers,
+  TurnCompletedEventData,
+  TurnStartedEventData,
+} from "./ChatService.types";
+
+type ParsedSSEEvent = {
+  event: string;
+  data: unknown;
+};
+
+const parseSSEEvent = (rawEvent: string): ParsedSSEEvent | null => {
+  const lines = rawEvent.split(/\r?\n/);
+  let event = "message";
+  const dataLines: string[] = [];
+
+  lines.forEach((line) => {
+    if (!line || line.startsWith(":")) {
+      return;
+    }
+    if (line.startsWith("event:")) {
+      event = line.slice("event:".length).trim();
+      return;
+    }
+    if (line.startsWith("data:")) {
+      dataLines.push(line.slice("data:".length).trim());
+    }
+  });
+
+  if (dataLines.length === 0) {
+    return null;
+  }
+
+  return {
+    event,
+    data: JSON.parse(dataLines.join("\n")),
+  };
+};
 
 export default class ChatService {
   private static instance: ChatService;
@@ -25,7 +67,11 @@ export default class ChatService {
     return ChatService.instance;
   }
 
-  public async sendMessage(sessionId: number, message: string): Promise<ConversationResponse> {
+  public async sendMessage(
+    sessionId: number,
+    message: string,
+    handlers?: SendMessageStreamHandlers
+  ): Promise<ConversationResponse> {
     const serviceName = "ChatService";
     const serviceFunction = "sendMessage";
     const method = "POST";
@@ -44,27 +90,133 @@ export default class ChatService {
       serviceName,
       serviceFunction,
       failureMessage: `Failed to send message with session id ${sessionId}`,
-      expectedContentType: "application/json",
+      expectedContentType: "text/event-stream",
     });
 
-    const responseBody = await response.text();
+    const completedMessages: ConversationMessage[] = [];
+    let completedTurn: TurnCompletedEventData | null = null;
+    let streamError: ErrorEventData | null = null;
 
-    let messageResponse: ConversationResponse;
-    try {
-      messageResponse = JSON.parse(responseBody);
-    } catch (e: any) {
+    const processRawEvent = (rawEvent: string) => {
+      if (!rawEvent.trim()) {
+        return;
+      }
+      let parsedEvent: ParsedSSEEvent | null = null;
+      try {
+        parsedEvent = parseSSEEvent(rawEvent);
+      } catch (e: any) {
+        throw errorFactory(
+          response.status,
+          ErrorConstants.ErrorCodes.INVALID_RESPONSE_BODY,
+          "Response did not contain valid SSE JSON payloads",
+          {
+            rawEvent,
+            error: e,
+          }
+        );
+      }
+      if (!parsedEvent) {
+        return;
+      }
+
+      switch (parsedEvent.event) {
+        case "turn_started":
+          handlers?.onTurnStarted?.(parsedEvent.data as TurnStartedEventData);
+          break;
+        case "message_started":
+          handlers?.onMessageStarted?.(parsedEvent.data as MessageStartedEventData);
+          break;
+        case "message_delta":
+          handlers?.onMessageDelta?.(parsedEvent.data as MessageDeltaEventData);
+          break;
+        case "message_completed": {
+          const completedMessage = parsedEvent.data as ConversationMessage;
+          completedMessages.push(completedMessage);
+          handlers?.onMessageCompleted?.(completedMessage);
+          break;
+        }
+        case "turn_completed":
+          completedTurn = parsedEvent.data as TurnCompletedEventData;
+          handlers?.onTurnCompleted?.(completedTurn);
+          break;
+        case "error":
+          streamError = parsedEvent.data as ErrorEventData;
+          handlers?.onError?.(streamError);
+          break;
+        default:
+          break;
+      }
+    };
+
+    const consumeStreamText = async (responseBody: string) => {
+      let buffer = responseBody;
+      let boundary = buffer.indexOf("\n\n");
+      while (boundary !== -1) {
+        processRawEvent(buffer.slice(0, boundary));
+        buffer = buffer.slice(boundary + 2);
+        boundary = buffer.indexOf("\n\n");
+      }
+      if (buffer.trim()) {
+        processRawEvent(buffer);
+      }
+    };
+
+    if (response.body) {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+
+        let boundary = buffer.indexOf("\n\n");
+        while (boundary !== -1) {
+          processRawEvent(buffer.slice(0, boundary));
+          buffer = buffer.slice(boundary + 2);
+          boundary = buffer.indexOf("\n\n");
+        }
+
+        if (done) {
+          if (buffer.trim()) {
+            processRawEvent(buffer);
+          }
+          break;
+        }
+      }
+    } else {
+      await consumeStreamText(await response.text());
+    }
+
+    if (streamError) {
+      const errorEvent = streamError as ErrorEventData;
+      throw errorFactory(
+        response.status,
+        ErrorConstants.ErrorCodes.API_ERROR,
+        errorEvent.message,
+        errorEvent
+      );
+    }
+
+    if (!completedTurn) {
       throw errorFactory(
         response.status,
         ErrorConstants.ErrorCodes.INVALID_RESPONSE_BODY,
-        "Response did not contain valid JSON",
+        "SSE stream ended without turn completion",
         {
-          responseBody,
-          error: e,
+          messagesReceived: completedMessages.length,
         }
       );
     }
 
-    return messageResponse;
+    const completedTurnData = completedTurn as TurnCompletedEventData;
+    return {
+      messages: completedMessages,
+      conversation_completed: completedTurnData.conversation_completed,
+      conversation_conducted_at: completedTurnData.conversation_conducted_at,
+      experiences_explored: completedTurnData.experiences_explored,
+      current_phase: completedTurnData.current_phase,
+    };
   }
 
   public async getChatHistory(sessionId: number): Promise<ConversationResponse> {

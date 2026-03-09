@@ -19,6 +19,7 @@ from app.vector_search.vector_search_dependencies import SearchServices
 from app.user_recommendations.services.service import IUserRecommendationsService
 from app.i18n.translation_service import t
 from app.context_vars import phase_ctx_var, agent_type_ctx_var # for observability logging
+from app.conversations.streaming import ConversationStreamingSink
 
 class LLMAgentDirector(AbstractAgentDirector):
     """
@@ -80,6 +81,10 @@ class LLMAgentDirector(AbstractAgentDirector):
             AgentType.FAREWELL_AGENT: FarewellAgent()
         }
         self._llm_router = LLMRouter(self._logger)
+
+    def set_streaming_sink(self, sink: ConversationStreamingSink | None) -> None:
+        for agent in self._agents.values():
+            agent.set_streaming_sink(sink)
 
     def get_welcome_agent(self) -> WelcomeAgent:
         # cast the agent to the WelcomeAgent

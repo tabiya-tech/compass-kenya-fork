@@ -605,7 +605,11 @@ describe("Chat", () => {
           // AND expect a typing indicator to have been shown
           assertTypingMessageWasShown();
           // AND expect an empty message to be sent to the chat service
-          expect(ChatService.getInstance().sendMessage).toHaveBeenCalledWith(givenActiveSessionId, "");
+          expect(ChatService.getInstance().sendMessage).toHaveBeenCalledWith(
+            givenActiveSessionId,
+            "",
+            expect.any(Object)
+          );
           await expect((ChatService.getInstance().sendMessage as jest.Mock).mock.results[0].value).resolves.toBe(
             givenSendMessageResponse
           );
@@ -651,7 +655,11 @@ describe("Chat", () => {
           // AND expect a typing indicator to be shown
           assertTypingMessageWasShown();
           // AND expect an empty message to be sent to the chat service
-          expect(ChatService.getInstance().sendMessage).toHaveBeenCalledWith(givenActiveSessionId, "");
+          expect(ChatService.getInstance().sendMessage).toHaveBeenCalledWith(
+            givenActiveSessionId,
+            "",
+            expect.any(Object)
+          );
           // AND an error message to be shown in the chat list
           expect(ChatList as jest.Mock).toHaveBeenLastCalledWith(
             expect.objectContaining({
@@ -857,7 +865,11 @@ describe("Chat", () => {
         // AND expect the chat history to be fetched for the new session
         expect(ChatService.getInstance().getChatHistory).toHaveBeenCalledWith(givenNewSessionId);
         // AND expect an empty message to be sent to the chat service for the new session
-        expect(ChatService.getInstance().sendMessage).toHaveBeenCalledWith(givenNewSessionId, "");
+        expect(ChatService.getInstance().sendMessage).toHaveBeenCalledWith(
+          givenNewSessionId,
+          "",
+          expect.any(Object)
+        );
         // AND expect the chat list to be updated with the new (empty) messages list
         expect(ChatList as jest.Mock).toHaveBeenNthCalledWith(1, expect.objectContaining({ messages: [] }), {});
         // AND expect no errors or warning to have occurred
@@ -1210,7 +1222,11 @@ describe("Chat", () => {
       });
 
       // THEN expect the send message method to be called with the user's message
-      expect(ChatService.getInstance().sendMessage).toHaveBeenCalledWith(givenActiveSessionId, givenMessage);
+      expect(ChatService.getInstance().sendMessage).toHaveBeenCalledWith(
+        givenActiveSessionId,
+        givenMessage,
+        expect.any(Object)
+      );
       // AND expect the user's message and a typing indicator to be shown in the chat
       await waitFor(() => {
         assertMessagesAreShown(
@@ -1437,7 +1453,11 @@ describe("Chat", () => {
       });
 
       // THEN expect the send message method to be called with the user's message
-      expect(ChatService.getInstance().sendMessage).toHaveBeenCalledWith(givenActiveSessionId, givenMessage);
+      expect(ChatService.getInstance().sendMessage).toHaveBeenCalledWith(
+        givenActiveSessionId,
+        givenMessage,
+        expect.any(Object)
+      );
       // AND expect the user's message and a typing indicator to be shown in the chat
       await waitFor(() => {
         assertMessagesAreShown(
@@ -1638,7 +1658,11 @@ describe("Chat", () => {
 
       // THEN expect the send message method to be called
       expect(ChatService.getInstance().sendMessage).toHaveBeenCalledTimes(1);
-      expect(ChatService.getInstance().sendMessage).toHaveBeenLastCalledWith(givenActiveSessionId, givenMessage);
+      expect(ChatService.getInstance().sendMessage).toHaveBeenLastCalledWith(
+        givenActiveSessionId,
+        givenMessage,
+        expect.any(Object)
+      );
       // AND expect an error to have been logged
       await waitFor(() => {
         expect(console.error).toHaveBeenCalledWith(new ChatError("Failed to send message:", givenError));
@@ -1960,7 +1984,11 @@ describe("Chat", () => {
       });
       // AND expect an empty message to be sent to the chat service for the new session
       await waitFor(() => {
-        expect(ChatService.getInstance().sendMessage).toHaveBeenCalledWith(givenNewSessionId, "");
+        expect(ChatService.getInstance().sendMessage).toHaveBeenCalledWith(
+          givenNewSessionId,
+          "",
+          expect.any(Object)
+        );
       });
       // AND expect the chat list to be updated with the response from the chat service
       await waitFor(() => {

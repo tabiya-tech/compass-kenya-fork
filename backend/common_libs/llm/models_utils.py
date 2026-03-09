@@ -1,6 +1,7 @@
 import logging
 import os
 from abc import ABC, abstractmethod
+from collections.abc import Awaitable, Callable
 
 import vertexai
 from dotenv import load_dotenv
@@ -189,6 +190,9 @@ class LLMResponse(BaseModel):
     """The number of tokens in the response."""
 
 
+LLMStreamingCallback = Callable[[str], Awaitable[None] | None]
+
+
 class LLM(ABC):
     """
     An abstract class for a LLM.
@@ -202,6 +206,14 @@ class LLM(ABC):
         that provides retry logic with exponential backoff.
         :param llm_input: Either a LLMInput object for chat, or a string for general generative content.
         :return: The generated response as a "model" with .
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def stream_content(self, llm_input: LLMInput | str, on_chunk: LLMStreamingCallback | None = None) -> LLMResponse:
+        """
+        Stream generated content and optionally invoke a callback for each text chunk.
+        Returns the final aggregated response once streaming completes.
         """
         raise NotImplementedError()
 
@@ -231,6 +243,26 @@ class BasicLLM(LLM):
 
         return await Retry[str].call_with_exponential_backoff(callback=_generate_content, logger=logger)
 
+    async def stream_content(self, llm_input: LLMInput | str, on_chunk: LLMStreamingCallback | None = None) -> LLMResponse:
+        async def _stream_content() -> LLMResponse:
+            try:
+                logger.debug("Streaming content with resource:%s", self._resource_name)
+                return await self.internal_stream_content(llm_input, on_chunk=on_chunk)
+            except Exception as e:
+                logger.error("An error occurred while streaming content with resource:%s",
+                             self._resource_name, exc_info=True)
+                raise e
+
+        return await Retry[str].call_with_exponential_backoff(callback=_stream_content, logger=logger)
+
     @abstractmethod
     async def internal_generate_content(self, llm_input: LLMInput | str) -> LLMResponse:
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def internal_stream_content(
+        self,
+        llm_input: LLMInput | str,
+        on_chunk: LLMStreamingCallback | None = None,
+    ) -> LLMResponse:
         raise NotImplementedError()

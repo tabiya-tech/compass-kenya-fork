@@ -1,6 +1,7 @@
 import asyncio
 from typing import Optional, Mapping, Any
 
+from bson import ObjectId
 from pydantic import BaseModel, Field, field_serializer, field_validator
 
 from app.agent.agent import Agent
@@ -257,6 +258,7 @@ class CollectExperiencesAgent(Agent):
         #   b) the model may have made a mistake interpreting the user input as we need to clarify
         conversation_llm = _ConversationLLM()
         exploring_type = self._state.unexplored_types[0] if len(self._state.unexplored_types) > 0 else None
+        conversation_message_id = str(ObjectId())
 
         transition_decision_tool = TransitionDecisionTool(self.logger)
 
@@ -273,7 +275,9 @@ class CollectExperiencesAgent(Agent):
                 exploring_type=exploring_type,
                 unexplored_types=self._state.unexplored_types,
                 explored_types=self._state.explored_types,
-                logger=self.logger),
+                logger=self.logger,
+                stream_sink=self._streaming_sink,
+                message_id=conversation_message_id),
             transition_decision_tool.execute(
                 collected_data=collected_data,
                 exploring_type=exploring_type,
@@ -325,9 +329,15 @@ class CollectExperiencesAgent(Agent):
             else:
                 transition_text = t('messages', 'collectExperiences.recapPrompt')
 
+            transition_delta = f"\n\n{transition_text}"
             conversation_llm_output.message_for_user = (
-                f"{conversation_llm_output.message_for_user}\n\n{transition_text}"
+                f"{conversation_llm_output.message_for_user}{transition_delta}"
             )
+            if self._streaming_sink is not None:
+                await self._streaming_sink.append_text(
+                    message_id=conversation_llm_output.message_id,
+                    delta=transition_delta,
+                )
 
         elif transition_decision == TransitionDecision.END_CONVERSATION:
             conversation_llm_output.finished = True
