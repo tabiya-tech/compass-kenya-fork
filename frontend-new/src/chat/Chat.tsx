@@ -683,6 +683,16 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
           const isConclusionMessage = response.conversation_completed && idx === response.messages.length - 1;
           if (!isConclusionMessage) {
             if (messageItem.message_type === "BWS_TASK" && messageItem.metadata) {
+              if (messageItem.metadata.task_number === 1) {
+                addMessageToChat(
+                  generateCompassMessage(
+                    `bws-transition-${messageItem.message_id}`,
+                    "Now I'd like to understand what you value most in a job. I'll show you a few sets of work activities — for each, choose the one you'd **most** prefer and the one you'd **least** prefer.",
+                    messageItem.sent_at,
+                    null
+                  )
+                );
+              }
               addMessageToChat(
                 generateBWSTaskMessage(
                   messageItem.message_id,
@@ -791,18 +801,30 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
           const isConclusionMessage = history.conversation_completed;
           const mappedMessages = history.messages
             .filter((_, idx) => !(isConclusionMessage && idx === history.messages.length - 1))
-            .map((message: ConversationMessage) => {
+            .flatMap((message: ConversationMessage) => {
               if (message.sender === ConversationMessageSender.USER) {
-                return generateUserMessage(message.message, message.sent_at);
+                return [generateUserMessage(message.message, message.sent_at)];
               }
               if (message.message_type === "BWS_TASK" && message.metadata) {
-                return generateBWSTaskMessage(
+                const bwsMessage = generateBWSTaskMessage(
                   message.message_id,
                   message.metadata,
                   (t, b, w) => handleBWSSubmitRef.current?.(t, b, w) ?? Promise.resolve()
                 );
+                if (message.metadata.task_number === 1) {
+                  return [
+                    generateCompassMessage(
+                      `bws-transition-${message.message_id}`,
+                      "Now I'd like to understand what you value most in a job. I'll show you a few sets of work activities — for each, choose the one you'd **most** prefer and the one you'd **least** prefer.",
+                      message.sent_at,
+                      null
+                    ),
+                    bwsMessage,
+                  ];
+                }
+                return [bwsMessage];
               }
-              return generateCompassMessage(message.message_id, message.message, message.sent_at, message.reaction);
+              return [generateCompassMessage(message.message_id, message.message, message.sent_at, message.reaction)];
             });
 
           setMessages(mappedMessages);

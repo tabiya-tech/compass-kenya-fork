@@ -149,19 +149,19 @@ const BWSTaskMessage: React.FC<BWSTaskMessageProps> = ({ taskId, taskNumber, tot
                     fontWeight: 600,
                     ...(isSelected
                       ? {
-                          backgroundColor: theme.palette.tabiyaBlue.main,
-                          borderColor: theme.palette.tabiyaBlue.main,
-                          color: theme.palette.tabiyaBlue.contrastText,
+                          backgroundColor: "#2e7d32",
+                          borderColor: "#2e7d32",
+                          color: "#ffffff",
                           "&:hover": {
-                            backgroundColor: theme.palette.tabiyaBlue.dark,
+                            backgroundColor: "#1b5e20",
                           },
                         }
                       : {
                           borderColor: theme.palette.grey[400],
                           color: theme.palette.text.primary,
                           "&:hover": {
-                            borderColor: theme.palette.tabiyaBlue.main,
-                            color: theme.palette.tabiyaBlue.main,
+                            borderColor: "#2e7d32",
+                            color: "#2e7d32",
                           },
                         }),
                   }}
@@ -210,19 +210,19 @@ const BWSTaskMessage: React.FC<BWSTaskMessageProps> = ({ taskId, taskNumber, tot
                     fontWeight: 600,
                     ...(isSelected
                       ? {
-                          backgroundColor: theme.palette.tabiyaYellow.main,
-                          borderColor: theme.palette.tabiyaYellow.main,
-                          color: theme.palette.tabiyaYellow.contrastText,
+                          backgroundColor: "#b71c1c",
+                          borderColor: "#b71c1c",
+                          color: "#ffffff",
                           "&:hover": {
-                            backgroundColor: theme.palette.tabiyaYellow.dark,
+                            backgroundColor: "#7f0000",
                           },
                         }
                       : {
                           borderColor: theme.palette.grey[400],
                           color: theme.palette.text.primary,
                           "&:hover": {
-                            borderColor: theme.palette.tabiyaYellow.dark,
-                            color: theme.palette.tabiyaYellow.dark,
+                            borderColor: "#b71c1c",
+                            color: "#b71c1c",
                           },
                         }),
                   }}
