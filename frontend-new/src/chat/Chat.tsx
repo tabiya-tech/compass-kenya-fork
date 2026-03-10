@@ -801,7 +801,7 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
           const isConclusionMessage = history.conversation_completed;
           const mappedMessages = history.messages
             .filter((_, idx) => !(isConclusionMessage && idx === history.messages.length - 1))
-            .flatMap((message: ConversationMessage) => {
+            .flatMap((message: ConversationMessage): IChatMessage<any>[] => {
               if (message.sender === ConversationMessageSender.USER) {
                 return [generateUserMessage(message.message, message.sent_at)];
               }
