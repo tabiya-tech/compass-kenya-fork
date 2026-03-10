@@ -46,12 +46,12 @@ export function getUserFriendlyConversationPhaseName(phase: CurrentPhase): strin
       // BWS phase has total=12 (occupation ranking tasks)
       // Use different label for BWS vs regular questions
       const label =
-        phase.total === 12
+        phase.total === 8
           ? i18n.t("chat.chatProgressbar.labels.tasks")
           : i18n.t("chat.chatProgressbar.labels.questions");
 
       const phaseName =
-        phase.total === 12
+        phase.total === 8
           ? i18n.t("chat.chatProgressbar.phases.rankingOccupations")
           : USER_FRIENDLY_PHASE_NAMES[ConversationPhase.PREFERENCE_ELICITATION];
 
