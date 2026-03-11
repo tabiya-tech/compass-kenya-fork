@@ -190,10 +190,18 @@ async def import_conversation(
             return False
 
         user_repository = UserPreferenceRepository(target_db)
+        
+        # Get existing user preferences to preserve existing sessions
+        existing_user_preferences = await user_repository.get_user_preference_by_user_id(target_user_id)
+        existing_sessions = existing_user_preferences.sessions if existing_user_preferences else []
+        
+        # Generate new session ID and prepend it to existing sessions
         target_new_session_id = generate_new_session_id()
+        new_sessions = [target_new_session_id, *existing_sessions]
+        
         await user_repository.update_user_preference(
             target_user_id,
-            UserPreferencesRepositoryUpdateRequest(sessions=[target_new_session_id]),
+            UserPreferencesRepositoryUpdateRequest(sessions=new_sessions),
         )
 
         # Update session ID in the state

@@ -9,6 +9,7 @@ jest.mock("src/envService", () => ({
   getMetricsEnabled: jest.fn(() => "true"),
   getMetricsConfig: jest.fn(() => ""),
   getCvUploadEnabled: jest.fn(() => "true"),
+  getNewSessionEnabled: jest.fn(() => false),
   getSocialAuthDisabled: jest.fn(() => "false"),
   getSupportedLocales: jest.fn(() => JSON.stringify(["en-US"])),
   getDefaultLocale: jest.fn(() => "en-US"),
