@@ -81,6 +81,8 @@ declare module "@mui/material/styles" {
     containerBackground: PaletteColor;
     tabiyaBlue: PaletteColor;
     tabiyaYellow: PaletteColor;
+    tabiyaGreen: PaletteColor;
+    tabiyaRed: PaletteColor;
     text: TypeText;
   }
 
@@ -94,6 +96,8 @@ declare module "@mui/material/styles" {
     containerBackground?: PaletteColorOptions;
     tabiyaBlue?: PaletteColorOptions;
     tabiyaYellow?: PaletteColorOptions;
+    tabiyaGreen?: PaletteColorOptions;
+    tabiyaRed?: PaletteColorOptions;
   }
 
   interface TypographyVariants {
