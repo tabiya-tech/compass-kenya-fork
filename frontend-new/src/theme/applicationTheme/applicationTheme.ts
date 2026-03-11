@@ -65,6 +65,7 @@ export const TabiyaBasicColors = {
   Green: "#00FF91",
   LightGreen: "#E4F8E2",
   DarkGreen: "#1E7166",
+  DarkRed: "#B71C1C",
   Gray: "#F3F1EE",
   GrayDark: "#41403D",
 };
@@ -99,6 +100,8 @@ const lightPalette: PaletteOptions = {
   },
   tabiyaYellow: augmentedThemeColor(TabiyaBasicColors.Yellow),
   tabiyaBlue: augmentedThemeColor(TabiyaBasicColors.DarkBlue),
+  tabiyaGreen: augmentedThemeColor(TabiyaBasicColors.DarkGreen),
+  tabiyaRed: augmentedThemeColor(TabiyaBasicColors.DarkRed),
   containerBackground: {
     light: "#FFFFFF",
     dark: "#DFDDD9",
