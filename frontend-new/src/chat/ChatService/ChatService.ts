@@ -213,12 +213,7 @@ export default class ChatService {
 
     if (streamError) {
       const errorEvent = streamError as ErrorEventData;
-      throw errorFactory(
-        response.status,
-        ErrorConstants.ErrorCodes.API_ERROR,
-        errorEvent.message,
-        errorEvent
-      );
+      throw errorFactory(response.status, ErrorConstants.ErrorCodes.API_ERROR, errorEvent.message, errorEvent);
     }
 
     if (!completedTurn) {

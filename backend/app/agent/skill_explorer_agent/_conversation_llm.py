@@ -20,7 +20,7 @@ from common_libs.retry import Retry
 # centralize use for skill_explorer_agent and conversation_llm_test
 _FINAL_MESSAGE_KEY = "exploreSkills.finalMessage"
 
-_END_OF_CONVERSATION_TOKEN = "<END_OF_CONVERSATION>"
+_END_OF_CONVERSATION_TOKEN = "<END_OF_CONVERSATION>"  # nosec B105 - LLM control token, not a password
 _MAX_CONTROL_TOKEN_LENGTH = len(_END_OF_CONVERSATION_TOKEN)
 
 

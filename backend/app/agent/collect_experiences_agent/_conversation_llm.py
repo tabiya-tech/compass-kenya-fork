@@ -25,8 +25,8 @@ from app.agent.persona_detector import PersonaType, get_persona_prompt_section
 
 _NO_EXPERIENCE_COLLECTED = "No experience data has been collected yet"
 _FINAL_MESSAGE = "Thank you for sharing your experiences. Let's move on to the next step."
-_END_OF_WORKTYPE_TOKEN = "<END_OF_WORKTYPE>"
-_END_OF_CONVERSATION_TOKEN = "<END_OF_CONVERSATION>"
+_END_OF_WORKTYPE_TOKEN = "<END_OF_WORKTYPE>"  # nosec B105 - LLM control token, not a password
+_END_OF_CONVERSATION_TOKEN = "<END_OF_CONVERSATION>"  # nosec B105 - LLM control token, not a password
 _CONTROL_TOKENS = (_END_OF_WORKTYPE_TOKEN, _END_OF_CONVERSATION_TOKEN)
 _MAX_CONTROL_TOKEN_LENGTH = max(len(token) for token in _CONTROL_TOKENS)
 
