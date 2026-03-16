@@ -1599,6 +1599,183 @@ describe("Chat", () => {
       expect(useSnackbar().enqueueSnackbar).not.toHaveBeenCalled();
     });
 
+    test("should keep typing visible until the first streamed delta and update progress live", async () => {
+      const givenUser: TabiyaUser = getMockUser();
+      AuthenticationStateService.getInstance().setUser(givenUser);
+      const givenActiveSessionId = 123;
+      UserPreferencesStateService.getInstance().setUserPreferences(
+        getMockUserPreferences(givenUser, givenActiveSessionId)
+      );
+
+      const givenPreviousConversation: ConversationResponse = getMockConversationResponse(
+        [
+          {
+            message_id: nanoid(),
+            message: "Welcome",
+            sent_at: new Date().toISOString(),
+            sender: ConversationMessageSender.COMPASS,
+            reaction: null,
+          },
+        ],
+        ConversationPhase.INTRO,
+        0
+      );
+      jest.spyOn(ChatService.getInstance(), "getChatHistory").mockResolvedValueOnce(givenPreviousConversation);
+
+      const streamedPhase = {
+        phase: ConversationPhase.PREFERENCE_ELICITATION,
+        percentage: 72,
+        current: 1,
+        total: 6,
+      };
+      const finalResponse: ConversationResponse = {
+        messages: [
+          {
+            message_id: "stream-msg",
+            message: "Hello there",
+            sent_at: new Date().toISOString(),
+            sender: ConversationMessageSender.COMPASS,
+            reaction: null,
+          },
+        ],
+        conversation_completed: false,
+        conversation_conducted_at: null,
+        experiences_explored: 0,
+        current_phase: streamedPhase,
+      };
+
+      let resolveSendMessage!: (value: ConversationResponse) => void;
+      let streamHandlers: any;
+      jest.spyOn(ChatService.getInstance(), "sendMessage").mockImplementationOnce(
+        (_sessionId, _message, handlers) =>
+          new Promise((resolve) => {
+            streamHandlers = handlers;
+            resolveSendMessage = resolve;
+          })
+      );
+
+      render(<Chat />);
+      await assertChatInitialized();
+
+      const givenMessage = "Tell me what happens next";
+      act(() => {
+        (ChatMessageField as jest.Mock).mock.calls.at(-1)[0].handleSend(givenMessage);
+      });
+
+      await waitFor(() => {
+        expect((ChatMessageField as jest.Mock).mock.calls.at(-1)[0].aiIsTyping).toBe(true);
+      });
+
+      act(() => {
+        streamHandlers?.onStatusUpdated?.({
+          label: "routing",
+          status: "running",
+          agent_type: "welcome_agent",
+          detail: "INTRO",
+          current_phase: givenPreviousConversation.current_phase,
+        });
+      });
+
+      await waitFor(() => {
+        expect(ChatList as jest.Mock).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            messages: expect.arrayContaining([
+              expect.objectContaining({
+                type: TYPING_CHAT_MESSAGE_TYPE,
+                payload: expect.objectContaining({
+                  message: "Choosing the best next step: INTRO",
+                }),
+              }),
+            ]),
+          }),
+          {}
+        );
+      });
+
+      act(() => {
+        streamHandlers?.onPhaseUpdated?.({
+          current_phase: streamedPhase,
+          agent_type: "preference_elicitation_agent",
+          detail: "phase_progressed",
+        });
+        streamHandlers?.onMessageStarted?.({
+          message_id: "stream-msg",
+          sender: ConversationMessageSender.COMPASS,
+          message_type: "TEXT",
+        });
+      });
+
+      await waitFor(() => {
+        expect((ChatMessageField as jest.Mock).mock.calls.at(-1)[0].aiIsTyping).toBe(true);
+      });
+      expect(ChatProgressBar as jest.Mock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          phase: streamedPhase.phase,
+          percentage: streamedPhase.percentage,
+          current: streamedPhase.current,
+          total: streamedPhase.total,
+        }),
+        {}
+      );
+
+      act(() => {
+        streamHandlers?.onMessageDelta?.({
+          message_id: "stream-msg",
+          delta: "Hello",
+        });
+      });
+
+      await waitFor(() => {
+        expect((ChatMessageField as jest.Mock).mock.calls.at(-1)[0].aiIsTyping).toBe(false);
+      });
+      await waitFor(() => {
+        expect(ChatList as jest.Mock).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            messages: expect.arrayContaining([
+              expect.objectContaining({
+                type: COMPASS_CHAT_MESSAGE_TYPE,
+                payload: expect.objectContaining({
+                  message_id: "stream-msg",
+                  message: "Hello",
+                }),
+              }),
+            ]),
+          }),
+          {}
+        );
+      });
+
+      act(() => {
+        streamHandlers?.onMessageCompleted?.(finalResponse.messages[0]);
+        streamHandlers?.onTurnCompleted?.({
+          conversation_completed: false,
+          conversation_conducted_at: null,
+          experiences_explored: 0,
+          current_phase: streamedPhase,
+        });
+        resolveSendMessage(finalResponse);
+      });
+
+      await waitFor(() => {
+        expect(ChatList as jest.Mock).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            messages: expect.arrayContaining([
+              expect.objectContaining({
+                type: COMPASS_CHAT_MESSAGE_TYPE,
+                payload: expect.objectContaining({
+                  message_id: "stream-msg",
+                  message: "Hello there",
+                }),
+              }),
+            ]),
+          }),
+          {}
+        );
+      });
+      expect(console.error).not.toHaveBeenCalled();
+      expect(console.warn).not.toHaveBeenCalled();
+    });
+
     test("should handle send message error", async () => {
       // GIVEN a user is logged in
       const givenUser: TabiyaUser = getMockUser();

@@ -12,6 +12,7 @@ import {
 } from "src/chat/ChatService/_test_utilities/generateTestChatResponses";
 
 const serializeSSEEvent = (event: string, data: unknown) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+const serializeCRLFSSEEvent = (event: string, data: unknown) => `event: ${event}\r\ndata: ${JSON.stringify(data)}\r\n\r\n`;
 
 describe("ChatService", () => {
   let givenApiServerUrl: string = "/path/to/api";
@@ -161,6 +162,109 @@ describe("ChatService", () => {
         expect(console.warn).not.toHaveBeenCalled();
       }
     );
+
+    test("should dispatch live stream handlers for status, phase, and delta events", async () => {
+      const givenMessage = "Hello";
+      const expectedMessages = generateTestChatResponses();
+      const expectedRootMessageResponse: ConversationResponse = {
+        messages: [expectedMessages[0]],
+        conversation_completed: false,
+        conversation_conducted_at: null,
+        experiences_explored: 1,
+        current_phase: {
+          phase: ConversationPhase.PREFERENCE_ELICITATION,
+          percentage: 72,
+          current: 1,
+          total: 6,
+        },
+      };
+      const sseResponseBody = [
+        serializeSSEEvent("turn_started", {
+          session_id: 1234,
+          user_message_id: "user-1",
+          current_phase: {
+            phase: ConversationPhase.INTRO,
+            percentage: 0,
+            current: null,
+            total: null,
+          },
+        }),
+        serializeCRLFSSEEvent("status_updated", {
+          label: "routing",
+          status: "running",
+          agent_type: "welcome_agent",
+          detail: "INTRO",
+          current_phase: {
+            phase: ConversationPhase.INTRO,
+            percentage: 0,
+            current: null,
+            total: null,
+          },
+        }),
+        serializeSSEEvent("phase_updated", {
+          current_phase: expectedRootMessageResponse.current_phase,
+          agent_type: "preference_elicitation_agent",
+          detail: "phase_progressed",
+        }),
+        serializeSSEEvent("message_started", {
+          message_id: expectedMessages[0].message_id,
+          sender: expectedMessages[0].sender,
+          message_type: expectedMessages[0].message_type ?? "TEXT",
+          metadata: expectedMessages[0].metadata ?? null,
+        }),
+        serializeSSEEvent("message_delta", {
+          message_id: expectedMessages[0].message_id,
+          delta: expectedMessages[0].message.slice(0, 5),
+        }),
+        serializeSSEEvent("message_completed", expectedMessages[0]),
+        serializeSSEEvent("turn_completed", {
+          conversation_completed: expectedRootMessageResponse.conversation_completed,
+          conversation_conducted_at: expectedRootMessageResponse.conversation_conducted_at,
+          experiences_explored: expectedRootMessageResponse.experiences_explored,
+          current_phase: expectedRootMessageResponse.current_phase,
+        }),
+      ].join("");
+      setupAPIServiceSpy(StatusCodes.CREATED, sseResponseBody, "text/event-stream;charset=UTF-8");
+
+      const handlers = {
+        onTurnStarted: jest.fn(),
+        onStatusUpdated: jest.fn(),
+        onPhaseUpdated: jest.fn(),
+        onMessageStarted: jest.fn(),
+        onMessageDelta: jest.fn(),
+        onMessageCompleted: jest.fn(),
+        onTurnCompleted: jest.fn(),
+      };
+
+      const response = await ChatService.getInstance().sendMessage(1234, givenMessage, handlers);
+
+      expect(response).toEqual(expectedRootMessageResponse);
+      expect(handlers.onTurnStarted).toHaveBeenCalledTimes(1);
+      expect(handlers.onStatusUpdated).toHaveBeenCalledWith(
+        expect.objectContaining({
+          label: "routing",
+          status: "running",
+        })
+      );
+      expect(handlers.onPhaseUpdated).toHaveBeenCalledWith(
+        expect.objectContaining({
+          current_phase: expectedRootMessageResponse.current_phase,
+        })
+      );
+      expect(handlers.onMessageStarted).toHaveBeenCalledTimes(1);
+      expect(handlers.onMessageDelta).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message_id: expectedMessages[0].message_id,
+          delta: expectedMessages[0].message.slice(0, 5),
+        })
+      );
+      expect(handlers.onMessageCompleted).toHaveBeenCalledWith(expectedMessages[0]);
+      expect(handlers.onTurnCompleted).toHaveBeenCalledWith(
+        expect.objectContaining({
+          current_phase: expectedRootMessageResponse.current_phase,
+        })
+      );
+    });
   });
 
   describe("getChatHistory", () => {

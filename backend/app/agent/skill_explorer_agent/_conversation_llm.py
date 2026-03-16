@@ -9,6 +9,7 @@ from app.agent.prompt_template.agent_prompt_template import STD_AGENT_CHARACTER
 from app.agent.prompt_template.format_prompt import replace_placeholders_with_indent
 from app.conversation_memory.conversation_formatter import ConversationHistoryFormatter
 from app.conversation_memory.conversation_memory_types import ConversationContext
+from app.conversations.streaming import ConversationStreamingSink
 from app.countries import Country
 from app.i18n.translation_service import t
 from app.agent.persona_detector import PersonaType, get_persona_prompt_section
@@ -18,6 +19,38 @@ from common_libs.retry import Retry
 
 # centralize use for skill_explorer_agent and conversation_llm_test
 _FINAL_MESSAGE_KEY = "exploreSkills.finalMessage"
+
+_END_OF_CONVERSATION_TOKEN = "<END_OF_CONVERSATION>"
+_MAX_CONTROL_TOKEN_LENGTH = len(_END_OF_CONVERSATION_TOKEN)
+
+
+class _SafeStreamingAccumulator:
+    def __init__(self, *, stream_sink: ConversationStreamingSink | None, message_id: str):
+        self._stream_sink = stream_sink
+        self._message_id = message_id
+        self._buffer = ""
+        self._emitted_length = 0
+
+    async def on_chunk(self, chunk: str) -> None:
+        if self._stream_sink is None or not chunk:
+            return
+        self._buffer += chunk
+        safe_prefix_length = max(0, len(self._buffer) - (_MAX_CONTROL_TOKEN_LENGTH - 1))
+        if safe_prefix_length <= 0:
+            return
+        safe_text = self._buffer[:safe_prefix_length]
+        self._buffer = self._buffer[safe_prefix_length:]
+        if safe_text:
+            self._emitted_length += len(safe_text)
+            await self._stream_sink.append_text(message_id=self._message_id, delta=safe_text)
+
+    async def flush_remaining(self, final_text: str) -> None:
+        if self._stream_sink is None:
+            return
+        remaining = final_text[self._emitted_length:]
+        if remaining:
+            self._emitted_length += len(remaining)
+            await self._stream_sink.append_text(message_id=self._message_id, delta=remaining)
 
 
 class _ConversationLLM:
@@ -35,18 +68,18 @@ class _ConversationLLM:
                       rich_response: bool,
                       experience_title,
                       work_type: WorkType,
-                      logger: logging.Logger) -> AgentOutput:
+                      logger: logging.Logger,
+                      stream_sink: ConversationStreamingSink | None = None,
+                      message_id: str | None = None) -> AgentOutput:
 
         async def _callback(attempt: int, max_retries: int) -> tuple[AgentOutput, float, BaseException | None]:
-            # Call the LLM to get the next message for the user.
-            # Add some temperature and top_p variation to prompt the LLM to return different results on each retry.
-            # Exponentially increase the temperature and top_p to avoid the LLM returning the same result every time.
             temperature_config = get_config_variation(start_temperature=0.25, end_temperature=0.5,
                                                       start_top_p=0.8, end_top_p=1,
                                                       attempt=attempt, max_retries=max_retries)
             logger.debug("Calling _ConversationLLM with temperature: %s, top_p: %s",
                          temperature_config["temperature"],
                          temperature_config["top_p"])
+            attempt_sink = stream_sink if attempt == 1 else None
             return await _ConversationLLM._internal_execute(
                 temperature_config=temperature_config,
                 experiences_explored=experiences_explored,
@@ -60,7 +93,9 @@ class _ConversationLLM:
                 rich_response=rich_response,
                 experience_title=experience_title,
                 work_type=work_type,
-                logger=logger
+                logger=logger,
+                stream_sink=attempt_sink,
+                message_id=message_id,
             )
 
         result, _result_penalty, _error = await Retry[AgentOutput].call_with_penalty(callback=_callback, logger=logger)
@@ -80,32 +115,29 @@ class _ConversationLLM:
                                 rich_response: bool,
                                 experience_title,
                                 work_type: WorkType,
-                                logger: logging.Logger) -> tuple[AgentOutput, float, BaseException | None]:
+                                logger: logging.Logger,
+                                stream_sink: ConversationStreamingSink | None = None,
+                                message_id: str | None = None) -> tuple[AgentOutput, float, BaseException | None]:
         """
         The main conversation logic for the skill explorer agent.
         """
 
         if user_input.message == "":
-            # If the user input is empty, set it to "(silence)"
-            # This is to avoid the agent failing to respond to an empty input
             user_input.message = "(silence)"
             user_input.is_artificial = True
-        msg = user_input.message.strip()  # Remove leading and trailing whitespaces
+        msg = user_input.message.strip()
         llm_start_time = time.time()
+
+        if message_id is None:
+            message_id = user_input.message_id
 
         llm_response: LLMResponse
         llm_input: LLMInput | str
         system_instructions: list[str] | str | None = None
+        streamer = _SafeStreamingAccumulator(stream_sink=stream_sink, message_id=message_id)
+        if stream_sink is not None:
+            await stream_sink.start_message(message_id=message_id)
         if first_time_for_experience:
-            # If this is the first experience, generate only a response without passing the conversation history
-            # or user message. Including these can confuse the model, potentially leading to responses about previous experiences.
-            #
-            # Various approaches have been tested, including using artificial prompts like "I am ready to share my experience as a ...",
-            # but this added unnecessary complexity.
-            #
-            # While earlier mitigations helped reduce this issue, they are no longer required, though we are keeping them for now
-            # in case they prove useful in the future.
-
             llm = GeminiGenerativeLLM(
                 config=LLMConfig(
                     generation_config=temperature_config
@@ -119,7 +151,7 @@ class _ConversationLLM:
                 rich_response=rich_response,
                 work_type=work_type
             )
-            llm_response = await llm.generate_content(llm_input=llm_input)
+            llm_response = await llm.stream_content(llm_input=llm_input, on_chunk=streamer.on_chunk)
         else:
             system_instructions = _ConversationLLM._create_conversation_system_instructions(
                 question_asked_until_now=question_asked_until_now,
@@ -137,7 +169,7 @@ class _ConversationLLM:
             llm_input = ConversationHistoryFormatter.format_for_agent_generative_prompt(
                 model_response_instructions=None,
                 context=context, user_input=msg)
-            llm_response = await llm.generate_content(llm_input=llm_input)
+            llm_response = await llm.stream_content(llm_input=llm_input, on_chunk=streamer.on_chunk)
 
         llm_end_time = time.time()
         llm_stats = LLMStats(prompt_token_count=llm_response.prompt_token_count,
@@ -159,15 +191,18 @@ class _ConversationLLM:
                 agent_response_time_in_sec=round(llm_end_time - llm_start_time, 2),
                 llm_stats=[llm_stats]), 100, ValueError("LLM response is empty")
 
-        if llm_response.text == "<END_OF_CONVERSATION>":
+        if llm_response.text == _END_OF_CONVERSATION_TOKEN:
             llm_response.text = t("messages", _FINAL_MESSAGE_KEY)
             finished = True
-        if llm_response.text.find("<END_OF_CONVERSATION>") != -1:
+        if _END_OF_CONVERSATION_TOKEN in llm_response.text:
             llm_response.text = t("messages", _FINAL_MESSAGE_KEY)
             finished = True
-            logger.warning("The response contains '<END_OF_CONVERSATION>' and additional text: %s", llm_response.text)
+            logger.warning("The response contains '%s' and additional text: %s", _END_OF_CONVERSATION_TOKEN, llm_response.text)
+
+        await streamer.flush_remaining(llm_response.text)
 
         return AgentOutput(
+            message_id=message_id,
             message_for_user=llm_response.text,
             finished=finished,
             agent_type=AgentType.EXPLORE_SKILLS_AGENT,

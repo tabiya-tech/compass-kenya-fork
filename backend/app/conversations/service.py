@@ -274,10 +274,21 @@ class ConversationService(IConversationService):
         self._conversation_memory_manager.set_streaming_sink(stream_sink)
         try:
             if stream_sink is not None:
+                initial_phase = get_current_conversation_phase_response(state, self._logger).model_dump(mode="json")
                 await stream_sink.emit_turn_started(
                     session_id=session_id,
                     user_message_id=user_input.message_id,
-                    current_phase=get_current_conversation_phase_response(state, self._logger).model_dump(mode="json"),
+                    current_phase=initial_phase,
+                )
+                await stream_sink.emit_status_update(
+                    label="preparing_state",
+                    status="started",
+                    current_phase=initial_phase,
+                )
+                await stream_sink.emit_status_update(
+                    label="routing",
+                    status="running",
+                    current_phase=initial_phase,
                 )
 
             await self._agent_director.execute(user_input=user_input)
@@ -293,6 +304,13 @@ class ConversationService(IConversationService):
             state.agent_director_state.conversation_conducted_at = datetime.now(timezone.utc)
 
             # save the state, before responding to the user
+            current_phase = get_current_conversation_phase_response(state, self._logger)
+            if stream_sink is not None:
+                await stream_sink.emit_status_update(
+                    label="saving_state",
+                    status="running",
+                    current_phase=current_phase.model_dump(mode="json"),
+                )
             await self._application_state_metrics_recorder.save_state(state, user_id)
 
             conversation_response = ConversationResponse(
@@ -300,7 +318,7 @@ class ConversationService(IConversationService):
                 conversation_completed=state.agent_director_state.current_phase == ConversationPhase.ENDED,
                 conversation_conducted_at=state.agent_director_state.conversation_conducted_at,
                 experiences_explored=get_total_explored_experiences(state),
-                current_phase=get_current_conversation_phase_response(state, self._logger)
+                current_phase=current_phase
             )
             if stream_sink is not None:
                 await stream_sink.emit_turn_completed(conversation_response)

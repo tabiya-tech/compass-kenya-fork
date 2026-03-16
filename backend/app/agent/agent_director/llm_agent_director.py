@@ -81,8 +81,10 @@ class LLMAgentDirector(AbstractAgentDirector):
             AgentType.FAREWELL_AGENT: FarewellAgent()
         }
         self._llm_router = LLMRouter(self._logger)
+        self._streaming_sink: ConversationStreamingSink | None = None
 
     def set_streaming_sink(self, sink: ConversationStreamingSink | None) -> None:
+        self._streaming_sink = sink
         for agent in self._agents.values():
             agent.set_streaming_sink(sink)
 
@@ -243,6 +245,19 @@ class LLMAgentDirector(AbstractAgentDirector):
                     phase=self._state.current_phase,
                     context=context)
                 self._logger.debug("Running agent: %s", {suitable_agent_type})
+                _AGENT_STATUS_LABELS = {
+                    AgentType.WELCOME_AGENT: "preparing_welcome",
+                    AgentType.EXPLORE_EXPERIENCES_AGENT: "exploring_experiences",
+                    AgentType.EXPLORE_SKILLS_AGENT: "exploring_skills_in_depth",
+                    AgentType.RECOMMENDER_ADVISOR_AGENT: "preparing_recommendations",
+                    AgentType.FAREWELL_AGENT: "wrapping_up",
+                }
+                if self._streaming_sink is not None:
+                    await self._streaming_sink.emit_status_update(
+                        label=_AGENT_STATUS_LABELS.get(suitable_agent_type, "running_agent"),
+                        status="started",
+                        agent_type=suitable_agent_type.value,
+                    )
 
                 # Track routed agent for sticky routing and observability
                 if suitable_agent_type != self._state.last_routed_agent:
@@ -258,6 +273,13 @@ class LLMAgentDirector(AbstractAgentDirector):
 
                 # Perform the task
                 agent_output = await agent_for_task.execute(clean_input, context)
+                if self._streaming_sink is not None:
+                    await self._streaming_sink.emit_status_update(
+                        label="running_agent",
+                        status="completed",
+                        agent_type=suitable_agent_type.value,
+                        detail="response_ready",
+                    )
                 
                 if not agent_for_task.is_responsible_for_conversation_history():
                     await self._conversation_manager.update_history(clean_input, agent_output)
@@ -281,6 +303,13 @@ class LLMAgentDirector(AbstractAgentDirector):
                 if transitioned_to_new_phase:
                     self._state.current_phase = new_phase
                     phase_ctx_var.set(new_phase.value if new_phase else ":none:")
+                    if self._streaming_sink is not None:
+                        await self._streaming_sink.emit_status_update(
+                            label="phase_transition",
+                            status="completed",
+                            agent_type=suitable_agent_type.value,
+                            detail=new_phase.name,
+                        )
 
                     if get_application_config().inline_phase_transition:
                         # Inline transition: skip the (silence) loop re-invocation.

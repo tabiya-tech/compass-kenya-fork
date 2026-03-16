@@ -159,6 +159,18 @@ class TestConversationsRoutes:
             sent_at=datetime.now().isoformat()
         )
         expected_stream = "".join([
+            format_sse_event("status_updated", {
+                "label": "routing",
+                "status": "running",
+                "agent_type": "welcome_agent",
+                "detail": "INTRO",
+                "current_phase": expected_turn_completed["current_phase"],
+            }),
+            format_sse_event("phase_updated", {
+                "current_phase": expected_turn_completed["current_phase"],
+                "agent_type": "preference_elicitation_agent",
+                "detail": "phase_progressed",
+            }),
             format_sse_event("message_started", {
                 "message_id": expected_message.message_id,
                 "sender": "COMPASS",

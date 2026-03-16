@@ -76,8 +76,8 @@ class IntentAnalyzerTool:
                                                             language_style=get_language_style()),
             config=LLMConfig(
                 generation_config=ZERO_TEMPERATURE_GENERATION_CONFIG | JSON_GENERATION_CONFIG | {
-                    "max_output_tokens": 3000
-                    # Limit the output to 3000 tokens to avoid the "reasoning recursion issues"
+                    "max_output_tokens": 1024
+                    # Intent analysis emits a small JSON payload, so a lower cap improves latency.
                 } | temperature_config | with_response_schema(_LLMOutput)
             ))
 

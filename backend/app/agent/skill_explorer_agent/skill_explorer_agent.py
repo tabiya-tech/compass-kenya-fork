@@ -203,7 +203,9 @@ class SkillsExplorerAgent(Agent):
                                                                rich_response=rich_response,
                                                                experience_title=self.experience_entity.experience_title,
                                                                work_type=self.experience_entity.work_type,
-                                                               logger=self.logger)
+                                                               logger=self.logger,
+                                                               stream_sink=self._streaming_sink,
+                                                               message_id=user_input.message_id)
 
         if conversation_llm_output.message_for_user != t("messages", _FINAL_MESSAGE_KEY):
             # don't add the final message to the list of questions asked, since it is not a question

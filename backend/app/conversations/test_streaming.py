@@ -60,3 +60,91 @@ async def test_streaming_sink_emits_message_and_turn_events():
     ]
     assert events[2][1]["message"] == "Hello from Compass"
     assert events[3][1]["experiences_explored"] == 1
+
+
+@pytest.mark.asyncio
+async def test_streaming_sink_emits_status_and_phase_updates():
+    sink = ConversationStreamingSink()
+
+    await sink.emit_status_update(
+        label="routing",
+        status="running",
+        agent_type="welcome_agent",
+        detail="INTRO",
+        current_phase={"phase": "INTRO", "percentage": 0, "current": None, "total": None},
+    )
+    await sink.emit_phase_update(
+        current_phase={"phase": "PREFERENCE_ELICITATION", "percentage": 72, "current": 1, "total": 6},
+        agent_type="preference_elicitation_agent",
+        detail="phase_progressed",
+    )
+    await sink.close()
+
+    events = []
+    async for chunk in sink.iter_sse():
+        lines = [line for line in chunk.split("\n") if line]
+        event_name_line, data_line = lines[:2]
+        events.append((event_name_line.removeprefix("event: "), json.loads(data_line.removeprefix("data: "))))
+
+    assert [event_name for event_name, _ in events] == [
+        "status_updated",
+        "phase_updated",
+    ]
+    assert events[0][1]["label"] == "routing"
+    assert events[1][1]["current_phase"]["phase"] == "PREFERENCE_ELICITATION"
+
+
+@pytest.mark.asyncio
+async def test_streaming_sink_coerces_non_string_detail_values():
+    sink = ConversationStreamingSink()
+
+    await sink.emit_status_update(
+        label="running_agent",
+        status="started",
+        agent_type="welcome_agent",
+        detail=0,
+    )
+    await sink.close()
+
+    events = []
+    async for chunk in sink.iter_sse():
+        lines = [line for line in chunk.split("\n") if line]
+        event_name_line, data_line = lines[:2]
+        events.append((event_name_line.removeprefix("event: "), json.loads(data_line.removeprefix("data: "))))
+
+    assert events == [
+        (
+            "status_updated",
+            {
+                "label": "running_agent",
+                "status": "started",
+                "agent_type": "welcome_agent",
+                "detail": "0",
+                "current_phase": None,
+            },
+        )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_streaming_sink_appends_multiple_deltas_once_per_message_start():
+    sink = ConversationStreamingSink()
+
+    await sink.append_text(message_id="msg-1", delta="Hello")
+    await sink.append_text(message_id="msg-1", delta=", world")
+    await sink.append_text(message_id="msg-1", delta="")
+    await sink.close()
+
+    events = []
+    async for chunk in sink.iter_sse():
+        lines = [line for line in chunk.split("\n") if line]
+        event_name_line, data_line = lines[:2]
+        events.append((event_name_line.removeprefix("event: "), json.loads(data_line.removeprefix("data: "))))
+
+    assert [event_name for event_name, _ in events] == [
+        "message_started",
+        "message_delta",
+        "message_delta",
+    ]
+    assert events[1][1]["delta"] == "Hello"
+    assert events[2][1]["delta"] == ", world"

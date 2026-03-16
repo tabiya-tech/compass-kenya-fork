@@ -296,10 +296,9 @@ class _ConversationLLM:
         if stream_sink is not None:
             await stream_sink.start_message(message_id=message_id)
         if first_time_visit:
-            # If this is the first time the user has visited the agent, the agent should get to the point
-            # and not introduce itself or ask how the user is doing.
+            first_visit_config = {**temperature_config, "max_output_tokens": 512}
             llm = GeminiGenerativeLLM(config=LLMConfig(
-                generation_config=temperature_config
+                generation_config=first_visit_config
             ))
             llm_input = _ConversationLLM._get_first_time_generative_prompt(
                 country_of_user=country_of_user,
@@ -314,11 +313,12 @@ class _ConversationLLM:
                                                                             unexplored_types=unexplored_types,
                                                                             explored_types=explored_types,
                                                                             last_referenced_experience_index=last_referenced_experience_index)
+            conversation_config = {**temperature_config, "max_output_tokens": 512}
             llm = GeminiGenerativeLLM(
                 system_instructions=system_instructions,
                 config=LLMConfig(
-                    language_model_name=AgentsConfig.deep_reasoning_model,
-                    generation_config=temperature_config
+                    language_model_name=AgentsConfig.default_model,
+                    generation_config=conversation_config
                 ))
             # Drop the first message from the conversation history, which is the welcome message from the welcome agent.
             # This message is treated as an instruction and causes the conversation to go off track.

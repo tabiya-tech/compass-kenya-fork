@@ -123,6 +123,8 @@ describe("Chat Utils", () => {
           message: givenMessage,
           sent_at: givenSentAt,
           reaction: givenReaction,
+          animateChunks: undefined,
+          streamVersion: undefined,
         },
         component: expect.any(Function),
       });
@@ -153,6 +155,8 @@ describe("Chat Utils", () => {
           message: givenMessage,
           sent_at: givenSentAt,
           reaction: null,
+          animateChunks: undefined,
+          streamVersion: undefined,
         },
         component: expect.any(Function),
       });
@@ -179,6 +183,8 @@ describe("Chat Utils", () => {
         type: TYPING_CHAT_MESSAGE_TYPE,
         payload: {
           waitBeforeThinking: undefined,
+          thinkingMessage: undefined,
+          message: undefined,
         },
         component: expect.any(Function),
       });

@@ -180,6 +180,19 @@ class CollectExperiencesAgent(Agent):
         self._search_services = search_services
         self._experience_pipeline_config = experience_pipeline_config
 
+    async def _emit_stream_status(self, label: str) -> None:
+        if self._streaming_sink is None:
+            return
+        await self._streaming_sink.emit_status_update(
+            label=label,
+            status="running",
+            agent_type=self.agent_type.value,
+        )
+
+    @staticmethod
+    def _has_pending_title_normalization(collected_data: list[CollectedData]) -> bool:
+        return any(elem.experience_title and not elem.normalized_experience_title for elem in collected_data)
+
     async def _normalize_experience_titles(self, *, collected_data: list[CollectedData]):
         if not self._search_services or self._state is None:
             return
@@ -250,7 +263,10 @@ class CollectExperiencesAgent(Agent):
             # TODO: the LLM can and will fail with an exception or even return None, we need to handle this
             last_referenced_experience_index, data_extraction_llm_stats = await data_extraction_llm.execute(user_input=user_input,
                                                                                                             context=context,
-                                                                                                            collected_experience_data_so_far=collected_data)
+                                                                                                            collected_experience_data_so_far=collected_data,
+                                                                                                            on_status=self._emit_stream_status)
+        if self._has_pending_title_normalization(collected_data):
+            await self._emit_stream_status(label="matching_job_titles")
         await self._normalize_experience_titles(collected_data=collected_data)
         # TODO: Keep track of the last_referenced_experience_index and if it has changed it means that the user has
         #   provided a new experience, we need to handle this as
@@ -261,6 +277,7 @@ class CollectExperiencesAgent(Agent):
         conversation_message_id = str(ObjectId())
 
         transition_decision_tool = TransitionDecisionTool(self.logger)
+        await self._emit_stream_status(label="composing_response")
 
         # Both are pure readers of collected_data/context/user_input -- safe to parallelize
         conversation_llm_output, (transition_decision, transition_reasoning, transition_llm_stats) = await asyncio.gather(
