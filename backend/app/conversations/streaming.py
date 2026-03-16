@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 from enum import Enum
 from typing import Any
 
@@ -8,9 +9,13 @@ from pydantic import BaseModel
 from app.agent.agent_types import AgentOutput
 from app.conversations.types import ConversationMessage, ConversationMessageSender, ConversationResponse
 
+SIMULATED_STREAM_CHUNK_SIZE = int(os.getenv("STREAM_CHUNK_SIZE", "10"))
+
 
 class ConversationStreamEventType(str, Enum):
     TURN_STARTED = "turn_started"
+    STATUS_UPDATED = "status_updated"
+    PHASE_UPDATED = "phase_updated"
     MESSAGE_STARTED = "message_started"
     MESSAGE_DELTA = "message_delta"
     MESSAGE_COMPLETED = "message_completed"
@@ -36,6 +41,20 @@ class MessageDeltaEvent(BaseModel):
     delta: str
 
 
+class StatusUpdatedEvent(BaseModel):
+    label: str
+    status: str = "running"
+    agent_type: str | None = None
+    detail: str | None = None
+    current_phase: dict[str, Any] | None = None
+
+
+class PhaseUpdatedEvent(BaseModel):
+    current_phase: dict[str, Any]
+    agent_type: str | None = None
+    detail: str | None = None
+
+
 class TurnCompletedEvent(BaseModel):
     conversation_completed: bool
     conversation_conducted_at: str | None = None
@@ -52,6 +71,12 @@ class ErrorEvent(BaseModel):
 def format_sse_event(event: str, data: dict[str, Any]) -> str:
     payload = json.dumps(data, ensure_ascii=True)
     return f"event: {event}\ndata: {payload}\n\n"
+
+
+def _normalize_optional_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    return str(value)
 
 
 def _get_message_type_and_metadata(agent_output: AgentOutput) -> tuple[str, dict[str, Any] | None]:
@@ -90,6 +115,42 @@ class ConversationStreamingSink:
                 session_id=session_id,
                 user_message_id=user_message_id,
                 current_phase=current_phase,
+            ),
+        )
+
+    async def emit_status_update(
+        self,
+        *,
+        label: str,
+        status: str = "running",
+        agent_type: str | None = None,
+        detail: Any | None = None,
+        current_phase: dict[str, Any] | None = None,
+    ) -> None:
+        await self._emit_model(
+            ConversationStreamEventType.STATUS_UPDATED,
+            StatusUpdatedEvent(
+                label=label,
+                status=status,
+                agent_type=agent_type,
+                detail=_normalize_optional_text(detail),
+                current_phase=current_phase,
+            ),
+        )
+
+    async def emit_phase_update(
+        self,
+        *,
+        current_phase: dict[str, Any],
+        agent_type: str | None = None,
+        detail: Any | None = None,
+    ) -> None:
+        await self._emit_model(
+            ConversationStreamEventType.PHASE_UPDATED,
+            PhaseUpdatedEvent(
+                current_phase=current_phase,
+                agent_type=agent_type,
+                detail=_normalize_optional_text(detail),
             ),
         )
 
@@ -133,7 +194,36 @@ class ConversationStreamingSink:
         await self._emit_model(ConversationStreamEventType.MESSAGE_COMPLETED, message)
 
     async def emit_agent_output(self, agent_output: AgentOutput) -> None:
-        await self.complete_message(conversation_message_from_agent_output(agent_output))
+        message = conversation_message_from_agent_output(agent_output)
+        already_streamed = message.message_id in self._started_message_ids
+        if already_streamed or message.message_type != "TEXT" or not message.message:
+            await self.complete_message(message)
+            return
+        await self._stream_text_then_complete(message)
+
+    async def _stream_text_then_complete(self, message: ConversationMessage) -> None:
+        text = message.message
+        await self.start_message(
+            message_id=message.message_id,
+            sender=message.sender.name,
+            message_type=message.message_type,
+            metadata=message.metadata,
+        )
+        offset = 0
+        while offset < len(text):
+            end = min(offset + SIMULATED_STREAM_CHUNK_SIZE, len(text))
+            if end < len(text):
+                space = text.rfind(" ", offset, end + 1)
+                if space > offset:
+                    end = space + 1
+            chunk = text[offset:end]
+            await self._emit_model(
+                ConversationStreamEventType.MESSAGE_DELTA,
+                MessageDeltaEvent(message_id=message.message_id, delta=chunk),
+            )
+            offset = end
+            await asyncio.sleep(0)
+        await self._emit_model(ConversationStreamEventType.MESSAGE_COMPLETED, message)
 
     async def emit_turn_completed(self, response: ConversationResponse) -> None:
         serialized_response = response.model_dump(mode="json")

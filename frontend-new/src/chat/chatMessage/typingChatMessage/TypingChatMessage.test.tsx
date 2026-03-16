@@ -120,4 +120,17 @@ describe("TypingChatMessage", () => {
     expect(console.error).not.toHaveBeenCalled();
     expect(console.warn).not.toHaveBeenCalled();
   });
+
+  test("should render an explicit streaming status message immediately", () => {
+    render(<TypingChatMessage message="Preparing your response" />);
+
+    expect(screen.getByText("Preparing your response")).toBeInTheDocument();
+    expect(screen.queryByText(i18n.t(UI_TEXT_KEYS.TYPING))).not.toBeInTheDocument();
+    act(() => {
+      jest.runAllTimers();
+    });
+    expect(screen.getByText("Preparing your response")).toBeInTheDocument();
+    expect(console.error).not.toHaveBeenCalled();
+    expect(console.warn).not.toHaveBeenCalled();
+  });
 });

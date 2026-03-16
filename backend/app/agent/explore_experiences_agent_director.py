@@ -21,6 +21,7 @@ from app.countries import Country
 from app.vector_search.esco_entities import SkillEntity
 from app.i18n.translation_service import t
 from app.vector_search.vector_search_dependencies import SearchServices
+from app.conversations.constants import DIVE_IN_EXPERIENCES_PERCENTAGE, PREFERENCE_ELICITATION_PERCENTAGE
 from app.conversations.streaming import ConversationStreamingSink
 
 
@@ -177,6 +178,61 @@ class ExploreExperiencesAgentDirector(Agent):
     This is a stateful agent.
     """
 
+    def _build_dive_in_stream_phase(self, state: ExploreExperiencesAgentDirectorState) -> dict[str, int | str | None]:
+        total_experiences = len(state.experiences_state)
+        total_explored_experiences = sum(
+            1 for exp in state.experiences_state.values() if exp.dive_in_phase == DiveInPhase.PROCESSED
+        )
+        dive_in_gap = PREFERENCE_ELICITATION_PERCENTAGE - DIVE_IN_EXPERIENCES_PERCENTAGE
+        if total_experiences == 0:
+            percentage = DIVE_IN_EXPERIENCES_PERCENTAGE
+            current = None
+            total = None
+        else:
+            percentage = round(
+                DIVE_IN_EXPERIENCES_PERCENTAGE + ((total_explored_experiences / total_experiences) * dive_in_gap)
+            )
+            current = min(total_explored_experiences + 1, total_experiences)
+            total = total_experiences
+        return {
+            "phase": "DIVE_IN",
+            "percentage": percentage,
+            "current": current,
+            "total": total,
+        }
+
+    async def _emit_stream_status(
+        self,
+        *,
+        label: str,
+        status: str = "running",
+        detail: str | None = None,
+        current_phase: dict[str, int | str | None] | None = None,
+    ) -> None:
+        if self._streaming_sink is None:
+            return
+        await self._streaming_sink.emit_status_update(
+            label=label,
+            status=status,
+            agent_type=self.agent_type.value,
+            detail=detail,
+            current_phase=current_phase,
+        )
+
+    async def _emit_dive_in_phase_update(
+        self,
+        state: ExploreExperiencesAgentDirectorState,
+        *,
+        detail: str | None = None,
+    ) -> None:
+        if self._streaming_sink is None:
+            return
+        await self._streaming_sink.emit_phase_update(
+            current_phase=self._build_dive_in_stream_phase(state),
+            agent_type=self.agent_type.value,
+            detail=detail,
+        )
+
     async def _dive_into_experiences(self, *,
                                      user_input: AgentInput,
                                      context: ConversationContext,
@@ -191,6 +247,11 @@ class ExploreExperiencesAgentDirector(Agent):
             current_experience = state.experiences_state.get(state.current_experience_uuid, None)
 
         if not current_experience:
+            await self._emit_stream_status(
+                label="transitioning_to_preferences",
+                status="running",
+                detail="all_experiences_processed",
+            )
             message = AgentOutput(
                 message_for_user=t("messages", "exploreExperiences.transitionToPreferences"),
                 finished=True,
@@ -209,9 +270,25 @@ class ExploreExperiencesAgentDirector(Agent):
             # Start the first sub-phase
             current_experience.dive_in_phase = DiveInPhase.EXPLORING_SKILLS
             picked_new_experience = True
+            await self._emit_stream_status(
+                label="diving_into_experiences",
+                status="running",
+                detail=current_experience.experience.experience_title,
+                current_phase=self._build_dive_in_stream_phase(state),
+            )
+            await self._emit_dive_in_phase_update(
+                state,
+                detail=current_experience.experience.experience_title,
+            )
 
         # Sub-phase 2
         if current_experience.dive_in_phase == DiveInPhase.EXPLORING_SKILLS:
+            await self._emit_stream_status(
+                label="exploring_skills",
+                status="running",
+                detail=current_experience.experience.experience_title,
+                current_phase=self._build_dive_in_stream_phase(state),
+            )
 
             if picked_new_experience:
                 # When transitioning between states set this message to "" and handle it in the execute method of the agent
@@ -231,6 +308,12 @@ class ExploreExperiencesAgentDirector(Agent):
 
         if current_experience.dive_in_phase == DiveInPhase.LINKING_RANKING:
             if current_experience.experience.responsibilities.responsibilities:
+                await self._emit_stream_status(
+                    label="linking_and_ranking",
+                    status="running",
+                    detail=current_experience.experience.experience_title,
+                    current_phase=self._build_dive_in_stream_phase(state),
+                )
                 # Infer the occupations for the experience and update the experience entity
                 # , then link the skills and rank them
                 agent_output = await self._link_and_rank(
@@ -245,11 +328,21 @@ class ExploreExperiencesAgentDirector(Agent):
                 # completed processing this experience
                 current_experience.dive_in_phase = DiveInPhase.PROCESSED
                 state.current_experience_uuid = None
+                await self._emit_dive_in_phase_update(
+                    state,
+                    detail=current_experience.experience.experience_title,
+                )
             else:
                 # if the current experience does not have any responsibilities, then we should skip this experience
                 # as there is no information to link and ran, and we should move to the next experience
                 current_experience.dive_in_phase = DiveInPhase.PROCESSED
                 state.current_experience_uuid = None
+                await self._emit_stream_status(
+                    label="skipping_experience",
+                    status="completed",
+                    detail=current_experience.experience.experience_title,
+                    current_phase=self._build_dive_in_stream_phase(state),
+                )
                 agent_output = AgentOutput(
                     message_for_user=t(
                         "messages",
@@ -267,6 +360,10 @@ class ExploreExperiencesAgentDirector(Agent):
                 ), agent_output)
                 # get the context again after updating the history
                 context = await self._conversation_manager.get_conversation_context()
+                await self._emit_dive_in_phase_update(
+                    state,
+                    detail=current_experience.experience.experience_title,
+                )
 
             if current_experience.dive_in_phase == DiveInPhase.PROCESSED:
                 # Add the experience to the list of explored experiences
@@ -277,6 +374,11 @@ class ExploreExperiencesAgentDirector(Agent):
             # then we are done
             _next_experience = _pick_next_experience_to_process(state.experiences_state)
             if not _next_experience:
+                await self._emit_stream_status(
+                    label="transitioning_to_preferences",
+                    status="completed",
+                    detail="all_experiences_processed",
+                )
                 return AgentOutput(
                     message_for_user=t("messages", "exploreExperiences.transitionToPreferences"),
                     finished=True,
@@ -322,6 +424,12 @@ class ExploreExperiencesAgentDirector(Agent):
             # and transition to the next phase
             state.conversation_phase = ConversationPhase.DIVE_IN
             transitioned_between_states = True
+            await self._emit_stream_status(
+                label="diving_into_experiences",
+                status="started",
+                current_phase=self._build_dive_in_stream_phase(state),
+            )
+            await self._emit_dive_in_phase_update(state, detail="phase_entered")
 
         # Then dive into each of the experiences collected
         if state.conversation_phase == ConversationPhase.DIVE_IN:

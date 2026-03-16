@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Optional
 
 from pydantic import BaseModel
@@ -93,7 +94,8 @@ class _DataExtractionLLM:
                       *,
                       user_input: AgentInput,
                       context: ConversationContext,
-                      collected_experience_data_so_far: list[CollectedData]
+                      collected_experience_data_so_far: list[CollectedData],
+                      on_status: Callable[[str], Awaitable[None]] | None = None,
                       ) -> tuple[int, list[LLMStats]]:
         """
         Given the last user input, a conversation history and the experience data collected so far.
@@ -107,6 +109,8 @@ class _DataExtractionLLM:
         """
 
         # 1. Get the list of operations from the user's input
+        if on_status is not None:
+            await on_status("analyzing_your_input")
         commands, llm_stats = await self._intent_analyzer_tool.execute(
             collected_experience_data_so_far=collected_experience_data_so_far,
             conversation_context=context,
@@ -151,6 +155,8 @@ class _DataExtractionLLM:
                     user_statement=command.users_statement
                 ))
 
+        if update_tasks and on_status is not None:
+            await on_status("extracting_experience_details")
         update_results = await asyncio.gather(*update_tasks)
         for (result, _llm_stats) in update_results:
             llm_stats.extend(_llm_stats)

@@ -9,7 +9,9 @@ import {
   ErrorEventData,
   MessageDeltaEventData,
   MessageStartedEventData,
+  PhaseUpdatedEventData,
   SendMessageStreamHandlers,
+  StatusUpdatedEventData,
   TurnCompletedEventData,
   TurnStartedEventData,
 } from "./ChatService.types";
@@ -17,6 +19,21 @@ import {
 type ParsedSSEEvent = {
   event: string;
   data: unknown;
+};
+
+const getSSEBoundary = (buffer: string): { index: number; length: number } | null => {
+  const unixBoundary = buffer.indexOf("\n\n");
+  const windowsBoundary = buffer.indexOf("\r\n\r\n");
+  if (unixBoundary === -1 && windowsBoundary === -1) {
+    return null;
+  }
+  if (unixBoundary === -1) {
+    return { index: windowsBoundary, length: 4 };
+  }
+  if (windowsBoundary === -1) {
+    return { index: unixBoundary, length: 2 };
+  }
+  return unixBoundary < windowsBoundary ? { index: unixBoundary, length: 2 } : { index: windowsBoundary, length: 4 };
 };
 
 const parseSSEEvent = (rawEvent: string): ParsedSSEEvent | null => {
@@ -123,6 +140,12 @@ export default class ChatService {
         case "turn_started":
           handlers?.onTurnStarted?.(parsedEvent.data as TurnStartedEventData);
           break;
+        case "status_updated":
+          handlers?.onStatusUpdated?.(parsedEvent.data as StatusUpdatedEventData);
+          break;
+        case "phase_updated":
+          handlers?.onPhaseUpdated?.(parsedEvent.data as PhaseUpdatedEventData);
+          break;
         case "message_started":
           handlers?.onMessageStarted?.(parsedEvent.data as MessageStartedEventData);
           break;
@@ -150,11 +173,11 @@ export default class ChatService {
 
     const consumeStreamText = async (responseBody: string) => {
       let buffer = responseBody;
-      let boundary = buffer.indexOf("\n\n");
-      while (boundary !== -1) {
-        processRawEvent(buffer.slice(0, boundary));
-        buffer = buffer.slice(boundary + 2);
-        boundary = buffer.indexOf("\n\n");
+      let boundary = getSSEBoundary(buffer);
+      while (boundary) {
+        processRawEvent(buffer.slice(0, boundary.index));
+        buffer = buffer.slice(boundary.index + boundary.length);
+        boundary = getSSEBoundary(buffer);
       }
       if (buffer.trim()) {
         processRawEvent(buffer);
@@ -170,11 +193,11 @@ export default class ChatService {
         const { done, value } = await reader.read();
         buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
 
-        let boundary = buffer.indexOf("\n\n");
-        while (boundary !== -1) {
-          processRawEvent(buffer.slice(0, boundary));
-          buffer = buffer.slice(boundary + 2);
-          boundary = buffer.indexOf("\n\n");
+        let boundary = getSSEBoundary(buffer);
+        while (boundary) {
+          processRawEvent(buffer.slice(0, boundary.index));
+          buffer = buffer.slice(boundary.index + boundary.length);
+          boundary = getSSEBoundary(buffer);
         }
 
         if (done) {

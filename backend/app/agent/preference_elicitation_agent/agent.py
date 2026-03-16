@@ -65,6 +65,7 @@ except ImportError:
     StoppingCriterion = None
     AdaptiveConfig = None
 from app.agent.simple_llm_agent.prompt_response_template import get_json_response_instructions
+from app.conversations.constants import FINISHED_CONVERSATION_PERCENTAGE, PREFERENCE_ELICITATION_PERCENTAGE
 from app.conversation_memory.conversation_formatter import ConversationHistoryFormatter
 from app.conversation_memory.conversation_memory_manager import ConversationContext
 from app.agent.experience.experience_entity import ExperienceEntity
@@ -457,6 +458,106 @@ class PreferenceElicitationAgent(Agent):
             f"industry={self._user_context.industry}, level={self._user_context.experience_level}"
         )
 
+    def _build_stream_current_phase(self) -> dict[str, int | str | None]:
+        total_categories = 6
+        min_vignettes = self._state.minimum_vignettes_completed
+        phase_name = self._state.conversation_phase
+
+        if phase_name == "COMPLETE":
+            return {
+                "phase": "PREFERENCE_ELICITATION",
+                "percentage": FINISHED_CONVERSATION_PERCENTAGE,
+                "current": None,
+                "total": None,
+            }
+
+        total_indicators = 0
+        completed_indicators = 0
+
+        if phase_name == "BWS":
+            total_indicators += 12
+            completed_indicators += self._state.bws_tasks_completed
+        elif self._state.bws_phase_complete:
+            total_indicators += 12
+            completed_indicators += 12
+
+        total_indicators += min_vignettes
+        completed_indicators += min(len(self._state.completed_vignettes), min_vignettes)
+
+        total_indicators += total_categories
+        completed_indicators += len(self._state.categories_covered)
+
+        if total_indicators == 0:
+            percentage = PREFERENCE_ELICITATION_PERCENTAGE
+        else:
+            pref_gap = FINISHED_CONVERSATION_PERCENTAGE - PREFERENCE_ELICITATION_PERCENTAGE
+            percentage = round(
+                PREFERENCE_ELICITATION_PERCENTAGE + ((completed_indicators / total_indicators) * pref_gap)
+            )
+
+        current: int | None = None
+        total: int | None = None
+        if phase_name == "EXPERIENCE_QUESTIONS":
+            total = total_categories
+            current = min(len(self._state.categories_covered) + 1, total)
+        elif phase_name == "BWS":
+            total = 12
+            current = min(max(self._state.bws_tasks_completed, 1), total)
+        elif phase_name in ("VIGNETTES", "FOLLOW_UP"):
+            total = min_vignettes
+            current = min(len(self._state.completed_vignettes) + 1, total) if total > 0 else None
+        elif phase_name == "GATE":
+            total = 3
+            current = min(self._state.gate_interventions_completed + 1, total)
+        elif phase_name == "WRAPUP":
+            total = 1
+            current = 1
+
+        return {
+            "phase": "PREFERENCE_ELICITATION",
+            "percentage": percentage,
+            "current": current,
+            "total": total,
+        }
+
+    def _get_stream_status_label(self, phase_name: str) -> str:
+        return {
+            "INTRO": "introducing_preferences",
+            "EXPERIENCE_QUESTIONS": "asking_preference_questions",
+            "VIGNETTES": "presenting_vignette",
+            "FOLLOW_UP": "asking_follow_up",
+            "GATE": "asking_clarifying_question",
+            "BWS": "ranking_work_activities",
+            "WRAPUP": "summarizing_preferences",
+            "COMPLETE": "preferences_complete",
+        }.get(phase_name, "preference_elicitation")
+
+    async def _emit_status_update(
+        self,
+        *,
+        label: str,
+        status: str = "running",
+        detail: str | None = None,
+    ) -> None:
+        if self._streaming_sink is None:
+            return
+        await self._streaming_sink.emit_status_update(
+            label=label,
+            status=status,
+            agent_type=self.agent_type.value,
+            detail=detail,
+            current_phase=self._build_stream_current_phase(),
+        )
+
+    async def _emit_phase_update(self, *, detail: str | None = None) -> None:
+        if self._streaming_sink is None:
+            return
+        await self._streaming_sink.emit_phase_update(
+            current_phase=self._build_stream_current_phase(),
+            agent_type=self.agent_type.value,
+            detail=detail,
+        )
+
     async def execute(
         self,
         user_input: AgentInput,
@@ -494,6 +595,13 @@ class PreferenceElicitationAgent(Agent):
 
         # Execute based on current phase
         try:
+            phase_before_execution = self._state.conversation_phase
+            await self._emit_status_update(
+                label=self._get_stream_status_label(phase_before_execution),
+                status="running",
+                detail="phase_started",
+            )
+            await self._emit_phase_update(detail="phase_started")
             if self._state.conversation_phase == "INTRO":
                 response, llm_stats = await self._handle_intro_phase(msg, context)
             elif self._state.conversation_phase == "EXPERIENCE_QUESTIONS":
@@ -513,6 +621,13 @@ class PreferenceElicitationAgent(Agent):
             else:
                 self.logger.error(f"Unknown phase: {self._state.conversation_phase}")
                 return self._create_error_response(agent_start_time)
+            await self._emit_phase_update(detail="phase_progressed")
+            if phase_before_execution != self._state.conversation_phase:
+                await self._emit_status_update(
+                    label=self._get_stream_status_label(self._state.conversation_phase),
+                    status="running",
+                    detail="phase_entered",
+                )
 
         except Exception as e:
             self.logger.exception("Error in preference elicitation agent: %s", str(e))
@@ -1502,7 +1617,17 @@ Keep it short (1-3 sentences), conversational, and easy to answer.
         )
 
         # Save preference vector to youth database (DB6)
+        await self._emit_status_update(
+            label="saving_preferences",
+            status="running",
+            detail="db6_save_started",
+        )
         await self._save_preference_vector_to_db6()
+        await self._emit_status_update(
+            label="saving_preferences",
+            status="completed",
+            detail="db6_save_finished",
+        )
 
         self._state.conversation_phase = "COMPLETE"
 
