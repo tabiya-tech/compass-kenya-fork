@@ -867,11 +867,7 @@ describe("Chat", () => {
         // AND expect the chat history to be fetched for the new session
         expect(ChatService.getInstance().getChatHistory).toHaveBeenCalledWith(givenNewSessionId);
         // AND expect an empty message to be sent to the chat service for the new session
-        expect(ChatService.getInstance().sendMessage).toHaveBeenCalledWith(
-          givenNewSessionId,
-          "",
-          expect.any(Object)
-        );
+        expect(ChatService.getInstance().sendMessage).toHaveBeenCalledWith(givenNewSessionId, "", expect.any(Object));
         // AND expect the chat list to be updated with the new (empty) messages list
         expect(ChatList as jest.Mock).toHaveBeenNthCalledWith(1, expect.objectContaining({ messages: [] }), {});
         // AND expect no errors or warning to have occurred

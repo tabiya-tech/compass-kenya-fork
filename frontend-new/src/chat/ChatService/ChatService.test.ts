@@ -12,7 +12,8 @@ import {
 } from "src/chat/ChatService/_test_utilities/generateTestChatResponses";
 
 const serializeSSEEvent = (event: string, data: unknown) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-const serializeCRLFSSEEvent = (event: string, data: unknown) => `event: ${event}\r\ndata: ${JSON.stringify(data)}\r\n\r\n`;
+const serializeCRLFSSEEvent = (event: string, data: unknown) =>
+  `event: ${event}\r\ndata: ${JSON.stringify(data)}\r\n\r\n`;
 
 describe("ChatService", () => {
   let givenApiServerUrl: string = "/path/to/api";
@@ -70,11 +71,7 @@ describe("ChatService", () => {
           current_phase: expectedRootMessageResponse.current_phase,
         }),
       ].join("");
-      const fetchSpy = setupAPIServiceSpy(
-        StatusCodes.CREATED,
-        sseResponseBody,
-        "text/event-stream;charset=UTF-8"
-      );
+      const fetchSpy = setupAPIServiceSpy(StatusCodes.CREATED, sseResponseBody, "text/event-stream;charset=UTF-8");
 
       // WHEN the sendMessage function is called with the given arguments
       const givenSessionId = 1234;

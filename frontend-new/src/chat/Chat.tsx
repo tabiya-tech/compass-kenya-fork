@@ -345,36 +345,33 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
   }, [currentUserId]);
 
   // Depending on the typing state, add or remove the typing message from the messages list
-  const addOrRemoveTypingMessage = useCallback(
-    (userIsTyping: boolean, typingMessage?: string) => {
-      if (userIsTyping) {
-        setMessages((prevMessages) => {
-          const lastMessage = prevMessages[prevMessages.length - 1];
-          const hasTypingMessage = lastMessage?.type?.startsWith("typing-message-") ?? false;
+  const addOrRemoveTypingMessage = useCallback((userIsTyping: boolean, typingMessage?: string) => {
+    if (userIsTyping) {
+      setMessages((prevMessages) => {
+        const lastMessage = prevMessages[prevMessages.length - 1];
+        const hasTypingMessage = lastMessage?.type?.startsWith("typing-message-") ?? false;
 
-          if (!hasTypingMessage) {
-            return [...prevMessages, generateTypingMessage(undefined, undefined, typingMessage)];
+        if (!hasTypingMessage) {
+          return [...prevMessages, generateTypingMessage(undefined, undefined, typingMessage)];
+        }
+        return prevMessages.map((message) => {
+          if (!message.type.startsWith("typing-message-")) {
+            return message;
           }
-          return prevMessages.map((message) => {
-            if (!message.type.startsWith("typing-message-")) {
-              return message;
-            }
-            return {
-              ...message,
-              payload: {
-                ...message.payload,
-                message: typingMessage,
-              },
-            };
-          });
+          return {
+            ...message,
+            payload: {
+              ...message.payload,
+              message: typingMessage,
+            },
+          };
         });
-      } else {
-        // filter out the typing message
-        setMessages((prevMessages) => prevMessages.filter((message) => !message.type.startsWith("typing-message-")));
-      }
-    },
-    []
-  );
+      });
+    } else {
+      // filter out the typing message
+      setMessages((prevMessages) => prevMessages.filter((message) => !message.type.startsWith("typing-message-")));
+    }
+  }, []);
 
   const recordChatResponseMetrics = useCallback(
     ({
@@ -836,7 +833,9 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
         const response = await ChatService.getInstance().sendMessage(sessionId, userMessage, {
           onTurnStarted: (event) => {
             if (event.current_phase) {
-              setCurrentPhase((_previousCurrentPhase) => parseConversationPhase(event.current_phase!, _previousCurrentPhase));
+              setCurrentPhase((_previousCurrentPhase) =>
+                parseConversationPhase(event.current_phase!, _previousCurrentPhase)
+              );
             }
           },
           onStatusUpdated: (event) => {
@@ -848,7 +847,9 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
             setStreamStatusMessage(formatStreamStatusMessage(event.label, event.detail));
           },
           onPhaseUpdated: (event) => {
-            setCurrentPhase((_previousCurrentPhase) => parseConversationPhase(event.current_phase, _previousCurrentPhase));
+            setCurrentPhase((_previousCurrentPhase) =>
+              parseConversationPhase(event.current_phase, _previousCurrentPhase)
+            );
           },
           onMessageStarted: (event) => {
             if (event.message_type === "BWS_TASK") {
@@ -864,7 +865,9 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
             upsertMessageInChat(createChatMessageFromConversationMessage(messageItem));
           },
           onTurnCompleted: (event) => {
-            setCurrentPhase((_previousCurrentPhase) => parseConversationPhase(event.current_phase, _previousCurrentPhase));
+            setCurrentPhase((_previousCurrentPhase) =>
+              parseConversationPhase(event.current_phase, _previousCurrentPhase)
+            );
             setStreamStatusMessage(null);
           },
           onError: () => {
