@@ -52,14 +52,19 @@ async def test_streaming_sink_emits_message_and_turn_events():
         event_name_line, data_line = lines[:2]
         events.append((event_name_line.removeprefix("event: "), json.loads(data_line.removeprefix("data: "))))
 
-    assert [event_name for event_name, _ in events] == [
-        "turn_started",
-        "message_started",
-        "message_completed",
-        "turn_completed",
-    ]
-    assert events[2][1]["message"] == "Hello from Compass"
-    assert events[3][1]["experiences_explored"] == 1
+    event_names = [event_name for event_name, _ in events]
+    assert event_names[0] == "turn_started"
+    assert event_names[-1] == "turn_completed"
+    assert "message_started" in event_names
+    assert "message_completed" in event_names
+    # message_delta events appear when streaming text chunks
+    assert event_names.count("message_delta") >= 1
+
+    message_completed = next(data for name, data in events if name == "message_completed")
+    assert message_completed["message"] == "Hello from Compass"
+
+    turn_completed = next(data for name, data in events if name == "turn_completed")
+    assert turn_completed["experiences_explored"] == 1
 
 
 @pytest.mark.asyncio
