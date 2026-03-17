@@ -55,6 +55,9 @@ def _create_test_client_with_mocks(auth) -> TestClientWithMocks:
         async def stream_send(self, user_id: str, session_id: int, user_input: str, clear_memory: bool, filter_pii: bool):
             raise NotImplementedError
 
+        async def ensure_conversation_not_concluded(self, session_id: int, clear_memory: bool):
+            raise NotImplementedError
+
         async def get_history_by_session_id(self, user_id: str, session_id: int):
             raise NotImplementedError
 
@@ -304,15 +307,14 @@ class TestConversationsRoutes:
         # AND the user has a valid session
         given_session_id = 123
 
-        # AND a ConversationService that will emit an SSE error event
+        # AND ensure_conversation_not_concluded raises (conversation already concluded)
         mocked_preferences_repository.get_user_preference_by_user_id = AsyncMock(
             return_value=get_mock_user_preferences(given_session_id))
-        expected_stream = format_sse_event("error", {
-            "code": "conversation_already_concluded",
-            "message": str(ConversationAlreadyConcludedError(given_session_id)),
-            "recoverable": False,
-        })
-        mocked_service.stream_send = Mock(return_value=_stream_events(expected_stream))
+
+        async def _raise_concluded(session_id: int, clear_memory: bool):
+            raise ConversationAlreadyConcludedError(session_id)
+
+        mocked_service.ensure_conversation_not_concluded = AsyncMock(side_effect=_raise_concluded)
         stream_spy = mocker.spy(mocked_service, "stream_send")
 
         # WHEN a POST request where the session_id is in the Path
@@ -321,20 +323,12 @@ class TestConversationsRoutes:
             json=given_user_message.model_dump(),
         )
 
-        # THEN the response is CREATED and contains an SSE error payload
-        assert response.status_code == HTTPStatus.CREATED
-        assert response.text == expected_stream
+        # THEN the response is BAD_REQUEST (400)
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        assert str(given_session_id) in response.json()["detail"]
 
-        # AND the conversation service was called with the correct arguments
-        stream_spy.assert_called_once_with(
-            mocked_user.user_id,
-            given_session_id,
-            given_user_message.user_input,
-            False,  # clear_memory
-            False,  # filter_pii
-            city=None,
-            province=None
-        )
+        # AND stream_send was never called
+        stream_spy.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_send_service_internal_server_error(self, authenticated_client_with_mocks: TestClientWithMocks,
