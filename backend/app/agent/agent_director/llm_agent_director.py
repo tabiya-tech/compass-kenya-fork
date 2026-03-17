@@ -249,6 +249,7 @@ class LLMAgentDirector(AbstractAgentDirector):
                     AgentType.WELCOME_AGENT: "preparing_welcome",
                     AgentType.EXPLORE_EXPERIENCES_AGENT: "exploring_experiences",
                     AgentType.EXPLORE_SKILLS_AGENT: "exploring_skills_in_depth",
+                    AgentType.PREFERENCE_ELICITATION_AGENT: "understanding_preferences",
                     AgentType.RECOMMENDER_ADVISOR_AGENT: "preparing_recommendations",
                     AgentType.FAREWELL_AGENT: "wrapping_up",
                 }

@@ -32,3 +32,31 @@ export const ShownWhenThinking: Story = {
     waitBeforeThinking: 0,
   },
 };
+
+export const WithStreamingStatusPreparing: Story = {
+  args: {
+    waitBeforeThinking: 0,
+    status: "Preparing your response",
+  },
+};
+
+export const WithStreamingStatusExploring: Story = {
+  args: {
+    waitBeforeThinking: 0,
+    status: "Exploring your experiences",
+  },
+};
+
+export const WithStreamingStatusUnderstandingPreferences: Story = {
+  args: {
+    waitBeforeThinking: 0,
+    status: "Understanding what matters most to you",
+  },
+};
+
+export const WithStreamingStatusPreparingRecommendations: Story = {
+  args: {
+    waitBeforeThinking: 0,
+    status: "Preparing your recommendations",
+  },
+};

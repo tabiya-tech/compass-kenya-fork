@@ -114,12 +114,14 @@ export const generateErrorMessage = (message: string): IChatMessage<ErrorChatMes
 export const generateTypingMessage = (
   waitBeforeThinking?: number,
   thinkingMessage?: string,
-  message?: string
+  message?: string,
+  status?: string
 ): IChatMessage<TypingChatMessageProps> => {
   const payload: TypingChatMessageProps = {
     waitBeforeThinking: waitBeforeThinking,
     thinkingMessage: thinkingMessage,
     message: message,
+    status: status,
   };
   return {
     type: TYPING_CHAT_MESSAGE_TYPE,

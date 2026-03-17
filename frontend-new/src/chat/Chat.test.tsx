@@ -1679,7 +1679,7 @@ describe("Chat", () => {
               expect.objectContaining({
                 type: TYPING_CHAT_MESSAGE_TYPE,
                 payload: expect.objectContaining({
-                  message: "Choosing the best next step",
+                  status: "Choosing the best next step",
                 }),
               }),
             ]),
