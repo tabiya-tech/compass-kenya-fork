@@ -21,6 +21,7 @@ from app.metrics.types import (
     CVDownloadedEvent,
     DemographicsEvent,
     DeviceSpecificationEvent,
+    NetworkInformationEvent,
     UserLocationEvent,
     UIInteractionEvent
 )
@@ -72,8 +73,8 @@ def get_network_information_request() -> dict:
     return {
         "event_type": EventType.NETWORK_INFORMATION.value,
         "user_id": get_random_user_id(),
-        "session_id": get_random_session_id(),
         "effective_connection_type": get_random_printable_string(10),
+        "connection_type": 4,
     }
 
 
@@ -181,6 +182,7 @@ class TestMetricsRoutes:
             (get_cv_downloaded_request, CVDownloadedEvent, EventType.CV_DOWNLOADED),
             (get_demographics_request, DemographicsEvent, EventType.DEMOGRAPHICS),
             (get_device_specification_request, DeviceSpecificationEvent, EventType.DEVICE_SPECIFICATION),
+            (get_network_information_request, NetworkInformationEvent, EventType.NETWORK_INFORMATION),
             (get_user_location_request, UserLocationEvent, EventType.USER_LOCATION),
             (get_ui_interaction_request, UIInteractionEvent, EventType.UI_INTERACTION),
         ],
@@ -188,6 +190,7 @@ class TestMetricsRoutes:
             "CV Downloaded",
             "Demographics",
             "Device Specification",
+            "Network Information",
             "User Location",
             "UI Interaction"
         ]
@@ -238,6 +241,7 @@ class TestMetricsRoutes:
             get_cv_downloaded_request(),
             get_demographics_request(),
             get_device_specification_request(),
+            get_network_information_request(),
             get_user_location_request(),
             get_ui_interaction_request()
         ]
@@ -265,6 +269,7 @@ class TestMetricsRoutes:
             (get_cv_downloaded_request, CVDownloadedEvent, EventType.CV_DOWNLOADED),
             (get_demographics_request, DemographicsEvent, EventType.DEMOGRAPHICS),
             (get_device_specification_request, DeviceSpecificationEvent, EventType.DEVICE_SPECIFICATION),
+            (get_network_information_request, NetworkInformationEvent, EventType.NETWORK_INFORMATION),
             (get_user_location_request, UserLocationEvent, EventType.USER_LOCATION),
             (get_ui_interaction_request, UIInteractionEvent, EventType.UI_INTERACTION),
         ],
@@ -272,6 +277,7 @@ class TestMetricsRoutes:
             "CV Downloaded",
             "Demographics",
             "Device Specification",
+            "Network Information",
             "User Location",
             "UI Interaction"
         ]

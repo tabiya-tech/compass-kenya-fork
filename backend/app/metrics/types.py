@@ -684,8 +684,20 @@ class NetworkInformationEvent(AbstractUserAccountEvent):
     """
     effective_connection_type - the network classification of the user's connection: 2g, 3g, 4g, 5g...
     """
+    connection_type: int | None = None
+    """
+    connection_type - numeric connection type from Network Information API: 0=unknown, 1=bluetooth, 2=cellular, 3=ethernet, 4=wifi, 5=wimax, 6=none
+    """
 
-    def __init__(self, *, user_id: str, effective_connection_type: str, client_id: str | None = None,  relevant_experiments: dict[str, str] = None):
+    def __init__(
+        self,
+        *,
+        user_id: str,
+        effective_connection_type: str,
+        client_id: str | None = None,
+        relevant_experiments: dict[str, str] | None = None,
+        connection_type: int | None = None,
+    ):
         super().__init__(
             user_id=user_id,
             client_id=client_id,
@@ -693,6 +705,7 @@ class NetworkInformationEvent(AbstractUserAccountEvent):
             effective_connection_type=effective_connection_type,
             relevant_experiments=relevant_experiments or {}
         )
+        self.connection_type = connection_type
 
     class Config:
         extra = "forbid"
