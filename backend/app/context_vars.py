@@ -32,3 +32,11 @@ llm_call_duration_ms_ctx_var = contextvars.ContextVar("llm_call_duration_ms", de
 
 # Detected language for the current turn (ENGLISH, SWAHILI, or MIXED)
 detected_language_ctx_var = contextvars.ContextVar("detected_language", default="english")
+
+# Streaming sink for the current turn (set at start of stream_send, cleared in finally)
+# Components read via get_stream_sink() instead of setter injection
+stream_sink_ctx_var = contextvars.ContextVar("stream_sink", default=None)
+
+
+def get_stream_sink():
+    return stream_sink_ctx_var.get()

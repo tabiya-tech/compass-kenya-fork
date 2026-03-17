@@ -47,6 +47,7 @@ from app.agent.prompt_template.agent_prompt_template import (
     STD_AGENT_CHARACTER,
     STD_LANGUAGE_STYLE
 )
+from app.context_vars import get_stream_sink
 
 # Adaptive D-efficiency imports
 try:
@@ -539,9 +540,10 @@ class PreferenceElicitationAgent(Agent):
         status: str = "running",
         detail: str | None = None,
     ) -> None:
-        if self._streaming_sink is None:
+        stream_sink = get_stream_sink()
+        if stream_sink is None:
             return
-        await self._streaming_sink.emit_status_update(
+        await stream_sink.emit_status_update(
             label=label,
             status=status,
             agent_type=self.agent_type.value,
@@ -550,9 +552,10 @@ class PreferenceElicitationAgent(Agent):
         )
 
     async def _emit_phase_update(self, *, detail: str | None = None) -> None:
-        if self._streaming_sink is None:
+        stream_sink = get_stream_sink()
+        if stream_sink is None:
             return
-        await self._streaming_sink.emit_phase_update(
+        await stream_sink.emit_phase_update(
             current_phase=self._build_stream_current_phase(),
             agent_type=self.agent_type.value,
             detail=detail,

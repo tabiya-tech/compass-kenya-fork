@@ -1,13 +1,9 @@
 import logging
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Optional
 
 from app.agent.agent_types import AgentInput, AgentOutput, AgentType
 from app.conversation_memory.conversation_memory_manager import ConversationContext
-
-if TYPE_CHECKING:
-    from app.conversations.streaming import ConversationStreamingSink
 
 
 class Agent(ABC):
@@ -23,7 +19,6 @@ class Agent(ABC):
         self._agent_type = agent_type
         self._is_responsible_for_conversation_history = is_responsible_for_conversation_history
         self._logger = logging.getLogger(self.__class__.__name__)
-        self._streaming_sink: ConversationStreamingSink | None = None
 
     @property
     def logger(self):
@@ -38,9 +33,6 @@ class Agent(ABC):
     @property
     def agent_type(self) -> AgentType:
         return self._agent_type
-
-    def set_streaming_sink(self, sink: Optional["ConversationStreamingSink"]) -> None:
-        self._streaming_sink = sink
 
     @abstractmethod
     async def execute(self, user_input: AgentInput, context: ConversationContext) -> AgentOutput:

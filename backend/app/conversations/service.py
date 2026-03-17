@@ -285,8 +285,11 @@ class ConversationService(IConversationService):
             )
             user_language_ctx_var.set(default_locale)
 
-        self._agent_director.set_streaming_sink(stream_sink)
-        self._conversation_memory_manager.set_streaming_sink(stream_sink)
+        from app.context_vars import stream_sink_ctx_var
+
+        stream_sink_token = None
+        if stream_sink is not None:
+            stream_sink_token = stream_sink_ctx_var.set(stream_sink)
         try:
             if stream_sink is not None:
                 initial_phase = get_current_conversation_phase_response(state, self._logger).model_dump(mode="json")
@@ -339,8 +342,8 @@ class ConversationService(IConversationService):
                 await stream_sink.emit_turn_completed(conversation_response)
             return conversation_response
         finally:
-            self._agent_director.set_streaming_sink(None)
-            self._conversation_memory_manager.set_streaming_sink(None)
+            if stream_sink_token is not None:
+                stream_sink_ctx_var.reset(stream_sink_token)
 
     async def get_history_by_session_id(self, user_id: str, session_id: int) -> ConversationResponse:
         state = await self._application_state_metrics_recorder.get_state(session_id)

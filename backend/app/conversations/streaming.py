@@ -196,7 +196,9 @@ class ConversationStreamingSink:
     async def emit_agent_output(self, agent_output: AgentOutput) -> None:
         message = conversation_message_from_agent_output(agent_output)
         already_streamed = message.message_id in self._started_message_ids
-        if already_streamed or message.message_type != "TEXT" or not message.message:
+        if already_streamed:
+            return
+        if message.message_type != "TEXT" or not message.message:
             await self.complete_message(message)
             return
         await self._stream_text_then_complete(message)
