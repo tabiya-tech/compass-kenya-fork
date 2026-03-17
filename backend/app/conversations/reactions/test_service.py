@@ -140,9 +140,6 @@ def _mock_conversation_memory_manager() -> IConversationMemoryManager:
         async def get_conversation_context(self):
             raise NotImplementedError()
 
-        def set_streaming_sink(self, sink):
-            raise NotImplementedError()
-
         async def update_history(self, user_input: AgentInput, agent_output: AgentOutput):
             raise NotImplementedError()
 

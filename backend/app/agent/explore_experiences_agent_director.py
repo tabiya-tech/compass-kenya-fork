@@ -22,7 +22,7 @@ from app.vector_search.esco_entities import SkillEntity
 from app.i18n.translation_service import t
 from app.vector_search.vector_search_dependencies import SearchServices
 from app.conversations.constants import DIVE_IN_EXPERIENCES_PERCENTAGE, PREFERENCE_ELICITATION_PERCENTAGE
-from app.conversations.streaming import ConversationStreamingSink
+from app.context_vars import get_stream_sink
 
 
 class ConversationPhase(Enum):
@@ -209,9 +209,10 @@ class ExploreExperiencesAgentDirector(Agent):
         detail: str | None = None,
         current_phase: dict[str, int | str | None] | None = None,
     ) -> None:
-        if self._streaming_sink is None:
+        stream_sink = get_stream_sink()
+        if stream_sink is None:
             return
-        await self._streaming_sink.emit_status_update(
+        await stream_sink.emit_status_update(
             label=label,
             status=status,
             agent_type=self.agent_type.value,
@@ -225,9 +226,10 @@ class ExploreExperiencesAgentDirector(Agent):
         *,
         detail: str | None = None,
     ) -> None:
-        if self._streaming_sink is None:
+        stream_sink = get_stream_sink()
+        if stream_sink is None:
             return
-        await self._streaming_sink.emit_phase_update(
+        await stream_sink.emit_phase_update(
             current_phase=self._build_dive_in_stream_phase(state),
             agent_type=self.agent_type.value,
             detail=detail,
@@ -453,11 +455,6 @@ class ExploreExperiencesAgentDirector(Agent):
         """
 
         self._state = state
-
-    def set_streaming_sink(self, sink: ConversationStreamingSink | None) -> None:
-        super().set_streaming_sink(sink)
-        self._collect_experiences_agent.set_streaming_sink(sink)
-        self._exploring_skills_agent.set_streaming_sink(sink)
 
     def __init__(self, *,
                  conversation_manager: ConversationMemoryManager,

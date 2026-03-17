@@ -1,12 +1,11 @@
 import logging
 
 from abc import ABC, abstractmethod
-
 from app.agent.agent_types import AgentInput, AgentOutput
-from app.conversations.streaming import ConversationStreamingSink
 from app.conversation_memory.conversation_memory_types import ConversationHistory, \
     ConversationContext, ConversationTurn, ConversationMemoryManagerState
 from app.conversation_memory.summarizer import Summarizer
+from app.context_vars import get_stream_sink
 
 
 class IConversationMemoryManager(ABC):
@@ -33,14 +32,6 @@ class IConversationMemoryManager(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def set_streaming_sink(self, sink: ConversationStreamingSink | None):
-        """
-        Set an optional streaming sink for emitting conversation events as history is updated.
-        :param sink: The streaming sink, or None to disable streaming.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
     async def update_history(self, user_input: AgentInput, agent_output: AgentOutput):
         """
         Update the conversation history for a session by appending the user input and agent output to the history.
@@ -63,7 +54,7 @@ class IConversationMemoryManager(ABC):
 
 class ConversationMemoryManager(IConversationMemoryManager):
     """
-    Manages the conversation history
+    Manages the conversation history.
     """
 
     def __init__(self, unsummarized_window_size, to_be_summarized_window_size):
@@ -72,13 +63,9 @@ class ConversationMemoryManager(IConversationMemoryManager):
         self._to_be_summarized_window_size = to_be_summarized_window_size
         self._summarizer = Summarizer()
         self._logger = logging.getLogger(self.__class__.__name__)
-        self._streaming_sink: ConversationStreamingSink | None = None
 
     def set_state(self, state: ConversationMemoryManagerState):
         self._state = state
-
-    def set_streaming_sink(self, sink: ConversationStreamingSink | None):
-        self._streaming_sink = sink
 
     async def get_conversation_context(self) -> ConversationContext:
         return ConversationContext(
@@ -116,8 +103,9 @@ class ConversationMemoryManager(IConversationMemoryManager):
         # If the to_be_summarized_history window is full, we perform summarization
         if len(self._state.to_be_summarized_history.turns) == self._to_be_summarized_window_size:
             await self._summarize()
-        if self._streaming_sink is not None and not user_input.is_artificial:
-            await self._streaming_sink.emit_agent_output(agent_output)
+        stream_sink = get_stream_sink()
+        if stream_sink is not None:
+            await stream_sink.emit_agent_output(agent_output)
 
     async def is_user_message(self, message_id: str) -> bool:
         # find out if the message_id of the message to react to is found an input message

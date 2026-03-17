@@ -21,6 +21,7 @@ from app.agent.linking_and_ranking_pipeline.infer_occupation_tool import InferOc
 from app.conversation_memory.conversation_memory_types import ConversationContext
 from app.countries import Country
 from app.i18n.translation_service import t
+from app.context_vars import get_stream_sink
 from app.vector_search.esco_entities import OccupationSkillEntity
 from app.vector_search.vector_search_dependencies import SearchServices
 
@@ -181,9 +182,10 @@ class CollectExperiencesAgent(Agent):
         self._experience_pipeline_config = experience_pipeline_config
 
     async def _emit_stream_status(self, label: str) -> None:
-        if self._streaming_sink is None:
+        stream_sink = get_stream_sink()
+        if stream_sink is None:
             return
-        await self._streaming_sink.emit_status_update(
+        await stream_sink.emit_status_update(
             label=label,
             status="running",
             agent_type=self.agent_type.value,
@@ -293,7 +295,7 @@ class CollectExperiencesAgent(Agent):
                 unexplored_types=self._state.unexplored_types,
                 explored_types=self._state.explored_types,
                 logger=self.logger,
-                stream_sink=self._streaming_sink,
+                stream_sink=get_stream_sink(),
                 message_id=conversation_message_id),
             transition_decision_tool.execute(
                 collected_data=collected_data,
@@ -350,8 +352,9 @@ class CollectExperiencesAgent(Agent):
             conversation_llm_output.message_for_user = (
                 f"{conversation_llm_output.message_for_user}{transition_delta}"
             )
-            if self._streaming_sink is not None:
-                await self._streaming_sink.append_text(
+            stream_sink = get_stream_sink()
+            if stream_sink is not None:
+                await stream_sink.append_text(
                     message_id=conversation_llm_output.message_id,
                     delta=transition_delta,
                 )

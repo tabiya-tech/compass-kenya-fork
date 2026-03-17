@@ -18,8 +18,7 @@ from app.conversation_memory.conversation_memory_types import ConversationContex
 from app.vector_search.vector_search_dependencies import SearchServices
 from app.user_recommendations.services.service import IUserRecommendationsService
 from app.i18n.translation_service import t
-from app.context_vars import phase_ctx_var, agent_type_ctx_var # for observability logging
-from app.conversations.streaming import ConversationStreamingSink
+from app.context_vars import phase_ctx_var, agent_type_ctx_var, get_stream_sink
 
 class LLMAgentDirector(AbstractAgentDirector):
     """
@@ -81,12 +80,6 @@ class LLMAgentDirector(AbstractAgentDirector):
             AgentType.FAREWELL_AGENT: FarewellAgent()
         }
         self._llm_router = LLMRouter(self._logger)
-        self._streaming_sink: ConversationStreamingSink | None = None
-
-    def set_streaming_sink(self, sink: ConversationStreamingSink | None) -> None:
-        self._streaming_sink = sink
-        for agent in self._agents.values():
-            agent.set_streaming_sink(sink)
 
     def get_welcome_agent(self) -> WelcomeAgent:
         # cast the agent to the WelcomeAgent
@@ -253,8 +246,9 @@ class LLMAgentDirector(AbstractAgentDirector):
                     AgentType.RECOMMENDER_ADVISOR_AGENT: "preparing_recommendations",
                     AgentType.FAREWELL_AGENT: "wrapping_up",
                 }
-                if self._streaming_sink is not None:
-                    await self._streaming_sink.emit_status_update(
+                stream_sink = get_stream_sink()
+                if stream_sink is not None:
+                    await stream_sink.emit_status_update(
                         label=_AGENT_STATUS_LABELS.get(suitable_agent_type, "running_agent"),
                         status="started",
                         agent_type=suitable_agent_type.value,
@@ -274,8 +268,9 @@ class LLMAgentDirector(AbstractAgentDirector):
 
                 # Perform the task
                 agent_output = await agent_for_task.execute(clean_input, context)
-                if self._streaming_sink is not None:
-                    await self._streaming_sink.emit_status_update(
+                stream_sink = get_stream_sink()
+                if stream_sink is not None:
+                    await stream_sink.emit_status_update(
                         label="running_agent",
                         status="completed",
                         agent_type=suitable_agent_type.value,
@@ -304,8 +299,9 @@ class LLMAgentDirector(AbstractAgentDirector):
                 if transitioned_to_new_phase:
                     self._state.current_phase = new_phase
                     phase_ctx_var.set(new_phase.value if new_phase else ":none:")
-                    if self._streaming_sink is not None:
-                        await self._streaming_sink.emit_status_update(
+                    stream_sink = get_stream_sink()
+                    if stream_sink is not None:
+                        await stream_sink.emit_status_update(
                             label="phase_transition",
                             status="completed",
                             agent_type=suitable_agent_type.value,

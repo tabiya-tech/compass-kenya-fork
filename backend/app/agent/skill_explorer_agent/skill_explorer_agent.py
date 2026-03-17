@@ -10,6 +10,7 @@ from app.conversation_memory.conversation_memory_types import ConversationContex
 from app.countries import Country
 from app.i18n.translation_service import t
 from app.agent.persona_detector import PersonaType
+from app.context_vars import get_stream_sink
 from ._conversation_llm import _ConversationLLM, _FINAL_MESSAGE_KEY
 from ._responsibilities_extraction_tool import _ResponsibilitiesExtractionTool
 
@@ -204,7 +205,7 @@ class SkillsExplorerAgent(Agent):
                                                                experience_title=self.experience_entity.experience_title,
                                                                work_type=self.experience_entity.work_type,
                                                                logger=self.logger,
-                                                               stream_sink=self._streaming_sink,
+                                                               stream_sink=get_stream_sink(),
                                                                message_id=user_input.message_id)
 
         if conversation_llm_output.message_for_user != t("messages", _FINAL_MESSAGE_KEY):

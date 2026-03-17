@@ -240,6 +240,10 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
     [flushPendingDeltas]
   );
 
+  const clearPendingDeltasForMessage = useCallback((messageId: string) => {
+    pendingDeltasRef.current.delete(messageId);
+  }, []);
+
   const removeMessageFromChat = useCallback((messageId: string) => {
     setMessages((prevMessages) => prevMessages.filter((msg) => msg.message_id !== messageId));
   }, []);
@@ -837,6 +841,7 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
           },
           onMessageCompleted: (messageItem) => {
             markAssistantVisible();
+            clearPendingDeltasForMessage(messageItem.message_id);
             upsertMessageInChat(createChatMessageFromConversationMessage(messageItem));
           },
           onTurnCompleted: (event) => {
@@ -954,6 +959,7 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
     [
       addMessageToChat,
       appendTextToCompassMessage,
+      clearPendingDeltasForMessage,
       createChatMessageFromConversationMessage,
       exploredExperiences,
       fetchExperiences,
