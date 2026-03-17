@@ -171,7 +171,7 @@ export default class ChatService {
       }
     };
 
-    const processSSEBuffer = (buffer: string) => {
+    const processBuffer = (buffer: string) => {
       let boundary = getSSEBoundary(buffer);
       while (boundary) {
         processRawEvent(buffer.slice(0, boundary.index));
@@ -191,22 +191,19 @@ export default class ChatService {
       while (true) {
         const { done, value } = await reader.read();
         buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
-        let boundary = getSSEBoundary(buffer);
-        while (boundary) {
+        const boundary = getSSEBoundary(buffer);
+        if (boundary) {
           processRawEvent(buffer.slice(0, boundary.index));
           buffer = buffer.slice(boundary.index + boundary.length);
-          boundary = getSSEBoundary(buffer);
         }
         if (done) {
-          if (buffer.trim()) {
-            processRawEvent(buffer);
-          }
+          processBuffer(buffer);
           break;
         }
       }
     } else {
       const text = await response.text();
-      processSSEBuffer(text);
+      processBuffer(text);
     }
 
     if (streamError) {

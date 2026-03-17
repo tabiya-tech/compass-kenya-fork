@@ -189,6 +189,7 @@ class TestConversationsRoutes:
             return_value=get_mock_user_preferences(given_session_id))
         preferences_spy = mocker.spy(mocked_preferences_repository, "get_user_preference_by_user_id")
 
+        mocked_service.ensure_conversation_not_concluded = AsyncMock()
         mocked_service.stream_send = Mock(return_value=_stream_events(expected_stream))
         service_spy = mocker.spy(mocked_service, "stream_send")
 
@@ -346,6 +347,7 @@ class TestConversationsRoutes:
         # AND a ConversationService that will emit an unexpected SSE error event
         mocked_preferences_repository.get_user_preference_by_user_id = AsyncMock(
             return_value=get_mock_user_preferences(given_session_id))
+        mocked_service.ensure_conversation_not_concluded = AsyncMock()
         expected_stream = format_sse_event("error", {
             "code": "unexpected_failure",
             "message": "Oops! something went wrong",

@@ -14,16 +14,16 @@ exports[`SkillsRankingPrompt snapshot: initial render in INITIAL phase (non-repl
       transition="[object Object]"
     >
       <div
-        animate="visible"
-        exit="hidden"
-        initial="hidden"
-        transition="[object Object]"
-        variants="[object Object]"
+        class="MuiBox-root css-1c8zvho"
+        data-testid="typing-chat-message-container-eb14a7aa-b515-4ab9-9829-8110346d9090"
+        origin="COMPASS"
       >
         <div
-          class="MuiBox-root css-1c8zvho"
-          data-testid="typing-chat-message-container-eb14a7aa-b515-4ab9-9829-8110346d9090"
-          origin="COMPASS"
+          animate="visible"
+          exit="hidden"
+          initial="hidden"
+          transition="[object Object]"
+          variants="[object Object]"
         >
           <div
             class="MuiBox-root css-uw2p1q"

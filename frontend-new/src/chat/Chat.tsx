@@ -1,5 +1,6 @@
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { TranslationKey } from "src/react-i18next";
 import ChatService from "src/chat/ChatService/ChatService";
 import ChatList from "src/chat/chatList/ChatList";
 import { IChatMessage } from "src/chat/Chat.types";
@@ -266,65 +267,37 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
   const { showSkillsRanking } = useSkillsRanking(addMessageToChat, removeMessageFromChat);
 
   const getActiveTypingMessage = useCallback(() => {
-    if (streamStatusMessage) {
-      return streamStatusMessage;
-    }
     if (currentPhase.phase === ConversationPhase.PREFERENCE_ELICITATION) {
       return t("chat.chatMessage.typingChatMessage.thinkingPreferenceElicitation");
     }
     return undefined;
-  }, [currentPhase.phase, streamStatusMessage, t]);
+  }, [currentPhase.phase, t]);
 
-  const formatStreamStatusMessage = useCallback((label: string, detail?: string | null) => {
-    const statusMessages: Record<string, string> = {
-      preparing_state: "Preparing your response",
-      routing: "Choosing the best next step",
-      running_agent: "Working on your response",
-      preparing_welcome: "Getting things ready for you",
-      exploring_experiences: "Exploring your experiences",
-      analyzing_your_input: "Understanding your message",
-      extracting_experience_details: "Extracting experience details",
-      matching_job_titles: "Matching job titles",
-      composing_response: "Composing your response",
-      exploring_skills_in_depth: "Exploring the skills in your experience",
-      preparing_recommendations: "Preparing your recommendations",
-      wrapping_up: "Wrapping things up",
-      phase_transition: "Moving to the next step",
-      diving_into_experiences: "Diving deeper into your experiences",
-      exploring_skills: "Exploring the skills in this experience",
-      linking_and_ranking: "Matching and ranking skills",
-      skipping_experience: "Skipping an experience with missing details",
-      transitioning_to_preferences: "Moving into preference questions",
-      introducing_preferences: "Introducing preference questions",
-      asking_preference_questions: "Understanding what matters most to you",
-      presenting_vignette: "Preparing your next scenario",
-      asking_follow_up: "Clarifying your preferences",
-      asking_clarifying_question: "Asking a clarifying question",
-      ranking_work_activities: "Preparing your activity ranking",
-      summarizing_preferences: "Summarizing your preferences",
-      saving_preferences: "Saving your preferences",
-      preferences_complete: "Finishing preference discovery",
-      saving_state: "Saving your progress",
-    };
+  const formatStreamStatusMessage = useCallback(
+    (label: string, detail?: string | null) => {
+      const i18nKey = `chat.chatMessage.streamingStatus.${label}` as TranslationKey;
+      const translated = t(i18nKey);
+      const baseMessage =
+        translated !== i18nKey
+          ? translated
+          : label
+              .split("_")
+              .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+              .join(" ");
 
-    const baseMessage =
-      statusMessages[label] ??
-      label
-        .split("_")
-        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-        .join(" ");
-
-    if (!detail || detail === "phase_started" || detail === "phase_progressed" || detail === "phase_entered") {
-      return baseMessage;
-    }
-    if (detail === "response_ready" || detail === "db6_save_started" || detail === "db6_save_finished") {
-      return baseMessage;
-    }
-    if (/^\d+$/.test(detail) || /^[A-Z_]+$/.test(detail)) {
-      return baseMessage;
-    }
-    return `${baseMessage}: ${detail}`;
-  }, []);
+      if (!detail || detail === "phase_started" || detail === "phase_progressed" || detail === "phase_entered") {
+        return baseMessage;
+      }
+      if (detail === "response_ready" || detail === "db6_save_started" || detail === "db6_save_finished") {
+        return baseMessage;
+      }
+      if (/^\d+$/.test(detail) || /^[A-Z_]+$/.test(detail)) {
+        return baseMessage;
+      }
+      return `${baseMessage}: ${detail}`;
+    },
+    [t]
+  );
 
   useEffect(() => {
     if (!currentUserId || networkInfoSentRef.current) {
@@ -344,34 +317,36 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
     }
   }, [currentUserId]);
 
-  // Depending on the typing state, add or remove the typing message from the messages list
-  const addOrRemoveTypingMessage = useCallback((userIsTyping: boolean, typingMessage?: string) => {
-    if (userIsTyping) {
-      setMessages((prevMessages) => {
-        const lastMessage = prevMessages[prevMessages.length - 1];
-        const hasTypingMessage = lastMessage?.type?.startsWith("typing-message-") ?? false;
+  const addOrRemoveTypingMessage = useCallback(
+    (userIsTyping: boolean, typingMessage?: string, statusMessage?: string) => {
+      if (userIsTyping) {
+        setMessages((prevMessages) => {
+          const lastMessage = prevMessages[prevMessages.length - 1];
+          const hasTypingMessage = lastMessage?.type?.startsWith("typing-message-") ?? false;
 
-        if (!hasTypingMessage) {
-          return [...prevMessages, generateTypingMessage(undefined, undefined, typingMessage)];
-        }
-        return prevMessages.map((message) => {
-          if (!message.type.startsWith("typing-message-")) {
-            return message;
+          if (!hasTypingMessage) {
+            return [...prevMessages, generateTypingMessage(undefined, undefined, typingMessage, statusMessage)];
           }
-          return {
-            ...message,
-            payload: {
-              ...message.payload,
-              message: typingMessage,
-            },
-          };
+          return prevMessages.map((message) => {
+            if (!message.type.startsWith("typing-message-")) {
+              return message;
+            }
+            return {
+              ...message,
+              payload: {
+                ...message.payload,
+                message: typingMessage,
+                status: statusMessage,
+              },
+            };
+          });
         });
-      });
-    } else {
-      // filter out the typing message
-      setMessages((prevMessages) => prevMessages.filter((message) => !message.type.startsWith("typing-message-")));
-    }
-  }, []);
+      } else {
+        setMessages((prevMessages) => prevMessages.filter((message) => !message.type.startsWith("typing-message-")));
+      }
+    },
+    []
+  );
 
   const recordChatResponseMetrics = useCallback(
     ({
@@ -1242,10 +1217,9 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
     }
   }, [exploredExperiencesNotification]);
 
-  // add a message when the compass is typing
   useEffect(() => {
-    addOrRemoveTypingMessage(aiIsTyping, getActiveTypingMessage());
-  }, [aiIsTyping, addOrRemoveTypingMessage, getActiveTypingMessage]);
+    addOrRemoveTypingMessage(aiIsTyping, getActiveTypingMessage(), streamStatusMessage ?? undefined);
+  }, [aiIsTyping, addOrRemoveTypingMessage, getActiveTypingMessage, streamStatusMessage]);
 
   // Fetch experiences when the active session id changes
   // And when not currentPhase is not `INITIALIZING`.
