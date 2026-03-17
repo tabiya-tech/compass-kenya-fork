@@ -171,8 +171,7 @@ export default class ChatService {
       }
     };
 
-    const consumeStreamText = async (responseBody: string) => {
-      let buffer = responseBody;
+    const processSSEBuffer = (buffer: string) => {
       let boundary = getSSEBoundary(buffer);
       while (boundary) {
         processRawEvent(buffer.slice(0, boundary.index));
@@ -192,14 +191,12 @@ export default class ChatService {
       while (true) {
         const { done, value } = await reader.read();
         buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
-
         let boundary = getSSEBoundary(buffer);
         while (boundary) {
           processRawEvent(buffer.slice(0, boundary.index));
           buffer = buffer.slice(boundary.index + boundary.length);
           boundary = getSSEBoundary(buffer);
         }
-
         if (done) {
           if (buffer.trim()) {
             processRawEvent(buffer);
@@ -208,7 +205,8 @@ export default class ChatService {
         }
       }
     } else {
-      await consumeStreamText(await response.text());
+      const text = await response.text();
+      processSSEBuffer(text);
     }
 
     if (streamError) {

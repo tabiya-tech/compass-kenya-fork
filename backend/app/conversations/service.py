@@ -83,6 +83,14 @@ class IConversationService(ABC):
         raise NotImplementedError()
 
     @abstractmethod
+    async def ensure_conversation_not_concluded(self, session_id: int, clear_memory: bool) -> None:
+        """
+        Raise ConversationAlreadyConcludedError if the conversation is already concluded.
+        Call before starting a stream to return HTTP 400 instead of 201.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     async def get_history_by_session_id(self, user_id: str, session_id: int) -> ConversationResponse:
         """
         Get all the messages for this session so far
@@ -109,6 +117,13 @@ class ConversationService(IConversationService):
         self._reaction_repository = reaction_repository
         self._job_preferences_service = job_preferences_service
         self._user_recommendations_service = user_recommendations_service
+
+    async def ensure_conversation_not_concluded(self, session_id: int, clear_memory: bool) -> None:
+        if clear_memory:
+            return
+        state = await self._application_state_metrics_recorder.get_state(session_id)
+        if state.agent_director_state.current_phase == ConversationPhase.ENDED:
+            raise ConversationAlreadyConcludedError(session_id)
 
     async def send(self, user_id: str, session_id: int, user_input: str, clear_memory: bool,
                    filter_pii: bool) -> ConversationResponse:

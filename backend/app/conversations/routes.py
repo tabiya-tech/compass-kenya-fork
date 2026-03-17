@@ -113,6 +113,8 @@ def add_conversation_routes(app: FastAPI, authentication: Authentication):
             # set the client_id in the context variable.
             client_id_ctx_var.set(current_user_preferences.client_id)
 
+            await service.ensure_conversation_not_concluded(session_id, clear_memory)
+
             async def _event_stream():
                 async for chunk in service.stream_send(user_id, session_id, user_input, clear_memory, filter_pii):
                     if await request.is_disconnected():
