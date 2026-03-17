@@ -1,15 +1,13 @@
 import asyncio
 import json
-import os
 from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel
 
 from app.agent.agent_types import AgentOutput
+from app.app_config import get_application_config
 from app.conversations.types import ConversationMessage, ConversationMessageSender, ConversationResponse
-
-SIMULATED_STREAM_CHUNK_SIZE = int(os.getenv("STREAM_CHUNK_SIZE", "10"))
 
 
 class ConversationStreamEventType(str, Enum):
@@ -204,6 +202,10 @@ class ConversationStreamingSink:
         await self._stream_text_then_complete(message)
 
     async def _stream_text_then_complete(self, message: ConversationMessage) -> None:
+        app_config = get_application_config()
+        chunk_size = app_config.stream_chunk_size
+        chunk_mode = app_config.stream_chunk_mode
+        delay_sec = app_config.stream_delta_delay_ms / 1000.0
         text = message.message
         await self.start_message(
             message_id=message.message_id,
@@ -211,20 +213,32 @@ class ConversationStreamingSink:
             message_type=message.message_type,
             metadata=message.metadata,
         )
-        offset = 0
-        while offset < len(text):
-            end = min(offset + SIMULATED_STREAM_CHUNK_SIZE, len(text))
-            if end < len(text):
-                space = text.rfind(" ", offset, end + 1)
-                if space > offset:
-                    end = space + 1
-            chunk = text[offset:end]
-            await self._emit_model(
-                ConversationStreamEventType.MESSAGE_DELTA,
-                MessageDeltaEvent(message_id=message.message_id, delta=chunk),
-            )
-            offset = end
-            await asyncio.sleep(0)
+        if chunk_mode == "words":
+            words = text.split()
+            for i in range(0, len(words), chunk_size):
+                chunk = " ".join(words[i : i + chunk_size])
+                if i + chunk_size < len(words):
+                    chunk += " "
+                await self._emit_model(
+                    ConversationStreamEventType.MESSAGE_DELTA,
+                    MessageDeltaEvent(message_id=message.message_id, delta=chunk),
+                )
+                await asyncio.sleep(delay_sec)
+        else:
+            offset = 0
+            while offset < len(text):
+                end = min(offset + chunk_size, len(text))
+                if end < len(text):
+                    space = text.rfind(" ", offset, end + 1)
+                    if space > offset:
+                        end = space + 1
+                chunk = text[offset:end]
+                await self._emit_model(
+                    ConversationStreamEventType.MESSAGE_DELTA,
+                    MessageDeltaEvent(message_id=message.message_id, delta=chunk),
+                )
+                offset = end
+                await asyncio.sleep(delay_sec)
         await self._emit_model(ConversationStreamEventType.MESSAGE_COMPLETED, message)
 
     async def emit_turn_completed(self, response: ConversationResponse) -> None:

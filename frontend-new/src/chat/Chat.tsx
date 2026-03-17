@@ -875,41 +875,27 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
           response.messages.forEach((messageItem, idx) => {
             const isConclusionMessage = response.conversation_completed && idx === response.messages.length - 1;
             if (!isConclusionMessage) {
-              upsertMessageInChat(createChatMessageFromConversationMessage(messageItem));
-            }
-          });
-        }
-
-        response.messages.forEach((messageItem, idx) => {
-          const isConclusionMessage = response.conversation_completed && idx === response.messages.length - 1;
-          if (!isConclusionMessage) {
-            if (messageItem.message_type === "BWS_TASK" && messageItem.metadata) {
-              if (messageItem.metadata.task_number === 1) {
+              if (messageItem.message_type === "BWS_TASK" && messageItem.metadata) {
+                if (messageItem.metadata.task_number === 1) {
+                  addMessageToChat(
+                    generateCompassMessage(
+                      `bws-transition-${messageItem.message_id}`,
+                      "Now I'd like to understand what you value most in a job. I'll show you a few sets of work activities — for each, choose the one you'd **most** prefer and the one you'd **least** prefer.",
+                      messageItem.sent_at,
+                      null
+                    )
+                  );
+                }
                 addMessageToChat(
-                  generateCompassMessage(
-                    `bws-transition-${messageItem.message_id}`,
-                    "Now I'd like to understand what you value most in a job. I'll show you a few sets of work activities — for each, choose the one you'd **most** prefer and the one you'd **least** prefer.",
-                    messageItem.sent_at,
-                    null
+                  generateBWSTaskMessage(
+                    messageItem.message_id,
+                    messageItem.metadata,
+                    (t, b, w) => handleBWSSubmitRef.current?.(t, b, w) ?? Promise.resolve()
                   )
                 );
+              } else {
+                upsertMessageInChat(createChatMessageFromConversationMessage(messageItem));
               }
-              addMessageToChat(
-                generateBWSTaskMessage(
-                  messageItem.message_id,
-                  messageItem.metadata,
-                  (t, b, w) => handleBWSSubmitRef.current?.(t, b, w) ?? Promise.resolve()
-                )
-              );
-            } else {
-              addMessageToChat(
-                generateCompassMessage(
-                  messageItem.message_id,
-                  messageItem.message,
-                  messageItem.sent_at,
-                  messageItem.reaction
-                )
-              );
             }
           });
         }

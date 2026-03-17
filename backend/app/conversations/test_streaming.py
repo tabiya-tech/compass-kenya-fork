@@ -17,7 +17,7 @@ def test_format_sse_event():
 
 
 @pytest.mark.asyncio
-async def test_streaming_sink_emits_message_and_turn_events():
+async def test_streaming_sink_emits_message_and_turn_events(setup_application_config):
     sink = ConversationStreamingSink()
     agent_output = AgentOutput(
         message_id="msg-1",

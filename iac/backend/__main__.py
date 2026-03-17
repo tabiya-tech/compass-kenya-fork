@@ -83,6 +83,10 @@ def main():
         cv_max_uploads_per_user=getenv("BACKEND_CV_MAX_UPLOADS_PER_USER", False, False),
         cv_rate_limit_per_minute=getenv("BACKEND_CV_RATE_LIMIT_PER_MINUTE", False, False),
 
+        stream_chunk_size=getenv("BACKEND_STREAM_CHUNK_SIZE", False, False),
+        stream_chunk_mode=getenv("BACKEND_STREAM_CHUNK_MODE", False, False),
+        stream_delta_delay_ms=getenv("BACKEND_STREAM_DELTA_DELAY_MS", False, False),
+
         # Branding
         global_product_name=getenv("GLOBAL_PRODUCT_NAME", False, False),
         enable_cv_upload=getenv("GLOBAL_ENABLE_CV_UPLOAD", False, False),
