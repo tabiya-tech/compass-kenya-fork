@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -107,6 +107,26 @@ class ApplicationConfig(BaseModel):
     When True, phase transitions skip the artificial (silence) re-invocation loop.
     The next user message will be routed deterministically via sub-phase instead.
     Corresponds to the COMPASS_INLINE_PHASE_TRANSITION environment variable.
+    """
+
+    stream_chunk_size: int = Field(default=10, gt=0)
+    """
+    Size of each text chunk when streaming SSE messages.
+    In chars mode: approximate character count per chunk.
+    In words mode: number of words per chunk.
+    Corresponds to BACKEND_STREAM_CHUNK_SIZE.
+    """
+
+    stream_chunk_mode: Literal["chars", "words"] = "chars"
+    """
+    How to chunk text for simulated streaming: by characters or by words.
+    Corresponds to BACKEND_STREAM_CHUNK_MODE.
+    """
+
+    stream_delta_delay_ms: int = Field(default=12, ge=0)
+    """
+    Delay between stream deltas in milliseconds (typing effect).
+    Corresponds to BACKEND_STREAM_DELTA_DELAY_MS.
     """
 
     @model_validator(mode='after')

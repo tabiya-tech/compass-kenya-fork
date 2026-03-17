@@ -234,6 +234,9 @@ application_config = ApplicationConfig(
     matching_service_url=os.getenv("MATCHING_SERVICE_URL"),
     matching_service_api_key=os.getenv("MATCHING_SERVICE_API_KEY"),
     inline_phase_transition=os.getenv("COMPASS_INLINE_PHASE_TRANSITION", "").lower() in ("1", "true"),
+    stream_chunk_size=int(os.getenv("BACKEND_STREAM_CHUNK_SIZE") or 10),
+    stream_chunk_mode="words" if (os.getenv("BACKEND_STREAM_CHUNK_MODE") or "").lower() == "words" else "chars",
+    stream_delta_delay_ms=int(os.getenv("BACKEND_STREAM_DELTA_DELAY_MS") or 12),
 )
 
 set_application_config(application_config)
