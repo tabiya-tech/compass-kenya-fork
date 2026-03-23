@@ -32,22 +32,40 @@ def _run_smoke_tests(version_json_url: str, max_retries: int = 10):
 
     print(f"info: running the smoke tests on {version_json_url} and expected version is {artifacts_version}")
 
-    version_json_response: Optional[requests.Response] = None
-
-    for _i in range(max_retries):
+    last_response: Optional[requests.Response] = None
+    for attempt in range(max_retries):
         try:
-            version_json_response = requests.get(version_json_url)
-            break
+            last_response = requests.get(version_json_url, timeout=60)
+            if last_response.status_code == 200:
+                break
+            print(
+                f"info: smoke GET status {last_response.status_code}, "
+                f"attempt {attempt + 1}/{max_retries}; retry in 10s"
+            )
+            time.sleep(10)
         except requests.exceptions.SSLError:
             print(f"info: retrying after 10 seconds the request to {version_json_url} due to SSL error.")
             time.sleep(10)
 
-    assert version_json_response is not None
-    assert version_json_response.status_code == 200
+    assert last_response is not None, "no HTTP response from smoke URL"
+    if last_response.status_code != 200:
+        body_preview = (last_response.text or "")[:800]
+        raise AssertionError(
+            f"smoke GET expected 200, got {last_response.status_code} from {version_json_url!r}. "
+            f"Body (truncated): {body_preview!r}"
+        )
 
-    version_json = version_json_response.json()
-    assert version_json["sha"] == artifacts_version.git_sha
-    assert version_json["branch"] == artifacts_version.git_branch_name
+    version_json = last_response.json()
+    if version_json.get("sha") != artifacts_version.git_sha:
+        raise AssertionError(
+            f"smoke version sha mismatch: got {version_json.get('sha')!r}, "
+            f"expected {artifacts_version.git_sha!r}"
+        )
+    if version_json.get("branch") != artifacts_version.git_branch_name:
+        raise AssertionError(
+            f"smoke version branch mismatch: got {version_json.get('branch')!r}, "
+            f"expected {artifacts_version.git_branch_name!r}"
+        )
 
     print("info: smoke tests passed successfully.")
 
@@ -65,12 +83,10 @@ def _deploy_frontend(stack_name: str):
 
 
 def _deploy_backend(stack_name: str):
-    # run pulumi up on the backend
-    up_results = run_pulumi_up(stack_name, IaCModules.BACKEND)
-
-    # run the smoke tests for the backend.
-    apigateway_url = up_results.outputs["apigateway_url"].value
-    _run_smoke_tests(f"{apigateway_url}/version")
+    run_pulumi_up(stack_name, IaCModules.BACKEND)
+    # Do not smoke-test the public backend_url here: the URL map / ESPv2 wiring lives in the
+    # common stack, which runs later in this pipeline. _deploy_common smoke-tests the same URL
+    # after the load balancer is applied.
 
 
 def _deploy_common(stack_name: str):

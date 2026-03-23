@@ -55,7 +55,7 @@ def main():
         root_project_id=root_project_id,
         upper_env_google_oauth_projects_folder_id=upper_env_google_oauth_projects_folder_id,
         lower_env_google_oauth_projects_folder_id=lower_env_google_oauth_projects_folder_id,
-        roots_path=libs_dir
+        roots_path=libs_dir,
     )
 
 

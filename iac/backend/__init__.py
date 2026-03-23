@@ -3,8 +3,6 @@
 REQUIRED_SERVICES = [
     # Required for VertexAI see https://cloud.google.com/vertex-ai/docs/start/cloud-environment
     "aiplatform.googleapis.com",
-    # GCP API Gateway
-    "apigateway.googleapis.com",
     # GCP Cloud Build
     "cloudbuild.googleapis.com",
     # Cloud Data Loss Prevention - Required for de-identifying data
@@ -13,4 +11,10 @@ REQUIRED_SERVICES = [
     "run.googleapis.com",
     # GCP Cloud Storage (for CV uploads bucket)
     "storage.googleapis.com",
+    # Required for ESPv2 service account and IAM bindings
+    "iam.googleapis.com",
+    # Required for ESPv2 Endpoints service management and Service Control API
+    "endpoints.googleapis.com",
+    "servicemanagement.googleapis.com",
+    "servicecontrol.googleapis.com",
 ]

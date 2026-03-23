@@ -80,6 +80,8 @@ class IConversationService(ABC):
         user_input: str,
         clear_memory: bool,
         filter_pii: bool,
+        city: str | None = None,
+        province: str | None = None,
     ) -> AsyncIterator[str]:
         """
         Stream a conversation turn over SSE while preserving the same final conversation state.
@@ -140,6 +142,8 @@ class ConversationService(IConversationService):
             clear_memory=clear_memory,
             filter_pii=filter_pii,
             stream_sink=None,
+            city=city,
+            province=province,
         )
 
     async def stream_send(
@@ -149,6 +153,8 @@ class ConversationService(IConversationService):
         user_input: str,
         clear_memory: bool,
         filter_pii: bool,
+        city: str | None = None,
+        province: str | None = None,
     ) -> AsyncIterator[str]:
         stream_sink = ConversationStreamingSink()
 
@@ -161,6 +167,8 @@ class ConversationService(IConversationService):
                     clear_memory=clear_memory,
                     filter_pii=filter_pii,
                     stream_sink=stream_sink,
+                    city=city,
+                    province=province,
                 )
             except ConversationAlreadyConcludedError as e:
                 await stream_sink.emit_error(
@@ -198,6 +206,8 @@ class ConversationService(IConversationService):
         clear_memory: bool,
         filter_pii: bool,
         stream_sink: ConversationStreamingSink | None,
+        city: str | None = None,
+        province: str | None = None,
     ) -> ConversationResponse:
         if clear_memory:
             await self._application_state_metrics_recorder.delete_state(session_id)

@@ -52,7 +52,8 @@ def _create_test_client_with_mocks(auth) -> TestClientWithMocks:
                        city: str | None = None, province: str | None = None):
             raise NotImplementedError
 
-        async def stream_send(self, user_id: str, session_id: int, user_input: str, clear_memory: bool, filter_pii: bool):
+        async def stream_send(self, user_id: str, session_id: int, user_input: str, clear_memory: bool, filter_pii: bool,
+                              city: str | None = None, province: str | None = None):
             raise NotImplementedError
 
         async def ensure_conversation_not_concluded(self, session_id: int, clear_memory: bool):
