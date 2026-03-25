@@ -803,6 +803,10 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
             .filter((_, idx) => !(isConclusionMessage && idx === history.messages.length - 1))
             .flatMap((message: ConversationMessage): IChatMessage<any>[] => {
               if (message.sender === ConversationMessageSender.USER) {
+                try {
+                  const parsed = JSON.parse(message.message);
+                  if (parsed.type === "bws_response") return [];
+                } catch {}
                 return [generateUserMessage(message.message, message.sent_at)];
               }
               if (message.message_type === "BWS_TASK" && message.metadata) {
