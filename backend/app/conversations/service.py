@@ -50,7 +50,9 @@ class IConversationService(ABC):
 
     @abstractmethod
     async def send(self, user_id: str, session_id: int, user_input: str, clear_memory: bool,
-                   filter_pii: bool) -> ConversationResponse:
+                   filter_pii: bool,
+                   city: str | None = None,
+                   province: str | None = None) -> ConversationResponse:
         # TODO: discuss filter pii and clear_memory
         """
         Get a message from the user and return a response from Compass, save the message and response into the application state
@@ -59,6 +61,8 @@ class IConversationService(ABC):
         :param user_input: str - the message sent by the user
         :param clear_memory: bool - [ Deprecated ] - pass true to clear memory for session
         :param filter_pii: bool - pass true to enable personal identifying information filtering
+        :param city: str | None - the city of the user (used only when initialising a new state)
+        :param province: str | None - the province/state of the user (used only when initialising a new state)
         :return: ConversationResponse - an object containing a list of messages and some metadata about the current conversation
         :raises Exception: if any error occurs
         """
@@ -93,7 +97,9 @@ class ConversationService(IConversationService):
         self._user_recommendations_service = user_recommendations_service
 
     async def send(self, user_id: str, session_id: int, user_input: str, clear_memory: bool,
-                   filter_pii: bool) -> ConversationResponse:
+                   filter_pii: bool,
+                   city: str | None = None,
+                   province: str | None = None) -> ConversationResponse:
         if clear_memory:
             await self._application_state_metrics_recorder.delete_state(session_id)
         if filter_pii:
@@ -102,7 +108,7 @@ class ConversationService(IConversationService):
         # set the sent_at for the user input
         user_input = AgentInput(message=user_input, sent_at=datetime.now(timezone.utc))
 
-        state = await self._application_state_metrics_recorder.get_state(session_id)
+        state = await self._application_state_metrics_recorder.get_state(session_id, city=city, province=province)
 
         if state.agent_director_state.current_phase == ConversationPhase.INTRO:
             data = await build_phase_data_status_from_state(

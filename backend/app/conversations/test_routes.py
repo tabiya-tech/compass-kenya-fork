@@ -42,7 +42,8 @@ def _create_test_client_with_mocks(auth) -> TestClientWithMocks:
 
     # mock the conversation service
     class MockConversationService(IConversationService):
-        async def send(self, user_id: str, session_id: int, user_input: str, clear_memory: bool, filter_pii: bool):
+        async def send(self, user_id: str, session_id: int, user_input: str, clear_memory: bool, filter_pii: bool,
+                       city: str | None = None, province: str | None = None):
             raise NotImplementedError
 
         async def get_history_by_session_id(self, user_id: str, session_id: int):
@@ -186,7 +187,9 @@ class TestConversationsRoutes:
             given_session_id,
             given_user_message.user_input,
             False,  # clear_memory
-            False  # filter_pii
+            False,  # filter_pii
+            city=None,
+            province=None
         )
 
     @pytest.mark.asyncio
@@ -298,7 +301,9 @@ class TestConversationsRoutes:
             given_session_id,
             given_user_message.user_input,
             False,  # clear_memory
-            False  # filter_pii
+            False,  # filter_pii
+            city=None,
+            province=None
         )
 
     @pytest.mark.asyncio
@@ -335,7 +340,9 @@ class TestConversationsRoutes:
             given_session_id,
             given_user_message.user_input,
             False,  # clear_memory
-            False  # filter_pii
+            False,  # filter_pii
+            city=None,
+            province=None
         )
 
     @pytest.mark.asyncio
