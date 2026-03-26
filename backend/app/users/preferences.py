@@ -133,7 +133,9 @@ async def _create_user_preferences(
             invitation_code=preferences.invitation_code,
             client_id=preferences.client_id,
             sensitive_personal_data_requirement=sensitive_personal_data_requirement,
-            sessions=sessions
+            sessions=sessions,
+            city=preferences.city,
+            province=preferences.province,
         ))
 
         # Record user account creation metric
@@ -229,6 +231,8 @@ async def _update_user_preferences(
                 language=preferences.language,
                 client_id=preferences.client_id,
                 accepted_tc=preferences.accepted_tc,
+                city=preferences.city,
+                province=preferences.province,
                 experiments=preferences.experiments
             )),
             user_feedback_service.get_answered_questions(preferences.user_id),

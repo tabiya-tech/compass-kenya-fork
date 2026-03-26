@@ -17,10 +17,15 @@ class IApplicationStateMetricsRecorder(ABC):
     """
 
     @abstractmethod
-    async def get_state(self, session_id: int) -> ApplicationState:
+    async def get_state(self, session_id: int,
+                        city: str | None = None,
+                        province: str | None = None) -> ApplicationState:
         """
         Get the application state for a session.
         If the state does not exist, a new state is created and stored.
+        :param session_id: The session ID
+        :param city: The city of the user (used only when initialising a new state)
+        :param province: The province/state of the user (used only when initialising a new state)
         """
         pass
 
@@ -60,14 +65,19 @@ class ApplicationStateMetricsRecorder(IApplicationStateMetricsRecorder):
         self.logger = logging.getLogger(self.__class__.__name__)
         self._previous_state: ApplicationStatesOfInterest | None = None
 
-    async def get_state(self, session_id: int) -> ApplicationState:
+    async def get_state(self, session_id: int,
+                        city: str | None = None,
+                        province: str | None = None) -> ApplicationState:
         """
         Get the application state for a session.
         If the state does not exist, a new state is created and stored.
         Also sets the state tracking variables based on the current state.
+        :param session_id: The session ID
+        :param city: The city of the user (used only when initialising a new state)
+        :param province: The province/state of the user (used only when initialising a new state)
         """
         # if the saving state fails, we want the error to propagate and handle it in the caller
-        state = await self._application_state_manager.get_state(session_id)
+        state = await self._application_state_manager.get_state(session_id, city=city, province=province)
         try:
             # if the parsing of the state fails, however, we want to log and move on since
             # the metrics are not critical to the application

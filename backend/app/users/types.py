@@ -55,6 +55,16 @@ class UserPreferencesRepositoryUpdateRequest(BaseModel):
     UUID - The client ID (UUID) assigned to the device client (Browser).
     """
 
+    city: str | None = None
+    """
+    city - The city of the user
+    """
+
+    province: str | None = None
+    """
+    province - The province/state of the user
+    """
+
     experiments: Experiments = Field(default_factory=dict)
     """
     experiments - A dictionary mapping experiment namespaces to their configuration
@@ -95,6 +105,16 @@ class UserPreferencesUpdateRequest(BaseModel):
     UUID - The client ID (UUID) assigned to the device client (Browser).
     """
 
+    city: str | None = None
+    """
+    city - The city of the user
+    """
+
+    province: str | None = None
+    """
+    province - The province/state of the user
+    """
+
     experiments: Experiments = Field(default_factory=dict)
     """
     experiments - A dictionary mapping experiment namespaces to their configuration
@@ -131,6 +151,14 @@ class UserPreferences(BaseModel):
     client_id: str | None = None
     sessions: list[int] = Field(default_factory=list)  # not required
     sensitive_personal_data_requirement: SensitivePersonalDataRequirement
+    city: str | None = None
+    """
+    city - The city of the user
+    """
+    province: str | None = None
+    """
+    province - The province/state of the user
+    """
     experiments: Experiments = Field(default_factory=dict)
     """
     experiments - A dictionary mapping experiment namespaces to their configuration
@@ -165,6 +193,8 @@ class UserPreferences(BaseModel):
                 "sensitive_personal_data_requirement",
                 SensitivePersonalDataRequirement.NOT_AVAILABLE
             ),
+            city=doc.get("city"),
+            province=doc.get("province"),
             experiments=doc.get("experiments", {}),
         )
 
@@ -213,6 +243,16 @@ class CreateUserPreferencesRequest(BaseModel):
     client_id: str
     """
     UUID - The client ID (UUID) assigned to the device client (Browser).
+    """
+
+    city: str | None = None
+    """
+    city - The city of the user
+    """
+
+    province: str | None = None
+    """
+    province - The province/state of the user
     """
 
     class Config:

@@ -112,7 +112,9 @@ def add_conversation_routes(app: FastAPI, authentication: Authentication):
             # set the client_id in the context variable.
             client_id_ctx_var.set(current_user_preferences.client_id)
 
-            return await service.send(user_id, session_id, user_input, clear_memory, filter_pii)
+            return await service.send(user_id, session_id, user_input, clear_memory, filter_pii,
+                                      city=current_user_preferences.city,
+                                      province=current_user_preferences.province)
         except ConversationAlreadyConcludedError as e:
             warning_msg = str(e)
             logger.warning(warning_msg)
