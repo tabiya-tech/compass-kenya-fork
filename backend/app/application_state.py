@@ -68,12 +68,15 @@ class ApplicationState(BaseModel):
                          )
 
     @classmethod
-    def new_state(cls, session_id: int, country_of_user: Country = None) -> "ApplicationState":
+    def new_state(cls, session_id: int, country_of_user: Country = None,
+                  city: str | None = None, province: str | None = None) -> "ApplicationState":
         """
         Create a new application state for the given session ID.
         All the states are initialized with the session ID and their default values.
         :param session_id:
         :param country_of_user: The country of the user
+        :param city: The city of the user (from user preferences)
+        :param province: The province/state of the user (from user preferences)
         """
         if country_of_user is None:
             country_of_user = Country.UNSPECIFIED
@@ -86,7 +89,11 @@ class ApplicationState(BaseModel):
             collect_experience_state=CollectExperiencesAgentState(session_id=session_id, country_of_user=country_of_user),
             skills_explorer_agent_state=SkillsExplorerAgentState(session_id=session_id, country_of_user=country_of_user),
             preference_elicitation_agent_state=PreferenceElicitationAgentState(session_id=session_id),
-            recommender_advisor_agent_state=RecommenderAdvisorAgentState(session_id=session_id)
+            recommender_advisor_agent_state=RecommenderAdvisorAgentState(
+                session_id=session_id,
+                city=city,
+                province=province,
+            )
         )
 
 
@@ -132,11 +139,16 @@ class IApplicationStateManager(ABC):
     """
 
     @abstractmethod
-    async def get_state(self, session_id: int) -> ApplicationState:
+    async def get_state(self, session_id: int,
+                        city: str | None = None,
+                        province: str | None = None) -> ApplicationState:
         """
         Get the application state for a session
         If the state does not exist, a new state is created and stored in
         the store prior to returning it.
+        :param session_id: The session ID
+        :param city: The city of the user (used only when initialising a new state)
+        :param province: The province/state of the user (used only when initialising a new state)
         """
         raise NotImplementedError()
 
@@ -175,18 +187,36 @@ class ApplicationStateManager(IApplicationStateManager):
         self._default_country_of_user = default_country_of_user
         self.logger = logging.getLogger(self.__class__.__name__)
 
-    async def get_state(self, session_id: int) -> ApplicationState:
+    async def get_state(self, session_id: int,
+                        city: str | None = None,
+                        province: str | None = None) -> ApplicationState:
         state = await self._store.get_state(session_id)
         if state is None:
-            # When creating a new state, use the default country of the user
-            # Eventually, we may want to use the country of the user from the user's profile, but for now, we just use the default.
-            # The default country is typically deployment-specific
+            # When creating a new state, use the default country of the user and any provided city/province.
+            # The default country is typically deployment-specific; city and province come from user preferences.
             state = ApplicationState.new_state(
                 session_id=session_id,
-                country_of_user=self._default_country_of_user
+                country_of_user=self._default_country_of_user,
+                city=city,
+                province=province,
             )
             logging.info("Creating a new application state for session ID %s", session_id)
             await self._store.save_state(state)
+        else:
+            # For existing states, backfill city/province from user preferences if they are not already set.
+            # This handles: (a) sessions started before city/province were introduced, and
+            # (b) the backward-compat path in the store that creates a bare RecommenderAdvisorAgentState
+            # without city/province when the recommender state document is missing from the DB.
+            _recommender_state = state.recommender_advisor_agent_state
+            _changed = False
+            if city is not None and _recommender_state.city is None:
+                _recommender_state.city = city
+                _changed = True
+            if province is not None and _recommender_state.province is None:
+                _recommender_state.province = province
+                _changed = True
+            if _changed:
+                await self._store.save_state(state)
         return state
 
     async def save_state(self, state: ApplicationState):
