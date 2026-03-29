@@ -71,7 +71,7 @@ describe("ChatService", () => {
           current_phase: expectedRootMessageResponse.current_phase,
         }),
       ].join("");
-      const fetchSpy = setupAPIServiceSpy(StatusCodes.CREATED, sseResponseBody, "text/event-stream;charset=UTF-8");
+      const fetchSpy = setupAPIServiceSpy(StatusCodes.OK, sseResponseBody, "text/event-stream;charset=UTF-8");
 
       // WHEN the sendMessage function is called with the given arguments
       const givenSessionId = 1234;
@@ -85,7 +85,7 @@ describe("ChatService", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_input: givenMessage }),
-        expectedStatusCode: StatusCodes.CREATED,
+        expectedStatusCode: StatusCodes.OK,
         serviceName: "ChatService",
         serviceFunction: "sendMessage",
         failureMessage: `Failed to send message with session id ${givenSessionId}`,
@@ -126,12 +126,12 @@ describe("ChatService", () => {
       ["is a malformed json", "{"],
       ["is a string", "foo"],
     ])(
-      "on 201, should reject with an error ERROR_CODE.INVALID_RESPONSE_BODY if response %s",
+      "on 200, should reject with an error ERROR_CODE.INVALID_RESPONSE_BODY if response %s",
       async (_description, givenResponse) => {
         // GIVEN some message specification to send
         const givenMessage = "Hello";
         // AND the send message REST API will respond with an invalid SSE payload
-        setupAPIServiceSpy(StatusCodes.CREATED, givenResponse, "text/event-stream;charset=UTF-8");
+        setupAPIServiceSpy(StatusCodes.OK, givenResponse, "text/event-stream;charset=UTF-8");
 
         // WHEN the sendMessage function is called with the given arguments
         const givenSessionId = 1234;
@@ -145,7 +145,7 @@ describe("ChatService", () => {
             "sendMessage",
             "POST",
             `${givenApiServerUrl}/conversations`,
-            StatusCodes.CREATED,
+            StatusCodes.OK,
             ErrorConstants.ErrorCodes.INVALID_RESPONSE_BODY,
             "",
             ""
@@ -221,7 +221,7 @@ describe("ChatService", () => {
           current_phase: expectedRootMessageResponse.current_phase,
         }),
       ].join("");
-      setupAPIServiceSpy(StatusCodes.CREATED, sseResponseBody, "text/event-stream;charset=UTF-8");
+      setupAPIServiceSpy(StatusCodes.OK, sseResponseBody, "text/event-stream;charset=UTF-8");
 
       const handlers = {
         onTurnStarted: jest.fn(),

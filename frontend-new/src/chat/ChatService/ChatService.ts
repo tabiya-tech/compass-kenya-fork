@@ -103,7 +103,7 @@ export default class ChatService {
       body: JSON.stringify({
         user_input: message,
       }),
-      expectedStatusCode: StatusCodes.CREATED,
+      expectedStatusCode: StatusCodes.OK,
       serviceName,
       serviceFunction,
       failureMessage: `Failed to send message with session id ${sessionId}`,

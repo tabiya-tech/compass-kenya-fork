@@ -192,6 +192,8 @@ def _deploy_espv2_proxy(*,
                 min_instance_count=min_instance_count,
                 max_instance_count=max_instance_count,
             ),
+            # Match the backend timeout so Cloud Run doesn't cut SSE streams short.
+            timeout="3600s",
             service_account=proxy_sa.email,
             containers=[
                 gcp.cloudrunv2.ServiceTemplateContainerArgs(

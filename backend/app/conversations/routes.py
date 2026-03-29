@@ -125,7 +125,7 @@ def add_conversation_routes(app: FastAPI, authentication: Authentication):
 
             return StreamingResponse(
                 _event_stream(),
-                status_code=HTTPStatus.CREATED,
+                status_code=HTTPStatus.OK,
                 media_type="text/event-stream",
                 headers={
                     "Cache-Control": "no-cache",

@@ -200,8 +200,8 @@ class TestConversationsRoutes:
             json=given_user_message.model_dump(),
         )
 
-        # THEN the response is CREATED
-        assert response.status_code == HTTPStatus.CREATED
+        # THEN the response is OK
+        assert response.status_code == HTTPStatus.OK
 
         # AND the response is an SSE stream with the expected payload
         assert response.headers["content-type"].startswith("text/event-stream")
@@ -363,8 +363,8 @@ class TestConversationsRoutes:
             json=given_user_message.model_dump(),
         )
 
-        # THEN the response is CREATED and contains an SSE error payload
-        assert response.status_code == HTTPStatus.CREATED
+        # THEN the response is OK and contains an SSE error payload
+        assert response.status_code == HTTPStatus.OK
         assert response.text == expected_stream
 
         # AND the conversation service was called with the correct arguments

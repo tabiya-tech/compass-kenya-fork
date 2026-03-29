@@ -7,7 +7,7 @@ info:
 host: __ESPV2_HOSTNAME__
 x-google-backend:
   address: __BACKEND_URI__
-  protocol: h2
+  protocol: http/1.1
   deadline: 3600.0
   jwt_audience: __BACKEND_URI__
 x-google-management:
