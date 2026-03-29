@@ -90,6 +90,8 @@ def _deploy_espv2_proxy(*,
                         cloudrun: gcp.cloudrunv2.Service,
                         firebase_project_id: pulumi.Output[str],
                         deployable_version: Version,
+                        min_instance_count: int,
+                        max_instance_count: int,
                         dependencies: list[pulumi.Resource]) -> gcp.cloudrunv2.Service:
     """
     Deploy ESPv2 as a Cloud Run service proxying the backend Cloud Run service.
@@ -187,7 +189,8 @@ def _deploy_espv2_proxy(*,
         ingress="INGRESS_TRAFFIC_ALL",
         template=gcp.cloudrunv2.ServiceTemplateArgs(
             scaling=gcp.cloudrunv2.ServiceTemplateScalingArgs(
-                min_instance_count=1,
+                min_instance_count=min_instance_count,
+                max_instance_count=max_instance_count,
             ),
             service_account=proxy_sa.email,
             containers=[
@@ -589,5 +592,7 @@ def deploy_backend(
         cloudrun=cloud_run,
         firebase_project_id=firebase_project_id,
         deployable_version=deployable_version,
+        min_instance_count=backend_service_cfg.cloudrun_min_instance_count,
+        max_instance_count=backend_service_cfg.cloudrun_max_instance_count,
         dependencies=[cloud_run],
     )
