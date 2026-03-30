@@ -215,7 +215,7 @@ class ExperienceEntity(BaseModel, Generic[SkillEntityT]):
                                company: Optional[str] = None) -> str:
         date_part: str
         if start_date is not None and start_date != "":
-            date_part = f", {start_date}" + f" - {end_date}" if end_date is not None and end_date != "" else ""
+            date_part = f", {start_date}" + (f" - {end_date}" if end_date is not None and end_date != "" else "")
         else:
             if end_date is not None and end_date != "":
                 # Localize "until {end_date}" pattern

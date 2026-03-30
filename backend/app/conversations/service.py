@@ -28,7 +28,6 @@ from app.job_preferences.types import JobPreferences
 
 from app.app_config import get_application_config
 from app.users.cv.service import ICVUploadService
-from app.users.cv.types import CVExtractedExperience
 from app.users.cv.cv_to_agent_mapper import map_cv_to_collected_data
 from app.context_vars import turn_index_ctx_var, detected_language_ctx_var, user_language_ctx_var
 from app.agent.persona_detector import detect_persona
@@ -118,13 +117,7 @@ class ConversationService(IConversationService):
             extraction = latest.structured_extraction
             if not extraction:
                 return
-            # extraction is either a CVStructuredExtractionResponse or a dict (from MongoDB)
-            if isinstance(extraction, dict):
-                cv_experiences = [
-                    CVExtractedExperience(**exp) for exp in extraction.get("experiences", [])
-                ]
-            else:
-                cv_experiences = extraction.experiences
+            cv_experiences = extraction.experiences
             if not cv_experiences:
                 return
             new_items = map_cv_to_collected_data(cv_experiences, collect_state.collected_data)

@@ -229,7 +229,7 @@ class SkillsExplorerAgent(Agent):
 
             structured_summary = ExperienceEntity.get_structured_summary(
                 experience_title=title,
-                work_type=work_type,
+                work_type=work_type.name if work_type else None,
                 company=company,
                 location=location,
                 start_date=start_date,
