@@ -89,7 +89,8 @@ class FisherInformationCalculator:
         Returns:
             Cumulative Fisher Information Matrix (7×7)
         """
-        cumulative_fim = np.zeros((7, 7))
+        n = len(preference_weights)
+        cumulative_fim = np.zeros((n, n))
 
         for vignette in vignettes:
             fim = self.compute_fim(vignette, preference_weights)

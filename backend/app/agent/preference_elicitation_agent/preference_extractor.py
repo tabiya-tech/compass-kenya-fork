@@ -472,7 +472,8 @@ class PreferenceExtractor:
         """Lazy initialization of likelihood calculator."""
         if not hasattr(self, '_likelihood_calculator') or self._likelihood_calculator is None:
             from app.agent.preference_elicitation_agent.bayesian.likelihood_calculator import LikelihoodCalculator
-            self._likelihood_calculator = LikelihoodCalculator()
+            schema_loader = getattr(self, '_schema_loader', None)
+            self._likelihood_calculator = LikelihoodCalculator(schema_loader)
 
     async def extract_likelihood(
         self,

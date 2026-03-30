@@ -16,16 +16,9 @@ class PosteriorDistribution(BaseModel):
     mean: List[float]  # μ: E[β]
     covariance: List[List[float]]  # Σ: Cov[β]
 
-    # Dimension names (maps index → preference dimension)
-    dimensions: List[str] = [
-        "financial_importance",
-        "work_environment_importance",
-        "career_growth_importance",
-        "work_life_balance_importance",
-        "job_security_importance",
-        "task_preference_importance",
-        "values_culture_importance"
-    ]
+    # Dimension names (maps index → preference dimension).
+    # Set at construction time from SchemaLoader — NOT hardcoded.
+    dimensions: List[str]
 
     class Config:
         """Pydantic configuration."""
@@ -59,17 +52,31 @@ class PosteriorDistribution(BaseModel):
 class PosteriorManager:
     """Manages Bayesian posterior distribution."""
 
-    def __init__(self, prior_mean: np.ndarray, prior_cov: np.ndarray):
+    def __init__(
+        self,
+        prior_mean: np.ndarray,
+        prior_cov: np.ndarray,
+        dimensions: List[str],
+    ):
         """
         Initialize posterior with prior distribution.
 
         Args:
-            prior_mean: Prior mean vector (7 dimensions)
-            prior_cov: Prior covariance matrix (7x7)
+            prior_mean: Prior mean vector (N dimensions)
+            prior_cov: Prior covariance matrix (NxN)
+            dimensions: Ordered list of preference dimension names
+                        (must match length of prior_mean)
         """
+        if len(prior_mean) != len(dimensions):
+            raise ValueError(
+                f"prior_mean length ({len(prior_mean)}) must match "
+                f"dimensions length ({len(dimensions)})"
+            )
+        self._dimensions = dimensions
         self.posterior = PosteriorDistribution(
             mean=prior_mean.tolist(),
-            covariance=prior_cov.tolist()
+            covariance=prior_cov.tolist(),
+            dimensions=dimensions,
         )
 
     def update(
@@ -125,7 +132,8 @@ class PosteriorManager:
 
         self.posterior = PosteriorDistribution(
             mean=map_estimate.tolist(),
-            covariance=updated_cov.tolist()
+            covariance=updated_cov.tolist(),
+            dimensions=self._dimensions,
         )
 
         return self.posterior

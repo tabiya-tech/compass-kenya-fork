@@ -55,6 +55,7 @@ try:
         PosteriorManager,
         PosteriorDistribution
     )
+    from app.agent.preference_elicitation_agent.bayesian.schema_loader import SchemaLoader
     from app.agent.preference_elicitation_agent.information_theory.stopping_criterion import StoppingCriterion
     from app.agent.preference_elicitation_agent.config.adaptive_config import AdaptiveConfig
     ADAPTIVE_AVAILABLE = True
@@ -62,8 +63,14 @@ except ImportError:
     ADAPTIVE_AVAILABLE = False
     PosteriorManager = None
     PosteriorDistribution = None
+    SchemaLoader = None
     StoppingCriterion = None
     AdaptiveConfig = None
+
+# Default schema path — can be overridden via ADAPTIVE_SCHEMA_PATH env var
+_DEFAULT_SCHEMA_PATH = (
+    Path(__file__).parent / "offline_optimization" / "preference_parameters.json"
+)
 from app.agent.simple_llm_agent.prompt_response_template import get_json_response_instructions
 from app.conversation_memory.conversation_formatter import ConversationHistoryFormatter
 from app.conversation_memory.conversation_memory_manager import ConversationContext
@@ -268,6 +275,7 @@ class PreferenceElicitationAgent(Agent):
         self._adaptive_config: Optional[AdaptiveConfig] = None
         self._posterior_manager: Optional[PosteriorManager] = None
         self._stopping_criterion: Optional[StoppingCriterion] = None
+        self._schema_loader = None  # Loaded alongside _posterior_manager
 
     def set_state(self, state: PreferenceElicitationAgentState) -> None:
         """
@@ -313,18 +321,28 @@ class PreferenceElicitationAgent(Agent):
             self._adaptive_config = AdaptiveConfig.from_env()
 
         if self._posterior_manager is None:
-            # Initialize with prior from config
-            prior_mean = self._adaptive_config.prior_mean
-            prior_variance = self._adaptive_config.prior_variance
+            import os
+            schema_path = os.getenv("ADAPTIVE_SCHEMA_PATH", str(_DEFAULT_SCHEMA_PATH))
+            schema_loader = SchemaLoader.from_file(schema_path)
 
-            # Create prior mean and covariance as numpy arrays
+            # If prior_mean was not set in config (empty list), use schema default
+            prior_mean = self._adaptive_config.prior_mean or schema_loader.default_prior_mean
+            prior_variance = self._adaptive_config.prior_variance
+            dimensions = schema_loader.dimensions
+
             prior_mean_array = np.array(prior_mean)
-            prior_cov_array = np.diag([prior_variance] * 7)  # Diagonal covariance matrix
+            prior_cov_array = np.diag([prior_variance] * len(dimensions))
 
             self._posterior_manager = PosteriorManager(
                 prior_mean=prior_mean_array,
-                prior_cov=prior_cov_array
+                prior_cov=prior_cov_array,
+                dimensions=dimensions,
             )
+            # Store schema loader for use by LikelihoodCalculator
+            self._schema_loader = schema_loader
+            # Propagate schema_loader to vignette_engine and preference_extractor
+            self._vignette_engine._schema_loader = schema_loader
+            self._preference_extractor._schema_loader = schema_loader
 
         if self._stopping_criterion is None:
             # Use absolute FIM determinant threshold (prior_fim_determinant=0).
@@ -1862,7 +1880,8 @@ Vignettes Completed: {pv.n_vignettes_completed}
             if self._state.posterior_mean and self._state.posterior_covariance:
                 self._posterior_manager.posterior = PosteriorDistribution(
                     mean=self._state.posterior_mean,
-                    covariance=self._state.posterior_covariance
+                    covariance=self._state.posterior_covariance,
+                    dimensions=self._posterior_manager.posterior.dimensions,
                 )
 
             # Update posterior (uses manager's internal posterior)
@@ -1879,10 +1898,11 @@ Vignettes Completed: {pv.n_vignettes_completed}
             from app.agent.preference_elicitation_agent.information_theory.fisher_information import FisherInformationCalculator
             from app.agent.preference_elicitation_agent.bayesian.likelihood_calculator import LikelihoodCalculator
 
-            likelihood_calc = LikelihoodCalculator()
+            likelihood_calc = LikelihoodCalculator(self._schema_loader)
             fisher_calculator = FisherInformationCalculator(likelihood_calc)
 
-            current_fim = np.array(self._state.fisher_information_matrix) if self._state.fisher_information_matrix else np.eye(7) / self._adaptive_config.prior_variance
+            n_dims = self._schema_loader.n_dimensions
+            current_fim = np.array(self._state.fisher_information_matrix) if self._state.fisher_information_matrix else np.eye(n_dims) / self._adaptive_config.prior_variance
 
             # Compute FIM contribution from this vignette
             vignette_fim = fisher_calculator.compute_fim(vignette, np.array(updated_posterior.mean))
@@ -1916,8 +1936,10 @@ Vignettes Completed: {pv.n_vignettes_completed}
         """
         Sync Bayesian posterior to simplified PreferenceVector.
 
-        Maps the 7-dimensional Bayesian posterior (learned from vignettes using
-        Laplace approximation) to the streamlined PreferenceVector structure.
+        Maps posterior dimensions (derived from the loaded schema) to the
+        PreferenceVector named fields by name, not by hardcoded index.
+        PreferenceVector fields that have no matching posterior dimension
+        are left at their default value (0.5).
 
         Uses sigmoid transformation to map unconstrained posterior_mean values
         to [0.0, 1.0] importance scores, and hybrid confidence calculation.
@@ -1933,72 +1955,62 @@ Vignettes Completed: {pv.n_vignettes_completed}
         try:
             posterior_mean = np.array(self._state.posterior_mean)
             posterior_cov = np.array(self._state.posterior_covariance)
+            dimensions = self._posterior_manager.posterior.dimensions
 
             # Sigmoid transformation: maps (-∞, +∞) → [0, 1]
             def sigmoid(x: float) -> float:
                 return float(1.0 / (1.0 + np.exp(-x)))
 
-            # Map posterior_mean to importance scores
-            # Dimension mapping (from PosteriorDistribution.dimensions):
-            # 0: financial_importance
-            # 1: work_environment_importance
-            # 2: career_growth_importance → career_advancement_importance
-            # 3: work_life_balance_importance
-            # 4: job_security_importance
-            # 5: task_preference_importance
-            # 6: values_culture_importance → social_impact_importance
+            # Map by name — only touch fields that exist in the current schema.
+            # Fields not present in the posterior keep their PreferenceVector default.
+            # "future_prospects_importance" (from schema group "Future Prospects")
+            # maps onto career_advancement_importance as the closest semantic match.
+            _dim_to_pv_field = {
+                "financial_importance":        "financial_importance",
+                "work_environment_importance": "work_environment_importance",
+                "future_prospects_importance": "career_advancement_importance",
+                "career_growth_importance":    "career_advancement_importance",
+                "work_life_balance_importance": "work_life_balance_importance",
+                "job_security_importance":     "job_security_importance",
+                "task_preference_importance":  "task_preference_importance",
+                "values_culture_importance":   "social_impact_importance",
+                "social_impact_importance":    "social_impact_importance",
+            }
 
-            self._state.preference_vector.financial_importance = sigmoid(posterior_mean[0])
-            self._state.preference_vector.work_environment_importance = sigmoid(posterior_mean[1])
-            self._state.preference_vector.career_advancement_importance = sigmoid(posterior_mean[2])
-            self._state.preference_vector.work_life_balance_importance = sigmoid(posterior_mean[3])
-            self._state.preference_vector.job_security_importance = sigmoid(posterior_mean[4])
-            self._state.preference_vector.task_preference_importance = sigmoid(posterior_mean[5])
-            self._state.preference_vector.social_impact_importance = sigmoid(posterior_mean[6])
+            variances = np.diag(posterior_cov)
+            per_dim_uncertainty = {}
+
+            for i, dim in enumerate(dimensions):
+                pv_field = _dim_to_pv_field.get(dim)
+                if pv_field and hasattr(self._state.preference_vector, pv_field):
+                    setattr(self._state.preference_vector, pv_field, sigmoid(float(posterior_mean[i])))
+                per_dim_uncertainty[dim] = float(variances[i])
 
             # Update metadata
             n_vignettes = len(self._state.completed_vignettes)
             self._state.preference_vector.n_vignettes_completed = n_vignettes
 
-            # Store raw Bayesian metadata
+            # Store raw Bayesian metadata (sized to actual posterior, not hardcoded 7)
             self._state.preference_vector.posterior_mean = posterior_mean.tolist()
             self._state.preference_vector.posterior_covariance_diagonal = np.diag(posterior_cov).tolist()
             self._state.preference_vector.fim_determinant = self._state.fim_determinant
-
-            # Per-dimension uncertainty
-            variances = np.diag(posterior_cov)
-            self._state.preference_vector.per_dimension_uncertainty = {
-                "financial_importance": float(variances[0]),
-                "work_environment_importance": float(variances[1]),
-                "career_advancement_importance": float(variances[2]),
-                "work_life_balance_importance": float(variances[3]),
-                "job_security_importance": float(variances[4]),
-                "task_preference_importance": float(variances[5]),
-                "social_impact_importance": float(variances[6])
-            }
+            self._state.preference_vector.per_dimension_uncertainty = per_dim_uncertainty
 
             # Calculate hybrid confidence score
-            # Component 1: Variance-based (statistical uncertainty)
             avg_variance = float(np.mean(variances))
             confidence_variance = 1.0 / (1.0 + avg_variance)
-
-            # Component 2: Vignette-count based (heuristic)
             confidence_count = 1.0 - np.exp(-n_vignettes / 10.0)
-
-            # Weighted combination (70% variance, 30% count)
             alpha = 0.7
             confidence = alpha * confidence_variance + (1.0 - alpha) * confidence_count
             self._state.preference_vector.confidence_score = float(np.clip(confidence, 0.0, 1.0))
 
+            dim_summary = "\n".join(
+                f"  {dim}: {sigmoid(float(posterior_mean[i])):.3f} (var: {variances[i]:.3f})"
+                for i, dim in enumerate(dimensions)
+            )
             self.logger.debug(
-                f"Synced Bayesian posterior to PreferenceVector:\n"
-                f"  Financial: {self._state.preference_vector.financial_importance:.3f} (var: {variances[0]:.3f})\n"
-                f"  Work Env: {self._state.preference_vector.work_environment_importance:.3f} (var: {variances[1]:.3f})\n"
-                f"  Career: {self._state.preference_vector.career_advancement_importance:.3f} (var: {variances[2]:.3f})\n"
-                f"  Work-Life: {self._state.preference_vector.work_life_balance_importance:.3f} (var: {variances[3]:.3f})\n"
-                f"  Security: {self._state.preference_vector.job_security_importance:.3f} (var: {variances[4]:.3f})\n"
-                f"  Tasks: {self._state.preference_vector.task_preference_importance:.3f} (var: {variances[5]:.3f})\n"
-                f"  Social: {self._state.preference_vector.social_impact_importance:.3f} (var: {variances[6]:.3f})\n"
+                f"Synced Bayesian posterior to PreferenceVector ({len(dimensions)} dims):\n"
+                f"{dim_summary}\n"
                 f"  Confidence: {self._state.preference_vector.confidence_score:.3f} "
                 f"(variance_component={confidence_variance:.3f}, count_component={confidence_count:.3f}, n={n_vignettes})"
             )
@@ -2093,7 +2105,8 @@ Vignettes Completed: {pv.n_vignettes_completed}
 
             posterior = PosteriorDistribution(
                 mean=self._state.posterior_mean,
-                covariance=self._state.posterior_covariance
+                covariance=self._state.posterior_covariance,
+                dimensions=self._posterior_manager.posterior.dimensions,
             )
 
             fim = np.array(self._state.fisher_information_matrix)

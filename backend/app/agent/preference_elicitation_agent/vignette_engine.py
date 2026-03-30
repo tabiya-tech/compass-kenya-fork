@@ -90,6 +90,7 @@ class VignetteEngine:
         self._d_optimal_selector: Optional[DOptimalSelector] = None
         self._fisher_calculator: Optional[FisherInformationCalculator] = None
         self._likelihood_calculator: Optional[LikelihoodCalculator] = None
+        self._schema_loader = None  # Set externally by agent after SchemaLoader is initialized
 
         if use_offline_with_personalization:
             # Hybrid mode: offline vignettes WITH personalization
@@ -895,7 +896,7 @@ class VignetteEngine:
     def _init_adaptive_components(self) -> None:
         """Lazy initialization of adaptive D-efficiency components."""
         if self._d_optimal_selector is None:
-            self._likelihood_calculator = LikelihoodCalculator()
+            self._likelihood_calculator = LikelihoodCalculator(self._schema_loader)
             self._fisher_calculator = FisherInformationCalculator(self._likelihood_calculator)
             self._d_optimal_selector = DOptimalSelector(self._fisher_calculator)
             self._logger.info("Initialized adaptive D-efficiency components")
