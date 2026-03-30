@@ -23,8 +23,8 @@ class DEfficiencyOptimizer:
         """
         self.logger = logging.getLogger(self.__class__.__name__)
         self.profile_generator = profile_generator
-        # Always use 7 preference dimensions (not 10 attributes)
-        self.n_params = 7
+        # Derive dimension count from schema via SchemaLoader
+        self.n_params = profile_generator.schema_loader.n_dimensions
 
     def select_static_vignettes(
         self,

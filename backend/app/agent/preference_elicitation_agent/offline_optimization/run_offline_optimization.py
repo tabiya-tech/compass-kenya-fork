@@ -219,9 +219,9 @@ def main():
 
     optimizer = DEfficiencyOptimizer(profile_generator)
 
-    # Prior mean for 7 preference dimensions (not 10 attributes)
-    # Use neutral prior (all zeros) since we're aggregating multiple attributes per dimension
-    prior_mean = np.zeros(7)
+    # Prior mean derived from schema (neutral prior = all zeros, N dimensions)
+    n_dims = profile_generator.schema_loader.n_dimensions
+    prior_mean = np.zeros(n_dims)
 
     beginning_vignettes, end_vignettes = optimizer.select_static_vignettes(
         profiles=non_dominated_profiles,
