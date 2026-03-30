@@ -33,6 +33,10 @@ class CollectedData(BaseModel):
     end_date: Optional[str]
     paid_work: Optional[bool | str]
     work_type: Optional[str]
+    source: Optional[str] = None
+    """Provenance marker: 'cv' for CV-extracted, 'conversation' for conversational, None for legacy data."""
+    responsibilities: list[str] = Field(default_factory=list)
+    """CV-extracted responsibilities for this experience. Empty for conversationally-collected data."""
 
     class Config:
         """

@@ -163,6 +163,14 @@ class SkillsExplorerAgent(Agent):
             self.state.question_asked_until_now = []  # Reset the questions asked until now for this experience
             self.state.answers_provided = []  # Reset the answers provided for this experience
 
+        _filtered_cv_responsibilities = [
+            r for r in self.experience_entity.responsibilities.responsibilities
+            if r and r.strip()
+        ]
+        cv_responsibilities: list[str] | None = (
+            _filtered_cv_responsibilities or None
+        ) if _first_time_for_experience and self.experience_entity.source == "cv" else None
+
         responsibilities_llm_stats = []
         responsibilities_output = None
         rich_response = False
@@ -179,8 +187,8 @@ class SkillsExplorerAgent(Agent):
             self.logger.debug("Experience data from our conversation until now to be merged to the data response: %s",
                               responsibilities_output)
             # Merge the extracted responsibilities data into the experience entity
-            SkillsExplorerAgent._merge_responsibilities_data(self.experience_entity, responsibilities_output)
             if responsibilities_output:
+                SkillsExplorerAgent._merge_responsibilities_data(self.experience_entity, responsibilities_output)
                 responsibilities_count = len(responsibilities_output.responsibilities)
                 word_count = len(user_input.message.split())
                 rich_response = responsibilities_count >= 5 or word_count >= 80
@@ -203,6 +211,7 @@ class SkillsExplorerAgent(Agent):
                                                                rich_response=rich_response,
                                                                experience_title=self.experience_entity.experience_title,
                                                                work_type=self.experience_entity.work_type,
+                                                               cv_responsibilities=cv_responsibilities,
                                                                logger=self.logger)
 
         if conversation_llm_output.message_for_user != t("messages", _FINAL_MESSAGE_KEY):

@@ -89,6 +89,7 @@ class UserCVRepository(IUserCVRepository):
             "error_code": getattr(upload, "error_code", None),
             "error_detail": getattr(upload, "error_detail", None),
             "experience_bullets": getattr(upload, "experience_bullets", None),
+            "structured_extraction": upload.structured_extraction.model_dump() if upload.structured_extraction else None,
         }
 
     @staticmethod
@@ -109,6 +110,7 @@ class UserCVRepository(IUserCVRepository):
             error_code=doc.get("error_code"),
             error_detail=doc.get("error_detail"),
             experience_bullets=doc.get("experience_bullets"),
+            structured_extraction=doc.get("structured_extraction"),
         )
 
     async def insert_upload(self, upload: UserCVUpload) -> str:
