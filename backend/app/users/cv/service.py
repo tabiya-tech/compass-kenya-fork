@@ -206,7 +206,7 @@ class CVUploadService(ICVUploadService):
                     try:
                         await self._repository.store_experiences(user_id, upload_id, experiences=bullets_local)
                     except Exception as e_store:
-                        self._logger.warning("[Upload %s] Failed to persist experiences_data", upload_id, str(e_store), exc_info=True)
+                        self._logger.warning("[Upload %s] Failed to persist experiences_data: %s", upload_id, str(e_store), exc_info=True)
                     # Structured extraction (best-effort — failure does not block the pipeline)
                     try:
                         structured_experiences, structured_qualifications = await self._run_with_cancellation(
@@ -218,9 +218,8 @@ class CVUploadService(ICVUploadService):
                             "experiences": [e.model_dump() for e in structured_experiences],
                             "qualifications": [q.model_dump() for q in structured_qualifications],
                         }
-                        await self._repository._collection.update_one(
-                            {"user_id": user_id, "upload_id": upload_id},
-                            {"$set": {"structured_extraction": extraction_dict}},
+                        await self._repository.store_structured_extraction(
+                            user_id, upload_id, extraction=extraction_dict,
                         )
                         self._logger.info(
                             "[Upload %s] Structured extraction persisted {experiences=%s, qualifications=%s}",
@@ -246,7 +245,7 @@ class CVUploadService(ICVUploadService):
                     try:
                         await self._repository.mark_failed(user_id, upload_id, error_code=error_code, error_detail=error_detail)
                     except Exception as e_mark_failed:
-                        self._logger.warning("[Upload %s] Failed to persist FAILED state", upload_id, str(e_mark_failed), exc_info=True)
+                        self._logger.warning("[Upload %s] Failed to persist FAILED state: %s", upload_id, str(e_mark_failed), exc_info=True)
 
             # Keep a strong reference to avoid GC of background task
             if not hasattr(self, "_background_tasks"):

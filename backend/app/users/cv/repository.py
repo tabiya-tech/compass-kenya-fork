@@ -7,7 +7,7 @@ from pymongo.errors import DuplicateKeyError
 
 from app.server_dependencies.database_collections import Collections
 from app.users.cv.errors import DuplicateCVUploadError
-from app.users.cv.types import UserCVUpload, UploadProcessState
+from app.users.cv.types import UserCVUpload, UploadProcessState, CVStructuredExtractionResponse
 from common_libs.time_utilities import get_now, datetime_to_mongo_date, mongo_date_to_datetime
 
 
@@ -65,6 +65,14 @@ class IUserCVRepository(ABC):
     async def get_user_uploads(self, *, user_id: str) -> list[UserCVUpload]:
         raise NotImplementedError()
 
+    @abstractmethod
+    async def store_structured_extraction(self, user_id: str, upload_id: str, *, extraction: dict) -> bool:
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def get_latest_structured_extraction(self, user_id: str) -> dict | None:
+        raise NotImplementedError()
+
 
 class UserCVRepository(IUserCVRepository):
     def __init__(self, db: AsyncIOMotorDatabase):
@@ -110,7 +118,7 @@ class UserCVRepository(IUserCVRepository):
             error_code=doc.get("error_code"),
             error_detail=doc.get("error_detail"),
             experience_bullets=doc.get("experience_bullets"),
-            structured_extraction=doc.get("structured_extraction"),
+            structured_extraction=CVStructuredExtractionResponse(**doc["structured_extraction"]) if doc.get("structured_extraction") else None,
         )
 
     async def insert_upload(self, upload: UserCVUpload) -> str:
@@ -318,7 +326,7 @@ class UserCVRepository(IUserCVRepository):
         }
 
         cursor = self._collection.find(query, sort=[("created_at", -1)])  # Most recent first
-        docs = await cursor.to_list(length=None)
+        docs = await cursor.to_list(length=50)
 
         self._logger.debug(
             "Fetched %d COMPLETED CV uploads for user_id=%s", len(docs), user_id
@@ -326,3 +334,23 @@ class UserCVRepository(IUserCVRepository):
 
         # Convert MongoDB documents to UserCVUpload objects
         return [UserCVRepository._from_db_doc(doc) for doc in docs]
+
+    async def store_structured_extraction(self, user_id: str, upload_id: str, *, extraction: dict) -> bool:
+        res = await self._collection.update_one(
+            {"user_id": user_id, "upload_id": upload_id},
+            {"$set": {"structured_extraction": extraction}},
+        )
+        return res.modified_count > 0
+
+    async def get_latest_structured_extraction(self, user_id: str) -> dict | None:
+        cursor = self._collection.find(
+            {
+                "user_id": user_id,
+                "upload_process_state": UploadProcessState.COMPLETED,
+                "structured_extraction": {"$ne": None},
+            },
+        ).sort("created_at", -1).limit(1)
+        docs = await cursor.to_list(length=1)
+        if not docs:
+            return None
+        return docs[0].get("structured_extraction")
