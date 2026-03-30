@@ -1952,6 +1952,12 @@ Vignettes Completed: {pv.n_vignettes_completed}
         if not self._state.posterior_mean or not self._state.posterior_covariance:
             return
 
+        if self._posterior_manager is None:
+            self._init_adaptive_components()
+
+        if self._posterior_manager is None:
+            return
+
         try:
             posterior_mean = np.array(self._state.posterior_mean)
             posterior_cov = np.array(self._state.posterior_covariance)

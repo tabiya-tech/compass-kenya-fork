@@ -6,13 +6,58 @@ import pytest
 import numpy as np
 from app.agent.preference_elicitation_agent.information_theory.fisher_information import FisherInformationCalculator
 from app.agent.preference_elicitation_agent.bayesian.likelihood_calculator import LikelihoodCalculator
+from app.agent.preference_elicitation_agent.bayesian.schema_loader import SchemaLoader
 from app.agent.preference_elicitation_agent.types import Vignette, VignetteOption
+
+# Minimal schema matching test vignette attributes
+_TEST_SCHEMA = {
+    "attributes": [
+        {
+            "name": "salary", "label": "Salary", "group": "Financial",
+            "type": "ordered", "coding": "linear",
+            "levels": [
+                {"id": "low", "label": "Low", "value": 15000},
+                {"id": "high", "label": "High", "value": 35000},
+            ]
+        },
+        {
+            "name": "remote", "label": "Remote Work", "group": "Work Environment",
+            "type": "categorical", "coding": "dummy", "base_level_id": "no",
+            "levels": [{"id": "no", "label": "Office"}, {"id": "yes", "label": "Remote"}]
+        },
+        {
+            "name": "career_growth", "label": "Career Growth", "group": "Future Prospects",
+            "type": "categorical", "coding": "dummy", "base_level_id": "no",
+            "levels": [{"id": "no", "label": "Low"}, {"id": "yes", "label": "High"}]
+        },
+        {
+            "name": "flexibility", "label": "Flexibility", "group": "Work Life Balance",
+            "type": "categorical", "coding": "dummy", "base_level_id": "no",
+            "levels": [{"id": "no", "label": "Fixed"}, {"id": "yes", "label": "Flexible"}]
+        },
+        {
+            "name": "job_security", "label": "Job Security", "group": "Job Security",
+            "type": "categorical", "coding": "dummy", "base_level_id": "no",
+            "levels": [{"id": "no", "label": "Low"}, {"id": "yes", "label": "High"}]
+        },
+        {
+            "name": "task_variety", "label": "Task Variety", "group": "Task Preferences",
+            "type": "categorical", "coding": "dummy", "base_level_id": "no",
+            "levels": [{"id": "no", "label": "Routine"}, {"id": "yes", "label": "Varied"}]
+        },
+        {
+            "name": "culture_alignment", "label": "Culture", "group": "Values Culture",
+            "type": "categorical", "coding": "dummy", "base_level_id": "no",
+            "levels": [{"id": "no", "label": "Standard"}, {"id": "yes", "label": "Mission"}]
+        },
+    ]
+}
 
 
 @pytest.fixture
 def likelihood_calculator():
-    """Create likelihood calculator with default temperature."""
-    return LikelihoodCalculator(temperature=1.0)
+    """Create likelihood calculator with test schema."""
+    return LikelihoodCalculator(schema_loader=SchemaLoader(_TEST_SCHEMA), temperature=1.0)
 
 
 @pytest.fixture
