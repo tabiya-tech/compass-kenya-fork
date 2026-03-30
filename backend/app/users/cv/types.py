@@ -6,6 +6,33 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
+class CVExtractedExperience(BaseModel):
+    """A single work experience extracted from a CV."""
+    experience_title: str
+    company: Optional[str] = None
+    location: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    work_type: Optional[str] = None
+    responsibilities: list[str] = Field(default_factory=list)
+
+
+class CVExtractedQualification(BaseModel):
+    """A single qualification extracted from a CV."""
+    name: str
+    qualification_type: Optional[str] = None
+    institution: Optional[str] = None
+    date_obtained: Optional[str] = None
+    field_of_study: Optional[str] = None
+    level: Optional[str] = None
+
+
+class CVStructuredExtractionResponse(BaseModel):
+    """The structured extraction result from a CV."""
+    experiences: list[CVExtractedExperience] = Field(default_factory=list)
+    qualifications: list[CVExtractedQualification] = Field(default_factory=list)
+
+
 class CVUploadStateResponse(BaseModel):
     upload_id: str
 
@@ -84,3 +111,7 @@ class UserCVUpload(BaseModel):
     # Optional experiences populated when COMPLETED
     experience_bullets: list[str] | None = Field(default=None,
                                                  description="Extracted experiences bullets when available")
+    structured_extraction: Optional['CVStructuredExtractionResponse'] = Field(
+        default=None,
+        description="Structured extraction of experiences and qualifications from the CV"
+    )
