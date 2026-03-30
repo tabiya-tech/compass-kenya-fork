@@ -12,7 +12,7 @@ from app.agent.persona_detector import PersonaType
 from app.agent.collect_experiences_agent._dataextraction_llm import _DataExtractionLLM
 from app.agent.collect_experiences_agent._transition_decision_tool import TransitionDecisionTool, TransitionDecision
 from app.agent.collect_experiences_agent._types import CollectedData
-from app.agent.experience.experience_entity import ExperienceEntity
+from app.agent.experience.experience_entity import ExperienceEntity, ResponsibilitiesData
 from app.agent.experience.timeline import Timeline
 from app.agent.experience.work_type import WorkType
 from app.agent.linking_and_ranking_pipeline import ExperiencePipelineConfig
@@ -26,9 +26,15 @@ from app.vector_search.vector_search_dependencies import SearchServices
 
 def _deserialize_work_types(value: list[str] | list[WorkType]) -> list[WorkType]:
     if isinstance(value, list):
-        # If the value is a list, and the items in the list are strings, we convert the strings to the Enum
-        # Otherwise, we return the value as is
-        return [WorkType[x] if isinstance(x, str) else x for x in value]
+        result = []
+        for x in value:
+            if isinstance(x, str):
+                wt = WorkType.from_string_key(x)
+                if wt is not None:
+                    result.append(wt)
+            else:
+                result.append(x)
+        return result
     return value
 
 
@@ -373,7 +379,9 @@ class CollectExperiencesAgent(Agent):
                     company=elem.company,
                     location=elem.location,
                     timeline=Timeline(start=elem.start_date, end=elem.end_date),
-                    work_type=WorkType.from_string_key(elem.work_type)
+                    work_type=WorkType.from_string_key(elem.work_type),
+                    responsibilities=ResponsibilitiesData(responsibilities=elem.responsibilities),
+                    source=elem.source,
                 )
                 experiences.append(entity)
             except Exception as e:  # pylint: disable=broad-except

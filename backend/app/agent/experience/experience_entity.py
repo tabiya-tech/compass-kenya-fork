@@ -108,6 +108,11 @@ class ExperienceEntity(BaseModel, Generic[SkillEntityT]):
     This is a human-readable string that summarizes the experience.
     """
 
+    source: Optional[str] = None
+    """
+    Provenance marker for this experience: 'cv' if pre-populated from a CV upload, None otherwise.
+    """
+
     # contextual_title: Optional[str] = None  # TODO: replace with the cluster_results from the ExperiencePipelineResponse
     # """
     # Title of the experience that is based on the experience title
@@ -145,7 +150,10 @@ class ExperienceEntity(BaseModel, Generic[SkillEntityT]):
     @field_validator("work_type", mode='before')
     def deserialize_work_type(cls, value: Any) -> WorkType:
         if isinstance(value, str):
-            return WorkType[value]
+            try:
+                return WorkType[value]
+            except KeyError:
+                return None
         return value
 
     class Config:
@@ -165,6 +173,7 @@ class ExperienceEntity(BaseModel, Generic[SkillEntityT]):
                  summary: Optional[str] = None,
                  top_skills: Optional[List[SkillEntity]] = None,
                  remaining_skills: Optional[List[SkillEntity]] = None,
+                 source: Optional[str] = None,
                  ):
         super().__init__(
             uuid=uuid if uuid is not None else str(uuid4()),  # Generate a unique UUID for each instance
@@ -179,7 +188,8 @@ class ExperienceEntity(BaseModel, Generic[SkillEntityT]):
             questions_and_answers=questions_and_answers if questions_and_answers is not None else [],
             summary=summary,
             top_skills=top_skills if top_skills is not None else [],
-            remaining_skills=remaining_skills if remaining_skills is not None else []
+            remaining_skills=remaining_skills if remaining_skills is not None else [],
+            source=source,
         )
 
     @staticmethod

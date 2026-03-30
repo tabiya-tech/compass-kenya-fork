@@ -34,6 +34,8 @@ from app.server_dependencies.application_state_dependencies import get_applicati
 from app.server_dependencies.conversation_manager_dependencies import get_conversation_memory_manager
 from app.server_dependencies.db_dependencies import CompassDBProvider
 from app.users.auth import Authentication, UserInfo
+from app.users.cv.routes import get_cv_service
+from app.users.cv.service import ICVUploadService
 
 
 async def get_conversation_service(agent_director: LLMAgentDirector = Depends(get_agent_director),
@@ -48,7 +50,9 @@ async def get_conversation_service(agent_director: LLMAgentDirector = Depends(ge
                                    job_preferences_service: IJobPreferencesService = Depends(
                                        get_job_preferences_service),
                                    user_recommendations_service: IUserRecommendationsService = Depends(
-                                       get_user_recommendations_service)) -> IConversationService:
+                                       get_user_recommendations_service),
+                                   cv_upload_service: ICVUploadService = Depends(
+                                       get_cv_service)) -> IConversationService:
     return ConversationService(agent_director=agent_director,
                                application_state_metrics_recorder=ApplicationStateMetricsRecorder(
                                    application_state_manager=application_state_manager,
@@ -56,7 +60,8 @@ async def get_conversation_service(agent_director: LLMAgentDirector = Depends(ge
                                conversation_memory_manager=conversation_memory_manager,
                                reaction_repository=ReactionRepository(db),
                                job_preferences_service=job_preferences_service,
-                               user_recommendations_service=user_recommendations_service)
+                               user_recommendations_service=user_recommendations_service,
+                               cv_upload_service=cv_upload_service)
 
 
 def add_conversation_routes(app: FastAPI, authentication: Authentication):

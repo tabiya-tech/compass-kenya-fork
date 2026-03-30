@@ -35,6 +35,7 @@ class _ConversationLLM:
                       rich_response: bool,
                       experience_title,
                       work_type: WorkType,
+                      cv_responsibilities: list[str] | None = None,
                       logger: logging.Logger) -> AgentOutput:
 
         async def _callback(attempt: int, max_retries: int) -> tuple[AgentOutput, float, BaseException | None]:
@@ -60,6 +61,7 @@ class _ConversationLLM:
                 rich_response=rich_response,
                 experience_title=experience_title,
                 work_type=work_type,
+                cv_responsibilities=cv_responsibilities,
                 logger=logger
             )
 
@@ -80,6 +82,7 @@ class _ConversationLLM:
                                 rich_response: bool,
                                 experience_title,
                                 work_type: WorkType,
+                                cv_responsibilities: list[str] | None = None,
                                 logger: logging.Logger) -> tuple[AgentOutput, float, BaseException | None]:
         """
         The main conversation logic for the skill explorer agent.
@@ -117,7 +120,8 @@ class _ConversationLLM:
                 experience_title=experience_title,
                 experience_index=experience_index,
                 rich_response=rich_response,
-                work_type=work_type
+                work_type=work_type,
+                cv_responsibilities=cv_responsibilities,
             )
             llm_response = await llm.generate_content(llm_input=llm_input)
         else:
@@ -299,7 +303,8 @@ class _ConversationLLM:
                                             experience_title: str,
                                             experience_index: int,
                                             rich_response: bool,
-                                            work_type: WorkType) -> str:
+                                            work_type: WorkType,
+                                            cv_responsibilities: list[str] | None = None) -> str:
         turn_target = 4 if experience_index == 0 else 3
         experience_phase_hint = ("This is the first experience. Use the full 4-turn flow."
                                  if experience_index == 0
@@ -307,42 +312,70 @@ class _ConversationLLM:
         rich_response_hint = ("If the user provides rich detail, you may skip redundant follow-ups and end early "
                               "after asking one achievement or challenge question."
                               if rich_response else "")
+
+        # Build the initial question block — CV-aware or default
+        if cv_responsibilities:
+            cv_bullets = "\n".join(f"- {r}" for r in cv_responsibilities)
+            initial_question_instructions = dedent(f"""\
+            The user's CV already contains the following responsibilities for this role:
+            {cv_bullets}
+
+            Before responding, assess whether these responsibilities are sufficiently specific and concrete
+            (e.g. "designed and deployed a payment API serving 10,000 users" counts as specific;
+            "managed team" or "did admin work" does not).
+
+            If the CV context is SUFFICIENT (most bullets are specific and concrete):
+                - Do NOT open with a generic question about their daily routine from scratch.
+                - Present a concise 2-3 sentence summary of what the CV says about this role.
+                - Ask the user to confirm whether this accurately represents their experience,
+                  or if they would like to add or correct anything.
+
+            If the CV context is NOT SUFFICIENT (bullets are vague, generic, or fewer than 2):
+                - Acknowledge what the CV captured. For example:
+                  "I can see from your CV that you were responsible for [X]."
+                - Ask ONE targeted follow-up question to fill the gap, informed by what is already there.
+                - Do NOT open with a generic question about their daily routine or tasks from scratch.""")
+        else:
+            initial_question_instructions = "Ask me to describe a typical day as {experience_title}.".format(
+                experience_title=f"'{experience_title}'"
+            )
+
         prompt_template = dedent("""\
         #Role
             You are an interviewer helping me, a young person{country_of_user_segment},
             reflect on my experience as {experience_title}{work_type}. I have already shared very basic information about this experience.
             {experiences_explored_instructions}
-                                 
+
             Let's now begin the process and help me reflect on the experience as {experience_title} in more detail.
             Target approximately {turn_target} turns. {experience_phase_hint}
             {rich_response_hint}
-            
+
             Respond with something similar to this:
                 Explain that we will explore my experience as {experience_title}.
-                
+
                 Add new line to separate the above from the next part.
-                     
-                Explicitly explain that you will ask me questions and that I should try to be as descriptive as possible in my responses 
+
+                Explicitly explain that you will ask me questions and that I should try to be as descriptive as possible in my responses
                                 and that the more I talk about my experience the more accurate the results will be.
-                
+
                 Add new line to separate the above from the following question.
-                
-                Ask me to describe a typical day as {experience_title}.
-            
+
+                {initial_question_instructions}
+
         {language_style}
-        
+
         {persona_guidance}
         """)
         experiences_explored_instructions = ""
         if len(experiences_explored) > 0:
             experiences_explored_instructions = dedent("""\
-            
+
             We have already finished reflecting in detail on the experiences:
                 {experiences_explored}
-            
-            Do not pay attention to what was said before regarding the above experiences 
+
+            Do not pay attention to what was said before regarding the above experiences
             as the focus is now on the experience as {experience_title}{work_type}.
-            
+
             """)
             experiences_explored_instructions = replace_placeholders_with_indent(
                 experiences_explored_instructions,
@@ -356,6 +389,7 @@ class _ConversationLLM:
                                                 turn_target=str(turn_target),
                                                 experience_phase_hint=experience_phase_hint,
                                                 rich_response_hint=rich_response_hint,
+                                                initial_question_instructions=initial_question_instructions,
                                                 language_style=get_language_style(),
                                                 persona_guidance=get_persona_prompt_section(persona_type),
                                                 )

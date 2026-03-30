@@ -27,6 +27,9 @@ from app.user_recommendations.services.service import IUserRecommendationsServic
 from app.job_preferences.types import JobPreferences
 
 from app.app_config import get_application_config
+from app.users.cv.service import ICVUploadService
+from app.users.cv.types import CVExtractedExperience
+from app.users.cv.cv_to_agent_mapper import map_cv_to_collected_data
 from app.context_vars import turn_index_ctx_var, detected_language_ctx_var, user_language_ctx_var
 from app.agent.persona_detector import detect_persona
 from app.agent.language_detector import detect_language, get_locale_for_detected_language, DetectedLanguage
@@ -88,7 +91,8 @@ class ConversationService(IConversationService):
                  conversation_memory_manager: IConversationMemoryManager,
                  reaction_repository: IReactionRepository,
                  job_preferences_service: IJobPreferencesService,
-                 user_recommendations_service: IUserRecommendationsService):
+                 user_recommendations_service: IUserRecommendationsService,
+                 cv_upload_service: ICVUploadService | None = None):
         self._logger = logging.getLogger(ConversationService.__name__)
         self._agent_director = agent_director
         self._application_state_metrics_recorder = application_state_metrics_recorder
@@ -96,6 +100,43 @@ class ConversationService(IConversationService):
         self._reaction_repository = reaction_repository
         self._job_preferences_service = job_preferences_service
         self._user_recommendations_service = user_recommendations_service
+        self._cv_upload_service = cv_upload_service
+
+    async def _inject_cv_experiences_if_available(self, state, user_id: str) -> None:
+        """Pre-populate collect_experience_state with CV-extracted experiences if available."""
+        if self._cv_upload_service is None:
+            return
+        collect_state = state.collect_experience_state
+        if not collect_state.first_time_visit or collect_state.collected_data:
+            return
+        try:
+            uploads = await self._cv_upload_service.get_user_cvs(user_id=user_id)
+            if not uploads:
+                return
+            # Use the most recent completed upload
+            latest = uploads[0]
+            extraction = latest.structured_extraction
+            if not extraction:
+                return
+            # extraction is either a CVStructuredExtractionResponse or a dict (from MongoDB)
+            if isinstance(extraction, dict):
+                cv_experiences = [
+                    CVExtractedExperience(**exp) for exp in extraction.get("experiences", [])
+                ]
+            else:
+                cv_experiences = extraction.experiences
+            if not cv_experiences:
+                return
+            new_items = map_cv_to_collected_data(cv_experiences, collect_state.collected_data)
+            collect_state.collected_data.extend(new_items)
+            self._logger.info(
+                "Injected %d CV experiences into collect_experience_state for user=%s",
+                len(new_items), user_id,
+            )
+        except Exception as e:
+            self._logger.warning(
+                "Failed to inject CV experiences for user=%s: %s", user_id, str(e), exc_info=True,
+            )
 
     async def send(self, user_id: str, session_id: int, user_input: str, clear_memory: bool,
                    filter_pii: bool,
@@ -139,6 +180,8 @@ class ConversationService(IConversationService):
         self._agent_director.get_explore_experiences_agent().set_state(state.explore_experiences_director_state)
         self._agent_director.get_explore_experiences_agent().get_collect_experiences_agent().set_state(
             state.collect_experience_state)
+        # Inject CV-extracted experiences into collect_experience_state if available
+        await self._inject_cv_experiences_if_available(state, user_id)
         self._agent_director.get_explore_experiences_agent().get_exploring_skills_agent().set_state(
             state.skills_explorer_agent_state)
         self._agent_director.get_preference_elicitation_agent().set_state(state.preference_elicitation_agent_state)

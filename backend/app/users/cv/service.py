@@ -12,6 +12,7 @@ from app.users.cv.repository import IUserCVRepository
 from app.users.cv.storage import build_user_cv_upload_record, ICVCloudStorageService
 from app.users.cv.types import UploadProcessState, CVUploadErrorCode, UserCVUpload
 from app.users.cv.utils.llm_extractor import CVExperienceExtractor
+from app.users.cv.utils.structured_extractor import CVStructuredExtractor
 from app.users.cv.utils.markdown_converter import convert_cv_bytes_to_markdown
 from common_libs.call_with_timeout.call_with_timeout import call_with_timeout
 
@@ -65,6 +66,7 @@ class CVUploadService(ICVUploadService):
         self._background_tasks: set[asyncio.Task] = set()
         self._logger = logging.getLogger(self.__class__.__name__)
         self._experiences_extractor = CVExperienceExtractor(self._logger)
+        self._structured_extractor = CVStructuredExtractor(self._logger)
 
         self._repository = repository
         self._cv_cloud_storage_service = cv_cloud_storage_service
@@ -205,6 +207,32 @@ class CVUploadService(ICVUploadService):
                         await self._repository.store_experiences(user_id, upload_id, experiences=bullets_local)
                     except Exception as e_store:
                         self._logger.warning("[Upload %s] Failed to persist experiences_data", upload_id, str(e_store), exc_info=True)
+                    # Structured extraction (best-effort — failure does not block the pipeline)
+                    try:
+                        structured_experiences, structured_qualifications = await self._run_with_cancellation(
+                            upload_id,
+                            self._structured_extractor.extract_structured,
+                            md,
+                        )
+                        extraction_dict = {
+                            "experiences": [e.model_dump() for e in structured_experiences],
+                            "qualifications": [q.model_dump() for q in structured_qualifications],
+                        }
+                        await self._repository._collection.update_one(
+                            {"user_id": user_id, "upload_id": upload_id},
+                            {"$set": {"structured_extraction": extraction_dict}},
+                        )
+                        self._logger.info(
+                            "[Upload %s] Structured extraction persisted {experiences=%s, qualifications=%s}",
+                            upload_id, len(structured_experiences), len(structured_qualifications),
+                        )
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as e_struct:
+                        self._logger.warning(
+                            "[Upload %s] Structured extraction failed (non-fatal): %s",
+                            upload_id, str(e_struct), exc_info=True,
+                        )
                     await self._repository.update_state(user_id, upload_id, to_state=UploadProcessState.COMPLETED)
                     self._logger.info("[Upload %s] Pipeline completed successfully", upload_id)
                 except asyncio.CancelledError:
