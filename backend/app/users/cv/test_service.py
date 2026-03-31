@@ -51,6 +51,12 @@ class MockCVRepository(IUserCVRepository):
     async def get_user_uploads(self, *, user_id: str) -> list[CVUploadResponseListItem]:
         return []
 
+    async def store_structured_extraction(self, user_id: str, upload_id: str, *, extraction: dict) -> bool:
+        return True
+
+    async def get_latest_structured_extraction(self, user_id: str) -> dict | None:
+        return None
+
 
 class MockCVCloudStorageService(ICVCloudStorageService):
     """Mock storage service for testing."""
