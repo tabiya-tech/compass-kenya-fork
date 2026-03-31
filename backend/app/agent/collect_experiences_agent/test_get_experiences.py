@@ -89,3 +89,24 @@ def test_get_experiences_empty_responsibilities_produces_empty_responsibilities_
     agent = _make_agent_with_state([data])
     experiences = agent.get_experiences()
     assert experiences[0].responsibilities.responsibilities == []
+
+
+def test_get_experiences_sets_source_from_education():
+    data = CollectedData(
+        index=0,
+        experience_title="BSc Computer Science",
+        company="University of Nairobi",
+        location="Nairobi",
+        start_date="2018-01",
+        end_date="2022-12",
+        paid_work=False,
+        work_type=None,
+        source="education",
+        responsibilities=[],
+    )
+    agent = _make_agent_with_state([data])
+    experiences = agent.get_experiences()
+    assert len(experiences) == 1
+    assert experiences[0].source == "education"
+    assert experiences[0].work_type is None
+    assert experiences[0].experience_title == "BSc Computer Science"

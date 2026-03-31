@@ -64,3 +64,19 @@ def test_responsibilities_serializes_to_json():
     dumped = data.model_dump_json()
     assert "Administered medication" in dumped
     assert "Recorded patient vitals" in dumped
+
+
+def test_state_without_education_phase_done_deserializes_cleanly():
+    """Simulate a stored MongoDB document that predates the education_phase_done field."""
+    from app.agent.collect_experiences_agent.collect_experiences_agent import CollectExperiencesAgentState
+    raw = {
+        "session_id": 1,
+        "country_of_user": "UNSPECIFIED",
+        "persona_type": "INFORMAL",
+        "collected_data": [],
+        "unexplored_types": ["FORMAL_SECTOR_WAGED_EMPLOYMENT"],
+        "explored_types": [],
+        "first_time_visit": True,
+    }
+    state = CollectExperiencesAgentState.from_document(raw)
+    assert state.education_phase_done is False

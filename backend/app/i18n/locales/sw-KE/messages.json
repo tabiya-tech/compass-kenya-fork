@@ -25,7 +25,13 @@
       "location": "mahali"
     },
     "askAboutType": "Niulize kuhusu uzoefu unaojumuisha: {experience_type}",
-    "recapPrompt": "Tuangalie tena, na unipe nafasi ya kusahihisha makosa yoyote."
+    "recapPrompt": "Tuangalie tena, na unipe nafasi ya kusahihisha makosa yoyote.",
+    "education": {
+      "askAboutEducation": "Kabla ya kuchunguza uzoefu wako wa kazi, je, umekamilisha elimu yoyote ya baada ya sekondari — kwa mfano chuo kikuu, TVET, chuo, au mafunzo ya ufundi?",
+      "courseTitle": "jina la kozi au programu",
+      "institution": "taasisi",
+      "transitionToWork": "Asante kwa kushiriki historia yako ya elimu. Sasa tuzungumze kuhusu uzoefu wako wa kazi."
+    }
   },
   "exploreExperiences": {
     "noMoreExperiences": "Inaonekana hakuna uzoefu zaidi wa kujadili.",
@@ -60,7 +66,8 @@
     "question": {
       "formalWaged": "Unafikiri ni nini muhimu unapofanya kazi katika kampuni kama hiyo?",
       "selfEmployment": "Unafikiri ni nini muhimu unapokuwa bosi wako mwenyewe?",
-      "unseenUnpaid": "Unafikiri ni nini muhimu zaidi unaposaidia jamii au kutunza wengine?"
+      "unseenUnpaid": "Unafikiri ni nini muhimu zaidi unaposaidia jamii au kutunza wengine?",
+      "education": "Ni eneo gani la masomo yako unalojisikia kuwa na uwezo zaidi wa kutumia katika mazingira ya kazi?"
     }
   }
 }

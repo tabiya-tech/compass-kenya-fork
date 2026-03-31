@@ -107,6 +107,12 @@ class CollectExperiencesAgentState(BaseModel):
     Whether this is the first time the agent is visited during the conversation.
     """
 
+    education_phase_done: bool = False
+    """
+    Whether the education collection phase has been completed.
+    Education is asked on first_time_visit before the work type loop begins.
+    """
+
     class Config:
         """
         Disallow extra fields in the model
@@ -166,7 +172,8 @@ class CollectExperiencesAgentState(BaseModel):
                                             collected_data=_doc["collected_data"],
                                             unexplored_types=_doc["unexplored_types"],
                                             explored_types=_doc["explored_types"],
-                                            first_time_visit=_doc["first_time_visit"])
+                                            first_time_visit=_doc["first_time_visit"],
+                                            education_phase_done=_doc.get("education_phase_done", False))
 
 
 class CollectExperiencesAgent(Agent):
@@ -245,6 +252,10 @@ class CollectExperiencesAgent(Agent):
         collected_data = self._state.collected_data
         last_referenced_experience_index = -1
         data_extraction_llm_stats = []
+
+        # Determine if we are in the education phase
+        is_education_phase = not self._state.education_phase_done
+
         if user_input.message == "":
             # If the user input is empty, set it to "(silence)"
             # This is to avoid the agent failing to respond to an empty input
@@ -256,6 +267,12 @@ class CollectExperiencesAgent(Agent):
             last_referenced_experience_index, data_extraction_llm_stats = await data_extraction_llm.execute(user_input=user_input,
                                                                                                             context=context,
                                                                                                             collected_experience_data_so_far=collected_data)
+            # Tag education-phase entries with source="education"
+            if is_education_phase:
+                for elem in collected_data:
+                    if elem.source is None:
+                        elem.source = "education"
+
         await self._normalize_experience_titles(collected_data=collected_data)
         # TODO: Keep track of the last_referenced_experience_index and if it has changed it means that the user has
         #   provided a new experience, we need to handle this as
@@ -270,6 +287,7 @@ class CollectExperiencesAgent(Agent):
         conversation_llm_output, (transition_decision, transition_reasoning, transition_llm_stats) = await asyncio.gather(
             conversation_llm.execute(
                 first_time_visit=self._state.first_time_visit,
+                is_education_phase=is_education_phase,
                 context=context,
                 user_input=user_input,
                 country_of_user=self._state.country_of_user,
@@ -294,6 +312,30 @@ class CollectExperiencesAgent(Agent):
         conversation_llm_output.llm_stats = data_extraction_llm_stats + conversation_llm_output.llm_stats + transition_llm_stats
         reasoning_text = transition_reasoning.reasoning if transition_reasoning else "No reasoning provided"
 
+        # Handle education phase transitions
+        if is_education_phase and transition_decision in (TransitionDecision.END_WORKTYPE, TransitionDecision.END_CONVERSATION):
+            self._state.education_phase_done = True
+            self.logger.info(
+                "Education phase complete (%s). Collected %d education entries. Transitioning to work type loop.",
+                transition_decision.value,
+                len([e for e in collected_data if e.source == "education"])
+            )
+            # Transition message to work types
+            transition_text = t("messages", "collectExperiences.education.transitionToWork")
+            next_exploring_type = self._state.unexplored_types[0] if self._state.unexplored_types else None
+            if next_exploring_type is not None:
+                work_type_text = t(
+                    'messages', 'collectExperiences.askAboutType',
+                    experience_type=_get_experience_type(next_exploring_type)
+                )
+                transition_text = f"{transition_text}\n\n{work_type_text}"
+            conversation_llm_output.message_for_user = (
+                f"{conversation_llm_output.message_for_user}\n\n{transition_text}"
+            )
+            conversation_llm_output.finished = False  # Don't end conversation, move to work types
+            return conversation_llm_output
+
+        # Normal work type loop handling (existing logic)
         if transition_decision == TransitionDecision.END_WORKTYPE:
             did_update = False
             # if decision is to end the exploration of the current work type, we update null fields to ""
@@ -310,11 +352,11 @@ class CollectExperiencesAgent(Agent):
                     "\n  - discovered experiences so far: %s"
                     "\n  - reasoning: %s",
                     exploring_type,
-                self._state.unexplored_types,
-                self._state.collected_data,
-                reasoning_text
-            )
-# exit if no unexplored types left
+                    self._state.unexplored_types,
+                    self._state.collected_data,
+                    reasoning_text
+                )
+            # exit if no unexplored types left
             if not did_update and not self._state.unexplored_types:
                 conversation_llm_output.finished = True
                 self.logger.info(

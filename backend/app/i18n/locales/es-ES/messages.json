@@ -25,7 +25,13 @@
       "location": "ubicación"
     },
     "askAboutType": "Preguntame sobre experiencias que incluyan: {experience_type}",
-    "recapPrompt": "Hagamos un repaso y dame la oportunidad de corregir cualquier error."
+    "recapPrompt": "Hagamos un repaso y dame la oportunidad de corregir cualquier error.",
+    "education": {
+      "askAboutEducation": "Antes de explorar tus experiencias laborales, ¿has completado alguna educación postsecundaria — por ejemplo universidad, formación profesional, o capacitación vocacional?",
+      "courseTitle": "nombre del curso o programa",
+      "institution": "institución",
+      "transitionToWork": "Gracias por compartir tu historial educativo. Ahora hablemos de tus experiencias laborales."
+    }
   },
   "exploreExperiences": {
     "noMoreExperiences": "Parece que no hay más experiencias para conversar.",
@@ -60,7 +66,8 @@
     "question": {
       "formalWaged": "¿Qué creés que es importante al trabajar en una empresa así?",
       "selfEmployment": "¿Qué creés que es importante cuando sos tu propio jefe?",
-      "unseenUnpaid": "¿Qué creés que es más importante al ayudar en la comunidad o cuidar a otras personas?"
+      "unseenUnpaid": "¿Qué creés que es más importante al ayudar en la comunidad o cuidar a otras personas?",
+      "education": "¿En qué área de tus estudios te sientes más seguro/a para aplicar en un entorno laboral?"
     }
   }
 }

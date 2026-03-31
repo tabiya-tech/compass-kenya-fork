@@ -212,6 +212,7 @@ class SkillsExplorerAgent(Agent):
                                                                experience_title=self.experience_entity.experience_title,
                                                                work_type=self.experience_entity.work_type,
                                                                cv_responsibilities=cv_responsibilities,
+                                                               source=self.experience_entity.source,
                                                                logger=self.logger)
 
         if conversation_llm_output.message_for_user != t("messages", _FINAL_MESSAGE_KEY):
