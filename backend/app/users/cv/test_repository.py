@@ -337,3 +337,56 @@ class TestUserCVRepository:
         for result, expected in zip(results, sorted_uploads):
             assert result.upload_id == expected.upload_id
             assert result.filename == expected.filename
+
+    @pytest.mark.asyncio
+    async def test_store_structured_extraction_updates_document(self, get_user_cv_repository: Awaitable[UserCVRepository]):
+        repository = await get_user_cv_repository
+        now = datetime.now(timezone.utc)
+        user_id = "user-1"
+        upload = _get_upload(user_id=user_id, created_at=now, suffix="1", md5_hash="hash_struct_1")
+        await repository.insert_upload(upload)
+
+        extraction = {
+            "experiences": [{"experience_title": "Engineer", "responsibilities": ["Built APIs"]}],
+            "qualifications": [{"name": "BSc Computer Science"}],
+        }
+        result = await repository.store_structured_extraction(user_id, upload.upload_id, extraction=extraction)
+        assert result is True
+
+        doc = await repository._collection.find_one({"user_id": user_id, "upload_id": upload.upload_id})
+        assert doc["structured_extraction"] == extraction
+
+    @pytest.mark.asyncio
+    async def test_store_structured_extraction_returns_false_when_not_found(self, get_user_cv_repository: Awaitable[UserCVRepository]):
+        repository = await get_user_cv_repository
+        result = await repository.store_structured_extraction("user-1", "nonexistent-id", extraction={})
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_get_latest_structured_extraction_returns_data(self, get_user_cv_repository: Awaitable[UserCVRepository]):
+        repository = await get_user_cv_repository
+        now = datetime.now(timezone.utc)
+        user_id = "user-1"
+
+        # GIVEN a completed upload with structured extraction
+        upload = _get_upload(user_id=user_id, created_at=now, suffix="1", md5_hash="hash_extract_1")
+        upload.upload_process_state = UploadProcessState.COMPLETED
+        await repository.insert_upload(upload)
+        extraction = {
+            "experiences": [{"experience_title": "Dev", "responsibilities": ["Coded"]}],
+            "qualifications": [],
+        }
+        await repository.store_structured_extraction(user_id, upload.upload_id, extraction=extraction)
+
+        # WHEN fetching the latest extraction
+        result = await repository.get_latest_structured_extraction(user_id)
+
+        # THEN
+        assert result is not None
+        assert len(result["experiences"]) == 1
+
+    @pytest.mark.asyncio
+    async def test_get_latest_structured_extraction_returns_none_when_no_uploads(self, get_user_cv_repository: Awaitable[UserCVRepository]):
+        repository = await get_user_cv_repository
+        result = await repository.get_latest_structured_extraction("user-no-uploads")
+        assert result is None
