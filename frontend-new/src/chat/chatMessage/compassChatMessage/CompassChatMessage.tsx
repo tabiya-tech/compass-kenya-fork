@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useEffect, useMemo, useRef } from "react";
+import { keyframes } from "@emotion/react";
 import { Box, styled } from "@mui/material";
 import { ConversationMessageSender, MessageReaction } from "src/chat/ChatService/ChatService.types";
 import ChatBubble from "src/chat/chatMessage/components/chatBubble/ChatBubble";
@@ -27,9 +28,57 @@ export interface CompassChatMessageProps {
   message: string;
   sent_at: string; // ISO formatted datetime string
   reaction: MessageReaction | null;
+  animateChunks?: boolean;
+  streamVersion?: number;
 }
 
-const CompassChatMessage: React.FC<CompassChatMessageProps> = ({ message_id, message, sent_at, reaction }) => {
+const chunkReveal = keyframes`
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+`;
+
+const AnimatedSuffix = styled("span")({
+  display: "inline",
+  animation: `${chunkReveal} 180ms ease-out`,
+  whiteSpace: "pre-wrap",
+});
+
+const CompassChatMessage: React.FC<CompassChatMessageProps> = ({
+  message_id,
+  message,
+  sent_at,
+  reaction,
+  animateChunks = false,
+  streamVersion,
+}) => {
+  const previousMessageRef = useRef("");
+
+  const renderedMessage = useMemo(() => {
+    const previousMessage = previousMessageRef.current;
+    if (!animateChunks || !message.startsWith(previousMessage) || message === previousMessage) {
+      return message;
+    }
+
+    return (
+      <>
+        {previousMessage}
+        <AnimatedSuffix key={`${message_id}-${streamVersion ?? message.length}`}>
+          {message.slice(previousMessage.length)}
+        </AnimatedSuffix>
+      </>
+    );
+  }, [animateChunks, message, message_id, streamVersion]);
+
+  useEffect(() => {
+    previousMessageRef.current = message;
+  }, [message]);
+
   return (
     <MessageContainer origin={ConversationMessageSender.COMPASS} data-testid={DATA_TEST_ID.CHAT_MESSAGE_CONTAINER}>
       <Box
@@ -43,7 +92,7 @@ const CompassChatMessage: React.FC<CompassChatMessageProps> = ({ message_id, mes
         }}
       >
         <Box sx={{ width: "100%" }}>
-          <ChatBubble message={message} sender={ConversationMessageSender.COMPASS} />
+          <ChatBubble message={renderedMessage} sender={ConversationMessageSender.COMPASS} />
           <ChatMessageFooterLayout sender={ConversationMessageSender.COMPASS}>
             <Timestamp sentAt={sent_at} />
             <ReactionButtons messageId={message_id} currentReaction={reaction} />

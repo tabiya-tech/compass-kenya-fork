@@ -14,7 +14,7 @@ def _setup_loadbalancer(*,
                         frontend_url: pulumi.Output[str],
                         frontend_bucket_name: pulumi.Output[str],
                         backend_url: pulumi.Output[str],
-                        api_gateway_id: pulumi.Output[str]) -> pulumi.Resource:
+                        espv2_cloudrun_service: gcp.cloudrunv2.Service) -> pulumi.Resource:
     # Create a global IP address for the load balancer
     ipaddress = gcp.compute.GlobalAddress(
         get_resource_name(resource="lb", resource_type="global-ip-address"),
@@ -46,26 +46,29 @@ def _setup_loadbalancer(*,
         opts=pulumi.ResourceOptions(provider=basic_config.provider)
     )
 
-    # create a region network endpoint group for connecting to the api gateway.
+    # Serverless NEG pointing at the ESPv2 Cloud Run service.
+    # SERVERLESS NEGs allow the load balancer to route to Cloud Run services directly.
     endpoint_group = gcp.compute.RegionNetworkEndpointGroup(
         get_resource_name(resource="lb", resource_type="endpoint-group"),
         network_endpoint_type="SERVERLESS",
         project=basic_config.project,
         region=basic_config.location,
-        serverless_deployment=gcp.compute.RegionNetworkEndpointGroupServerlessDeploymentArgs(
-            platform="apigateway.googleapis.com",
-            resource=api_gateway_id
+        cloud_run=gcp.compute.RegionNetworkEndpointGroupCloudRunArgs(
+            service=espv2_cloudrun_service.name,
         ),
-        opts=pulumi.ResourceOptions(provider=basic_config.provider)
+        opts=pulumi.ResourceOptions(
+            depends_on=[espv2_cloudrun_service],
+            provider=basic_config.provider,
+        )
     )
 
-    # Create a backend service for the api gateway
-    api_gateway_backend_service = gcp.compute.BackendService(
+    # Create a backend service for ESPv2 Cloud Run.
+    espv2_backend_service = gcp.compute.BackendService(
         get_resource_name(resource="lb", resource_type="backend-service"),
         project=basic_config.project,
         connection_draining_timeout_sec=10,
-        protocol="HTTP",
-        enable_cdn=False,  # the responses will not be cached.
+        protocol="HTTPS",
+        enable_cdn=False,  # SSE responses must not be cached.
         load_balancing_scheme="EXTERNAL_MANAGED",
         backends=[gcp.compute.BackendServiceBackendArgs(group=endpoint_group.id)],
         log_config=gcp.compute.BackendServiceLogConfigArgs(enable=True),
@@ -95,12 +98,12 @@ def _setup_loadbalancer(*,
     # Map <backend_url>/* -> /* of the backend service.
     backend_path_rule = backend_url.apply(_get_path_rule)
     backend_rule = gcp.compute.URLMapPathMatcherPathRuleArgs(paths=[backend_path_rule],
-                                                             service=api_gateway_backend_service.id,
+                                                             service=espv2_backend_service.id,
                                                              route_action=route_action)
 
     # Swagger UI will request /openapi.json, so we need to rewrite the path to the correct one.
     backend_openapi_rule = gcp.compute.URLMapPathMatcherPathRuleArgs(paths=["/openapi.json"],
-                                                                     service=api_gateway_backend_service.id)
+                                                                     service=espv2_backend_service.id)
 
     https_url_map = gcp.compute.URLMap(
         get_resource_name(resource="lb", resource_type="https-urlmap"),
@@ -194,7 +197,7 @@ def deploy_common(*,
                   frontend_url: pulumi.Output[str],
                   frontend_bucket_name: pulumi.Output[str],
                   backend_url: pulumi.Output[str],
-                  api_gateway_id: pulumi.Output[str]):
+                  espv2_cloudrun_service: gcp.cloudrunv2.Service):
     basic_config = get_project_base_config(project=project, location=location)
 
     # Create the Global Load Balancer
@@ -205,4 +208,4 @@ def deploy_common(*,
         frontend_url=frontend_url,
         frontend_bucket_name=frontend_bucket_name,
         backend_url=backend_url,
-        api_gateway_id=api_gateway_id)
+        espv2_cloudrun_service=espv2_cloudrun_service)

@@ -13,8 +13,8 @@ from lib import getconfig, getstackref, getenv, parse_realm_env_name_from_stack,
 
 
 def main():
-    # The environment is the stack name
-    _, environment_name, stack_name = parse_realm_env_name_from_stack()
+    # The environment is the stack name, e.g. "compass.dev" → realm="compass", env="dev"
+    realm_name, environment_name, stack_name = parse_realm_env_name_from_stack()
 
     # Load environment variables
     load_dot_realm_env(stack_name)
@@ -30,8 +30,6 @@ def main():
     cloudrun_memory_limit: str = getconfig("memory_limit", "cloudrun")
     cloudrun_cpu_limit: str = str(getconfig("cpu_limit", "cloudrun"))
 
-    api_gateway_timeout: str = str(getconfig("timeout", "api_gateway"))
-
     # Get stack references
     env_reference = pulumi.StackReference(f"tabiya-tech/compass-environment/{stack_name}")
     docker_repository = getstackref(env_reference, "docker_repository")
@@ -41,6 +39,9 @@ def main():
 
     backend_url = getstackref(env_reference, "backend_url")
     frontend_url = getstackref(env_reference, "frontend_url")
+
+    # Firebase project ID equals the GCP project ID.
+    firebase_project_id = project
 
     # Get backend service configuration
     backend_service_cfg = BackendServiceConfig(
@@ -74,7 +75,6 @@ def main():
         cloudrun_request_timeout=cloudrun_request_timeout,
         cloudrun_memory_limit=cloudrun_memory_limit,
         cloudrun_cpu_limit=cloudrun_cpu_limit,
-        api_gateway_timeout=api_gateway_timeout,
 
         features=getenv("BACKEND_FEATURES", True, False),
         experience_pipeline_config=getenv("BACKEND_EXPERIENCE_PIPELINE_CONFIG", False, False),
@@ -82,6 +82,10 @@ def main():
         # CV limits (no bucket name env)
         cv_max_uploads_per_user=getenv("BACKEND_CV_MAX_UPLOADS_PER_USER", False, False),
         cv_rate_limit_per_minute=getenv("BACKEND_CV_RATE_LIMIT_PER_MINUTE", False, False),
+
+        stream_chunk_size=getenv("BACKEND_STREAM_CHUNK_SIZE", False, False),
+        stream_chunk_mode=getenv("BACKEND_STREAM_CHUNK_MODE", False, False),
+        stream_delta_delay_ms=getenv("BACKEND_STREAM_DELTA_DELAY_MS", False, False),
 
         # Branding
         global_product_name=getenv("GLOBAL_PRODUCT_NAME", False, False),
@@ -109,6 +113,7 @@ def main():
         backend_service_cfg=backend_service_cfg,
         docker_repository=docker_repository,
         deployable_version=deployable_version,
+        firebase_project_id=firebase_project_id,
     )
 
 

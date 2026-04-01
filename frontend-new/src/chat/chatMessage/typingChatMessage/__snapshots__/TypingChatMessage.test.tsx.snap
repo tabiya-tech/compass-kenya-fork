@@ -7,35 +7,43 @@ exports[`TypingChatMessage should render the Typing Chat message correctly when 
   origin="COMPASS"
 >
   <div
-    data-testid="chat-message-bubble-container-6e685eeb-2b54-432a-8b66-8a81633b3981"
+    animate="visible"
+    exit="hidden"
+    initial="hidden"
+    transition="[object Object]"
+    variants="[object Object]"
   >
     <div
-      class="MuiBox-root css-x1sij0"
+      data-testid="chat-message-bubble-container-6e685eeb-2b54-432a-8b66-8a81633b3981"
     >
-      <p
-        class="MuiTypography-root MuiTypography-body1 css-19s6r5h-MuiTypography-root"
+      <div
+        class="MuiBox-root css-x1sij0"
       >
-        Typing
-      </p>
-      <span
-        class="MuiBox-root css-sz63p1"
-      >
-        <span
-          class="MuiTypography-root MuiTypography-body1 css-aqob4v-MuiTypography-root"
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-19s6r5h-MuiTypography-root"
         >
-          .
-        </span>
+          Please wait, I'm thinking
+        </p>
         <span
-          class="MuiTypography-root MuiTypography-body1 css-1kbk25g-MuiTypography-root"
+          class="MuiBox-root css-sz63p1"
         >
-          .
+          <span
+            class="MuiTypography-root MuiTypography-body1 css-aqob4v-MuiTypography-root"
+          >
+            .
+          </span>
+          <span
+            class="MuiTypography-root MuiTypography-body1 css-1kbk25g-MuiTypography-root"
+          >
+            .
+          </span>
+          <span
+            class="MuiTypography-root MuiTypography-body1 css-1cya8iq-MuiTypography-root"
+          >
+            .
+          </span>
         </span>
-        <span
-          class="MuiTypography-root MuiTypography-body1 css-1cya8iq-MuiTypography-root"
-        >
-          .
-        </span>
-      </span>
+      </div>
     </div>
   </div>
 </div>
@@ -48,35 +56,43 @@ exports[`TypingChatMessage should render the Typing Chat message correctly when 
   origin="COMPASS"
 >
   <div
-    data-testid="chat-message-bubble-container-6e685eeb-2b54-432a-8b66-8a81633b3981"
+    animate="visible"
+    exit="hidden"
+    initial="hidden"
+    transition="[object Object]"
+    variants="[object Object]"
   >
     <div
-      class="MuiBox-root css-x1sij0"
+      data-testid="chat-message-bubble-container-6e685eeb-2b54-432a-8b66-8a81633b3981"
     >
-      <p
-        class="MuiTypography-root MuiTypography-body1 css-19s6r5h-MuiTypography-root"
+      <div
+        class="MuiBox-root css-x1sij0"
       >
-        Typing
-      </p>
-      <span
-        class="MuiBox-root css-sz63p1"
-      >
-        <span
-          class="MuiTypography-root MuiTypography-body1 css-aqob4v-MuiTypography-root"
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-19s6r5h-MuiTypography-root"
         >
-          .
-        </span>
+          Typing
+        </p>
         <span
-          class="MuiTypography-root MuiTypography-body1 css-1kbk25g-MuiTypography-root"
+          class="MuiBox-root css-sz63p1"
         >
-          .
+          <span
+            class="MuiTypography-root MuiTypography-body1 css-aqob4v-MuiTypography-root"
+          >
+            .
+          </span>
+          <span
+            class="MuiTypography-root MuiTypography-body1 css-1kbk25g-MuiTypography-root"
+          >
+            .
+          </span>
+          <span
+            class="MuiTypography-root MuiTypography-body1 css-1cya8iq-MuiTypography-root"
+          >
+            .
+          </span>
         </span>
-        <span
-          class="MuiTypography-root MuiTypography-body1 css-1cya8iq-MuiTypography-root"
-        >
-          .
-        </span>
-      </span>
+      </div>
     </div>
   </div>
 </div>

@@ -78,13 +78,16 @@ export const generateCompassMessage = (
   message_id: string,
   message: string,
   sent_at: string,
-  reaction: MessageReaction | null
+  reaction: MessageReaction | null,
+  options?: { animateChunks?: boolean; streamVersion?: number }
 ): IChatMessage<CompassChatMessageProps> => {
   const payload: CompassChatMessageProps = {
     message_id: message_id,
     message: message,
     sent_at: sent_at,
     reaction: reaction,
+    animateChunks: options?.animateChunks,
+    streamVersion: options?.streamVersion,
   };
   return {
     type: COMPASS_CHAT_MESSAGE_TYPE,
@@ -110,11 +113,15 @@ export const generateErrorMessage = (message: string): IChatMessage<ErrorChatMes
 
 export const generateTypingMessage = (
   waitBeforeThinking?: number,
-  thinkingMessage?: string
+  thinkingMessage?: string,
+  message?: string,
+  status?: string
 ): IChatMessage<TypingChatMessageProps> => {
   const payload: TypingChatMessageProps = {
     waitBeforeThinking: waitBeforeThinking,
     thinkingMessage: thinkingMessage,
+    message: message,
+    status: status,
   };
   return {
     type: TYPING_CHAT_MESSAGE_TYPE,

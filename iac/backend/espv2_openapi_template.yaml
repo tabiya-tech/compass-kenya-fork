@@ -1,0 +1,110 @@
+# Multi-segment catch-all: `/{path=**}` (Swagger `/{any}` only matches one segment).
+# Wildcard methods (except OPTIONS) require Firebase JWT at ESPv2; OPTIONS stays open for CORS preflight.
+swagger: "2.0"
+info:
+  title: compass-backend
+  version: "1.0"
+host: __ESPV2_HOSTNAME__
+x-google-backend:
+  address: __BACKEND_URI__
+  protocol: http/1.1
+  deadline: 3600.0
+  jwt_audience: __BACKEND_URI__
+x-google-management:
+  metrics:
+    - name: "request-metric"
+      displayName: "Request metric"
+      valueType: INT64
+      metricKind: DELTA
+  quota:
+    limits:
+      - name: "request-limit"
+        metric: "request-metric"
+        unit: "1/min/{project}"
+        values:
+          STANDARD: 1200
+paths:
+  "/{path=**}":
+    get:
+      operationId: getWildcard
+      parameters:
+        - name: path
+          in: path
+          required: true
+          type: string
+      security:
+        - firebase: []
+      responses:
+        "200":
+          description: OK
+    post:
+      operationId: postWildcard
+      parameters:
+        - name: path
+          in: path
+          required: true
+          type: string
+      security:
+        - firebase: []
+      responses:
+        "200":
+          description: OK
+    put:
+      operationId: putWildcard
+      parameters:
+        - name: path
+          in: path
+          required: true
+          type: string
+      security:
+        - firebase: []
+      responses:
+        "200":
+          description: OK
+    patch:
+      operationId: patchWildcard
+      parameters:
+        - name: path
+          in: path
+          required: true
+          type: string
+      security:
+        - firebase: []
+      responses:
+        "200":
+          description: OK
+    delete:
+      operationId: deleteWildcard
+      parameters:
+        - name: path
+          in: path
+          required: true
+          type: string
+      security:
+        - firebase: []
+      responses:
+        "200":
+          description: OK
+    options:
+      operationId: optionsWildcard
+      parameters:
+        - name: path
+          in: path
+          required: true
+          type: string
+      security: []
+      responses:
+        "200":
+          description: OK
+securityDefinitions:
+  firebase:
+    authorizationUrl: ""
+    flow: implicit
+    type: oauth2
+    x-google-issuer: "https://securetoken.google.com/__FIREBASE_PROJECT_ID__"
+    x-google-jwks_uri: "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"
+    x-google-audiences: "__FIREBASE_PROJECT_ID__"
+  api_key:
+    type: "apiKey"
+    name: "x-api-key"
+    in: "header"

@@ -98,7 +98,7 @@ class TemporalAndWorkTypeClassifierTool:
         return GeminiGenerativeLLM(
             system_instructions=self._get_system_instructions(),
             config=LLMConfig(
-                language_model_name=AgentsConfig.deep_reasoning_model,
+                language_model_name=AgentsConfig.default_model,
                 generation_config=ZERO_TEMPERATURE_GENERATION_CONFIG | JSON_GENERATION_CONFIG | {
                     "max_output_tokens": 3000
                     # Limit the output to 3000 tokens to avoid the "reasoning recursion issues"

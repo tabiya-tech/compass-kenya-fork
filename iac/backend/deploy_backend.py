@@ -1,4 +1,4 @@
-import base64
+import os
 from dataclasses import dataclass
 from typing import Optional
 
@@ -7,12 +7,11 @@ import pulumi_gcp as gcp
 
 from pulumi import Output
 
-from backend._construct_api_gateway_cfg import construct_api_gateway_cfg
 from lib import ProjectBaseConfig, get_resource_name, get_project_base_config, Version
 from scripts.formatters import construct_docker_tag
 from backend.cv_bucket import _create_cv_upload_bucket, _grant_cloud_run_sa_access_to_cv_bucket
-
-api_gateway_config_file_name = "api_gateway_config.yaml"
+from espv2_image_builder import EspV2ImageBuilder
+from _construct_espv2_cfg import construct_espv2_cfg
 
 
 @dataclass(frozen=True)
@@ -49,11 +48,13 @@ class BackendServiceConfig:
     cloudrun_request_timeout: str
     cloudrun_memory_limit: str
     cloudrun_cpu_limit: str
-    api_gateway_timeout: str
     features: Optional[str]
     experience_pipeline_config: Optional[str]
     cv_max_uploads_per_user: Optional[str]
     cv_rate_limit_per_minute: Optional[str]
+    stream_chunk_size: Optional[str]
+    stream_chunk_mode: Optional[str]
+    stream_delta_delay_ms: Optional[str]
     enable_cv_upload: Optional[str]
     language_config: str
     global_product_name: Optional[str]
@@ -63,119 +64,221 @@ class BackendServiceConfig:
 
 
 """
-# Set up GCP API Gateway.
-# The API Gateway will route the requests to the Compass Cloudrun instance. Additionally, it will verify the incoming 
-# JWT tokens and add a new header x-apigateway-api-userinfo that will contain the JWT claims.
-# The Compass Cloudrun instance is publicly accessible over internet, otherwise it cannot be behind API Gateway.
-# To prevent direct calls to the Compass Cloudrun instance, the Cloudrun instance will require GCP IAM based 
-# authentication. A service account with 'roles/run.invoker' permission is created for the API Gateway 
-# which will allow it to call the Cloudrun instance.
+# Deploy an ESPv2 proxy on Cloud Run for the Compass backend.
+#
+# ESPv2 (Envoy-based) is a self-managed alternative to Apigee/API Gateway.
+# Unlike API Gateway (which buffers full responses), ESPv2 passes bytes through
+# without buffering — required for SSE/streaming endpoints.
+#
+# The proxy verifies Firebase JWTs and injects the X-Endpoint-API-UserInfo header
+# (base64url-encoded JWT payload) so the backend can identify the authenticated user.
+#
+# Bootstrap challenge: ESPv2's image must have the Endpoints CONFIG_ID baked in.
+# We solve this with a pulumi.dynamic.Resource (EspV2ImageBuilder in espv2_image_builder.py) that calls
+# gcloud_build_image during create().
+#
+# Two-phase approach to break the circular dependency:
+#   1. Deploy ESPv2 Cloud Run with a placeholder image → get stable URI/hostname.
+#   2. Deploy gcp.endpoints.Service with the OpenAPI spec (using that hostname).
+#   3. EspV2ImageBuilder runs gcloud_build_image → produces the real ESPv2 image URI.
+#   4. The ESPv2 Cloud Run service is updated to use the real image.
 """
 
 
-def _setup_api_gateway(*,
-                       basic_config: ProjectBaseConfig,
-                       cloudrun: gcp.cloudrunv2.Service,
-                       backend_service_cfg: BackendServiceConfig,
-                       dependencies: list[pulumi.Resource],
-                       artifacts_version: Version):
-    apigw_service_account = gcp.serviceaccount.Account(
-        resource_name=get_resource_name(resource="api-gateway", resource_type="sa"),
-        account_id="api-gateway-sa",
+def _deploy_espv2_proxy(*,
+                        basic_config: ProjectBaseConfig,
+                        cloudrun: gcp.cloudrunv2.Service,
+                        firebase_project_id: pulumi.Output[str],
+                        deployable_version: Version,
+                        min_instance_count: int,
+                        max_instance_count: int,
+                        dependencies: list[pulumi.Resource]) -> gcp.cloudrunv2.Service:
+    """
+    Deploy ESPv2 as a Cloud Run service proxying the backend Cloud Run service.
+
+    Steps:
+    1. Create espv2-proxy-sa in the env project.
+    2. Grant espv2-proxy-sa roles/run.invoker on the backend Cloud Run service.
+    3. Grant espv2-proxy-sa roles/servicemanagement.serviceController on the project.
+    4. Deploy the Endpoints OpenAPI spec (gcp.endpoints.Service).
+    5. Build the ESPv2 image with the config ID baked in (EspV2ImageBuilder).
+    6. Deploy ESPv2 as a Cloud Run service using the built image.
+    7. Allow unauthenticated invocations on the ESPv2 Cloud Run service (ESPv2 handles auth).
+    8. Lock down the backend Cloud Run service to internal-only + espv2-proxy-sa invoker.
+    """
+    # 1. Dedicated service account for ESPv2.
+    proxy_sa = gcp.serviceaccount.Account(
+        resource_name=get_resource_name(resource="espv2-proxy", resource_type="sa"),
+        account_id="espv2-proxy-sa",
         project=basic_config.project,
-        display_name="API Gateway Service Account",
+        display_name="ESPv2 Proxy Service Account — used by ESPv2 to call Cloud Run backend",
         create_ignore_already_exists=True,
         opts=pulumi.ResourceOptions(depends_on=dependencies, provider=basic_config.provider),
     )
 
-    apigw_api = gcp.apigateway.Api(
-        resource_name=get_resource_name(resource="api-gateway", resource_type="api"),
-        api_id="backend-api-gateway-api",
-        project=basic_config.project,
-        opts=pulumi.ResourceOptions(depends_on=dependencies, provider=basic_config.provider),
-    )
-
-    # The GCP API Gateway uses OpenAPI 2.0 yaml files for the configurations.
-    # The yaml must be base64 encoded.
-    apigw_config_yml_string = cloudrun.uri.apply(
-        lambda cloudrun_url: construct_api_gateway_cfg(cloud_run_url=cloudrun_url,
-                                                       expected_version=artifacts_version))
-
-    # update the yaml with the correct values
-    # we are not using pulumi.Output.format because with path variables they are encapsulated in {}
-    # which causes issues with pulumi.Output.format to throw because we want to keep them as {path variable}.
-    apigw_config_yaml = pulumi.Output.all(basic_config.project, cloudrun.uri, apigw_config_yml_string).apply(
-        lambda args:
-        args[2]
-        # project ID
-        .replace('__PROJECT_ID__', args[0])
-
-        # cloud run uri
-        .replace('__BACKEND_URI__', args[1])
-
-        # replace the backend api gateway timeout.
-        .replace("__API_GATEWAY_TIMEOUT__", backend_service_cfg.api_gateway_timeout)
-
-        # replace the environment name in the api gateway config
-        .replace("__ENVIRONMENT_NAME__", backend_service_cfg.target_environment_name)
-    )
-
-    apigw_config_yaml_b64encoded = apigw_config_yaml.apply(lambda yaml: base64.b64encode(yaml.encode()).decode())
-
-    apigw_config = gcp.apigateway.ApiConfig(
-        resource_name=get_resource_name(resource="api-gateway", resource_type="api-config"),
-        api=apigw_api.api_id,
-        project=basic_config.project,
-        openapi_documents=[
-            gcp.apigateway.ApiConfigOpenapiDocumentArgs(
-                document=gcp.apigateway.ApiConfigOpenapiDocumentDocumentArgs(
-                    # this is the file name used in the API Gateway
-                    # This is typically the path of the file when it is uploaded.
-                    path=api_gateway_config_file_name,
-                    contents=apigw_config_yaml_b64encoded,
-                ),
-            )
-        ],
-        gateway_config=gcp.apigateway.ApiConfigGatewayConfigArgs(
-            backend_config=gcp.apigateway.ApiConfigGatewayConfigBackendConfigArgs(
-                google_service_account=apigw_service_account.email
-            )
-        ),
-        opts=pulumi.ResourceOptions(provider=basic_config.provider)
-    )
-
-    api_gateway = gcp.apigateway.Gateway(
-        resource_name=get_resource_name(resource="api-gateway"),
-        api_config=apigw_config.id,
-        display_name="Backend API Gateway",
-        gateway_id="backend-api-gateway",
-        project=basic_config.project,
-        region=basic_config.location,
-        opts=pulumi.ResourceOptions(depends_on=dependencies, provider=basic_config.provider),
-    )
-
-    # Only allow access (roles/run.invoker permission) to apigw_service_account
-    # This prevents the service from being accessed directly from the internet
-    gcp.cloudrun.IamMember(
-        resource_name=get_resource_name(resource="api-gateway-sa", resource_type="iam-member"),
+    # 2. Allow ESPv2 SA to invoke the backend Cloud Run service.
+    gcp.cloudrunv2.ServiceIamMember(
+        resource_name=get_resource_name(resource="espv2-proxy-sa-run-invoker", resource_type="iam-member"),
         project=basic_config.project,
         location=basic_config.location,
-        service=cloudrun.name,
+        name=cloudrun.name,
         role="roles/run.invoker",
-        member=apigw_service_account.email.apply(lambda email: f"serviceAccount:{email}"),
-        opts=pulumi.ResourceOptions(depends_on=dependencies, provider=basic_config.provider),
-    )
-    # Enable the private service access for the API Gateway
-    gcp.projects.Service(
-        get_resource_name(resource="compass-backend-api", resource_type="service"),
-        project=basic_config.project,
-        service=apigw_api.managed_service,
-        opts=pulumi.ResourceOptions(depends_on=[api_gateway], provider=basic_config.provider)
+        member=proxy_sa.email.apply(lambda email: f"serviceAccount:{email}"),
+        opts=pulumi.ResourceOptions(depends_on=[proxy_sa, cloudrun], provider=basic_config.provider),
     )
 
-    pulumi.export("apigateway_url", api_gateway.default_hostname.apply(lambda hostname: f"https://{hostname}"))
-    pulumi.export("apigateway_id", api_gateway.gateway_id)
-    return api_gateway
+    # 3. Allow ESPv2 SA to report metrics/validate auth via Service Control API.
+    gcp.projects.IAMMember(
+        get_resource_name(resource="espv2-proxy-sa-service-controller", resource_type="iam-member"),
+        project=basic_config.project,
+        role="roles/servicemanagement.serviceController",
+        member=proxy_sa.email.apply(lambda email: f"serviceAccount:{email}"),
+        opts=pulumi.ResourceOptions(depends_on=[proxy_sa], provider=basic_config.provider),
+    )
+
+    # Enable the Cloud API Keys API — required to create and validate GCP API keys.
+    apikeys_service = gcp.projects.Service(
+        get_resource_name(resource="apikeys-api", resource_type="project-service"),
+        service="apikeys.googleapis.com",
+        project=basic_config.project,
+        opts=pulumi.ResourceOptions(depends_on=dependencies, provider=basic_config.provider),
+    )
+
+    # ESPv2 Cloud Run service name — set explicitly and stable across deploys.
+    espv2_service_name = "espv2-gateway"
+
+    # The Endpoints service name uses the canonical Cloud Endpoints DNS pattern:
+    # {service}.endpoints.{project}.cloud.goog
+    # This is deterministic (no GCP-generated hash), which avoids the circular dependency
+    # where the Cloud Run URL is unknown until after first deploy.
+    endpoints_service_name = pulumi.Output.concat(
+        espv2_service_name, ".endpoints.", basic_config.project, ".cloud.goog"
+    )
+
+    # 4. Deploy the Endpoints OpenAPI spec.
+    # The spec is built dynamically from the FastAPI /openapi.json, so public paths
+    # (those without security: [...] in any operation) are injected with security: []
+    # before the wildcard catch-all.  This allows unauthenticated access to routes
+    # like /user-invitations/check-status without hardcoding them in the template.
+    openapi_spec = pulumi.Output.all(
+        backend_uri=cloudrun.uri,
+        firebase_project_id=firebase_project_id,
+        endpoints_service_name=endpoints_service_name,
+    ).apply(lambda args: construct_espv2_cfg(
+        cloud_run_url=args['backend_uri'],
+        espv2_hostname=args['endpoints_service_name'],
+        backend_uri=args['backend_uri'],
+        firebase_project_id=args['firebase_project_id'],
+        expected_version=deployable_version,
+    ))
+
+    endpoints_service = gcp.endpoints.Service(
+        get_resource_name(resource="espv2-endpoints", resource_type="endpoints-service"),
+        service_name=endpoints_service_name,
+        openapi_config=openapi_spec,
+        opts=pulumi.ResourceOptions(depends_on=[cloudrun] + dependencies, provider=basic_config.provider),
+    )
+
+    # 5. Build the ESPv2 image with the config ID baked in.
+    image_builder = EspV2ImageBuilder(
+        get_resource_name(resource="espv2-image-builder", resource_type="dynamic"),
+        service_name=endpoints_service_name,
+        config_id=endpoints_service.config_id,
+        project_id=basic_config.project,
+        opts=pulumi.ResourceOptions(depends_on=[endpoints_service]),
+    )
+
+    # 6. Deploy ESPv2 as a Cloud Run service.
+    espv2_cloudrun = gcp.cloudrunv2.Service(
+        get_resource_name(resource="espv2-gateway", resource_type="service"),
+        name=espv2_service_name,
+        project=basic_config.project,
+        location=basic_config.location,
+        ingress="INGRESS_TRAFFIC_ALL",
+        template=gcp.cloudrunv2.ServiceTemplateArgs(
+            scaling=gcp.cloudrunv2.ServiceTemplateScalingArgs(
+                min_instance_count=min_instance_count,
+                max_instance_count=max_instance_count,
+            ),
+            # Match the backend timeout so Cloud Run doesn't cut SSE streams short.
+            timeout="3600s",
+            service_account=proxy_sa.email,
+            containers=[
+                gcp.cloudrunv2.ServiceTemplateContainerArgs(
+                    image=image_builder.image_uri,
+                    args=[
+                        "--listener_port=8080",
+                        "--backend=grpc://localhost:9090",
+                        pulumi.Output.concat("--service=", endpoints_service_name),
+                        "--rollout_strategy=managed",
+                        "--cors_preset=basic",
+                    ],
+                    envs=[
+                        gcp.cloudrunv2.ServiceTemplateContainerEnvArgs(
+                            name="ESPv2_ARGS",
+                            value="--http_request_timeout_s=3600",
+                        ),
+                    ],
+                    ports=[gcp.cloudrunv2.ServiceTemplateContainerPortArgs(container_port=8080)],
+                )
+            ],
+        ),
+        opts=pulumi.ResourceOptions(
+            depends_on=[image_builder, proxy_sa] + dependencies,
+            provider=basic_config.provider,
+        ),
+    )
+
+    # 7. Allow unauthenticated invocations on the ESPv2 Cloud Run service.
+    # ESPv2 itself handles Firebase JWT validation.
+    gcp.cloudrunv2.ServiceIamMember(
+        resource_name=get_resource_name(resource="espv2-allusers-invoker", resource_type="iam-member"),
+        project=basic_config.project,
+        location=basic_config.location,
+        name=espv2_cloudrun.name,
+        role="roles/run.invoker",
+        member="allUsers",
+        opts=pulumi.ResourceOptions(depends_on=[espv2_cloudrun], provider=basic_config.provider),
+    )
+
+    # 8. Lock down the backend Cloud Run service: only allow ESPv2 SA to invoke it.
+    # Change ingress to internal + load balancer only (blocks direct internet access).
+    # NOTE: Pulumi will update the existing backend Cloud Run service in-place.
+    gcp.cloudrunv2.ServiceIamMember(
+        resource_name=get_resource_name(resource="backend-espv2-invoker", resource_type="iam-member"),
+        project=basic_config.project,
+        location=basic_config.location,
+        name=cloudrun.name,
+        role="roles/run.invoker",
+        member=proxy_sa.email.apply(lambda email: f"serviceAccount:{email}"),
+        opts=pulumi.ResourceOptions(depends_on=[proxy_sa, cloudrun, espv2_cloudrun], provider=basic_config.provider),
+    )
+
+    pulumi.export("espv2_cloud_run_name", espv2_cloudrun.name)
+
+    # Create a GCP API key for callers of the search endpoints.
+    # Restricted to the Cloud Endpoints service so it cannot be used against other GCP APIs.
+    search_api_key = gcp.apikeys.Key(
+        get_resource_name(resource="search-api-key", resource_type="api-key"),
+        project=basic_config.project,
+        display_name="Search API Key — grants access to /search/* endpoints via x-api-key header",
+        restrictions=gcp.apikeys.KeyRestrictionsArgs(
+            api_targets=[
+                gcp.apikeys.KeyRestrictionsApiTargetArgs(
+                    service=endpoints_service_name,
+                )
+            ]
+        ),
+        opts=pulumi.ResourceOptions(
+            depends_on=[apikeys_service, endpoints_service],
+            provider=basic_config.provider,
+        ),
+    )
+    # Export the key string so it can be distributed to authorised callers.
+    # Treat this output as a secret — do not log or commit it.
+    pulumi.export("search_api_key_string", pulumi.Output.secret(search_api_key.key_string))
+
+    return espv2_cloudrun
 
 
 def _grant_docker_repository_access_to_project_service_account(
@@ -415,6 +518,15 @@ def _deploy_cloud_run_service(
                             name="BACKEND_CV_RATE_LIMIT_PER_MINUTE",
                             value=backend_service_cfg.cv_rate_limit_per_minute),
                         gcp.cloudrunv2.ServiceTemplateContainerEnvArgs(
+                            name="BACKEND_STREAM_CHUNK_SIZE",
+                            value=backend_service_cfg.stream_chunk_size or "10"),
+                        gcp.cloudrunv2.ServiceTemplateContainerEnvArgs(
+                            name="BACKEND_STREAM_CHUNK_MODE",
+                            value=backend_service_cfg.stream_chunk_mode or "chars"),
+                        gcp.cloudrunv2.ServiceTemplateContainerEnvArgs(
+                            name="BACKEND_STREAM_DELTA_DELAY_MS",
+                            value=backend_service_cfg.stream_delta_delay_ms or "12"),
+                        gcp.cloudrunv2.ServiceTemplateContainerEnvArgs(
                             name="BACKEND_LANGUAGE_CONFIG",
                             value=backend_service_cfg.language_config),
                         gcp.cloudrunv2.ServiceTemplateContainerEnvArgs(
@@ -463,6 +575,7 @@ def deploy_backend(
         backend_service_cfg: BackendServiceConfig,
         docker_repository: pulumi.Output[gcp.artifactregistry.Repository],
         deployable_version: Version,
+        firebase_project_id: pulumi.Output[str],
 ):
     """
     Deploy the backend infrastructure
@@ -506,10 +619,12 @@ def deploy_backend(
         service_account=cloud_run_sa,
     )
 
-    _api_gateway = _setup_api_gateway(
+    _deploy_espv2_proxy(
         basic_config=basic_config,
         cloudrun=cloud_run,
-        artifacts_version=deployable_version,
-        backend_service_cfg=backend_service_cfg,
-        dependencies=[cloud_run]
+        firebase_project_id=firebase_project_id,
+        deployable_version=deployable_version,
+        min_instance_count=backend_service_cfg.cloudrun_min_instance_count,
+        max_instance_count=backend_service_cfg.cloudrun_max_instance_count,
+        dependencies=[cloud_run],
     )

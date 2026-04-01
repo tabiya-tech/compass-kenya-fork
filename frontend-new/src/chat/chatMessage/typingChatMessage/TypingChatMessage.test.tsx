@@ -120,4 +120,13 @@ describe("TypingChatMessage", () => {
     expect(console.error).not.toHaveBeenCalled();
     expect(console.warn).not.toHaveBeenCalled();
   });
+
+  test("should render status above typing bubble when status prop is set", () => {
+    render(<TypingChatMessage status="Preparing your response" />);
+
+    expect(screen.getByText("Preparing your response")).toBeInTheDocument();
+    expect(screen.getByText(i18n.t(UI_TEXT_KEYS.TYPING))).toBeInTheDocument();
+    expect(console.error).not.toHaveBeenCalled();
+    expect(console.warn).not.toHaveBeenCalled();
+  });
 });

@@ -1,11 +1,11 @@
 import logging
 
 from abc import ABC, abstractmethod
-
 from app.agent.agent_types import AgentInput, AgentOutput
 from app.conversation_memory.conversation_memory_types import ConversationHistory, \
     ConversationContext, ConversationTurn, ConversationMemoryManagerState
 from app.conversation_memory.summarizer import Summarizer
+from app.context_vars import get_stream_sink
 
 
 class IConversationMemoryManager(ABC):
@@ -54,7 +54,7 @@ class IConversationMemoryManager(ABC):
 
 class ConversationMemoryManager(IConversationMemoryManager):
     """
-    Manages the conversation history
+    Manages the conversation history.
     """
 
     def __init__(self, unsummarized_window_size, to_be_summarized_window_size):
@@ -103,6 +103,9 @@ class ConversationMemoryManager(IConversationMemoryManager):
         # If the to_be_summarized_history window is full, we perform summarization
         if len(self._state.to_be_summarized_history.turns) == self._to_be_summarized_window_size:
             await self._summarize()
+        stream_sink = get_stream_sink()
+        if stream_sink is not None:
+            await stream_sink.emit_agent_output(agent_output)
 
     async def is_user_message(self, message_id: str) -> bool:
         # find out if the message_id of the message to react to is found an input message

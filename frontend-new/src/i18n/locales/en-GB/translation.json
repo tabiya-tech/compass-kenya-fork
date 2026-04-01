@@ -119,10 +119,41 @@
       "viewUploadedLabel": "Previously uploaded CVs"
     },
     "chatMessage": {
+      "streamingStatus": {
+        "preparing_state": "Preparing your response",
+        "routing": "Choosing the best next step",
+        "running_agent": "Working on your response",
+        "preparing_welcome": "Getting things ready for you",
+        "understanding_preferences": "Understanding your preferences",
+        "exploring_experiences": "Exploring your experiences",
+        "analyzing_your_input": "Understanding your message",
+        "extracting_experience_details": "Extracting experience details",
+        "matching_job_titles": "Matching job titles",
+        "composing_response": "Composing your response",
+        "exploring_skills_in_depth": "Exploring the skills in your experience",
+        "preparing_recommendations": "Preparing your recommendations",
+        "wrapping_up": "Wrapping things up",
+        "phase_transition": "Moving to the next step",
+        "diving_into_experiences": "Diving deeper into your experiences",
+        "exploring_skills": "Exploring the skills in this experience",
+        "linking_and_ranking": "Matching and ranking skills",
+        "skipping_experience": "Skipping an experience with missing details",
+        "transitioning_to_preferences": "Moving into preference questions",
+        "introducing_preferences": "Introducing preference questions",
+        "asking_preference_questions": "Understanding what matters most to you",
+        "presenting_vignette": "Preparing your next scenario",
+        "asking_follow_up": "Clarifying your preferences",
+        "asking_clarifying_question": "Asking a clarifying question",
+        "ranking_work_activities": "Preparing your activity ranking",
+        "summarizing_preferences": "Summarizing your preferences",
+        "saving_preferences": "Saving your preferences",
+        "preferences_complete": "Finishing preference discovery",
+        "saving_state": "Saving your progress"
+      },
       "typingChatMessage": {
         "typing": "Typing",
         "thinking": "Please wait, I'm thinking",
-        "thinkingPreferenceElicitation": "Thinking about your response…"
+        "thinkingPreferenceElicitation": "Thinking about your response"
       },
       "bwsTaskMessage": {
         "whichWouldYouPrefer": "Which would you prefer?",

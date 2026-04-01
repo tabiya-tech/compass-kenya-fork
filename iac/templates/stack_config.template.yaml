@@ -23,7 +23,6 @@ backend:
     cloudrun:max_instance_count: <max_instance_count>
     # See https://cloud.google.com/run/docs/configuring/request-timeout
     # In seconds e.g. 60s or 3.05s
-    # This should be equal or less than the timeout of the API Gateway
     cloudrun:request_timeout: <timeout>
 
     # See https://cloud.google.com/run/docs/configuring/services/memory-limits
@@ -33,13 +32,6 @@ backend:
     # See https://cloud.google.com/run/docs/configuring/services/cpu
     # Units are 1,2,4,6,8 or less and one in increments of 0.01
     cloudrun:cpu_limit: <cpu_limit>
-    ############################
-
-    ############################
-    # Api Gateway settings
-    # See https://cloud.google.com/endpoints/docs/openapi/openapi-extensions#deadline
-    # In seconds as a double e.g. 15.0
-    api_gateway:timeout: <api_gateway_timeout>
     ############################
 
 frontend:

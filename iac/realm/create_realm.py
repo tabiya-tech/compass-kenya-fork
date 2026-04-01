@@ -454,7 +454,10 @@ def _enable_required_services(*, provider: gcp.Provider) -> time.Sleep:
         # Required for enabling the identity toolkit in the environment projects
         "identitytoolkit.googleapis.com",
         # GCP Secret Manager — Required for creating config secrets.
-        "secretmanager.googleapis.com"
+        "secretmanager.googleapis.com",
+        # Required by Pulumi's gcp.endpoints.Service provider (Service Management API calls
+        # are made from the realm root project's credentials).
+        "servicemanagement.googleapis.com",
     ]
 
     services = enable_services(provider=provider, service_names=_REQUIRED_SERVICES, dependencies=[])

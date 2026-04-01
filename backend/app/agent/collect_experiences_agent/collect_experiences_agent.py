@@ -1,6 +1,7 @@
 import asyncio
 from typing import Optional, Mapping, Any
 
+from bson import ObjectId
 from pydantic import BaseModel, Field, field_serializer, field_validator
 
 from app.agent.agent import Agent
@@ -20,6 +21,7 @@ from app.agent.linking_and_ranking_pipeline.infer_occupation_tool import InferOc
 from app.conversation_memory.conversation_memory_types import ConversationContext
 from app.countries import Country
 from app.i18n.translation_service import t
+from app.context_vars import get_stream_sink
 from app.vector_search.esco_entities import OccupationSkillEntity
 from app.vector_search.vector_search_dependencies import SearchServices
 
@@ -179,6 +181,20 @@ class CollectExperiencesAgent(Agent):
         self._search_services = search_services
         self._experience_pipeline_config = experience_pipeline_config
 
+    async def _emit_stream_status(self, label: str) -> None:
+        stream_sink = get_stream_sink()
+        if stream_sink is None:
+            return
+        await stream_sink.emit_status_update(
+            label=label,
+            status="running",
+            agent_type=self.agent_type.value,
+        )
+
+    @staticmethod
+    def _has_pending_title_normalization(collected_data: list[CollectedData]) -> bool:
+        return any(elem.experience_title and not elem.normalized_experience_title for elem in collected_data)
+
     async def _normalize_experience_titles(self, *, collected_data: list[CollectedData]):
         if not self._search_services or self._state is None:
             return
@@ -249,7 +265,10 @@ class CollectExperiencesAgent(Agent):
             # TODO: the LLM can and will fail with an exception or even return None, we need to handle this
             last_referenced_experience_index, data_extraction_llm_stats = await data_extraction_llm.execute(user_input=user_input,
                                                                                                             context=context,
-                                                                                                            collected_experience_data_so_far=collected_data)
+                                                                                                            collected_experience_data_so_far=collected_data,
+                                                                                                            on_status=self._emit_stream_status)
+        if self._has_pending_title_normalization(collected_data):
+            await self._emit_stream_status(label="matching_job_titles")
         await self._normalize_experience_titles(collected_data=collected_data)
         # TODO: Keep track of the last_referenced_experience_index and if it has changed it means that the user has
         #   provided a new experience, we need to handle this as
@@ -257,8 +276,10 @@ class CollectExperiencesAgent(Agent):
         #   b) the model may have made a mistake interpreting the user input as we need to clarify
         conversation_llm = _ConversationLLM()
         exploring_type = self._state.unexplored_types[0] if len(self._state.unexplored_types) > 0 else None
+        conversation_message_id = str(ObjectId())
 
         transition_decision_tool = TransitionDecisionTool(self.logger)
+        await self._emit_stream_status(label="composing_response")
 
         # Both are pure readers of collected_data/context/user_input -- safe to parallelize
         conversation_llm_output, (transition_decision, transition_reasoning, transition_llm_stats) = await asyncio.gather(
@@ -273,7 +294,9 @@ class CollectExperiencesAgent(Agent):
                 exploring_type=exploring_type,
                 unexplored_types=self._state.unexplored_types,
                 explored_types=self._state.explored_types,
-                logger=self.logger),
+                logger=self.logger,
+                stream_sink=get_stream_sink(),
+                message_id=conversation_message_id),
             transition_decision_tool.execute(
                 collected_data=collected_data,
                 exploring_type=exploring_type,
@@ -325,9 +348,16 @@ class CollectExperiencesAgent(Agent):
             else:
                 transition_text = t('messages', 'collectExperiences.recapPrompt')
 
+            transition_delta = f"\n\n{transition_text}"
             conversation_llm_output.message_for_user = (
-                f"{conversation_llm_output.message_for_user}\n\n{transition_text}"
+                f"{conversation_llm_output.message_for_user}{transition_delta}"
             )
+            stream_sink = get_stream_sink()
+            if stream_sink is not None:
+                await stream_sink.append_text(
+                    message_id=conversation_llm_output.message_id,
+                    delta=transition_delta,
+                )
 
         elif transition_decision == TransitionDecision.END_CONVERSATION:
             conversation_llm_output.finished = True

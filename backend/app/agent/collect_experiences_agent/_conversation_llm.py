@@ -17,6 +17,7 @@ from app.conversation_memory.conversation_memory_types import ConversationContex
 from app.countries import Country
 from app.i18n.locale_date_format import get_locale_date_format, format_date_value_for_locale
 from app.i18n.translation_service import t
+from app.conversations.streaming import ConversationStreamingSink
 from common_libs.llm.generative_models import GeminiGenerativeLLM
 from common_libs.llm.models_utils import LLMConfig, LLMResponse, get_config_variation, LLMInput
 from common_libs.retry import Retry
@@ -24,6 +25,10 @@ from app.agent.persona_detector import PersonaType, get_persona_prompt_section
 
 _NO_EXPERIENCE_COLLECTED = "No experience data has been collected yet"
 _FINAL_MESSAGE = "Thank you for sharing your experiences. Let's move on to the next step."
+_END_OF_WORKTYPE_TOKEN = "<END_OF_WORKTYPE>"  # nosec B105 - LLM control token, not a password
+_END_OF_CONVERSATION_TOKEN = "<END_OF_CONVERSATION>"  # nosec B105 - LLM control token, not a password
+_CONTROL_TOKENS = (_END_OF_WORKTYPE_TOKEN, _END_OF_CONVERSATION_TOKEN)
+_MAX_CONTROL_TOKEN_LENGTH = max(len(token) for token in _CONTROL_TOKENS)
 
 
 def _find_incomplete_experiences(collected_data: list[CollectedData]) -> list[tuple[int, CollectedData, list[str]]]:
@@ -123,6 +128,77 @@ class ConversationLLMAgentOutput(AgentOutput):
     exploring_type_finished: bool = False
 
 
+class _SafeStreamingAccumulator:
+    def __init__(self, *, stream_sink: ConversationStreamingSink | None, message_id: str):
+        self._stream_sink = stream_sink
+        self._message_id = message_id
+        self._buffer = ""
+        self._emitted_length = 0
+
+    async def on_chunk(self, chunk: str) -> None:
+        if self._stream_sink is None or not chunk:
+            return
+        self._buffer += chunk
+        safe_prefix_length = max(0, len(self._buffer) - (_MAX_CONTROL_TOKEN_LENGTH - 1))
+        if safe_prefix_length <= 0:
+            return
+        safe_text = self._buffer[:safe_prefix_length]
+        self._buffer = self._buffer[safe_prefix_length:]
+        if safe_text:
+            self._emitted_length += len(safe_text)
+            await self._stream_sink.append_text(message_id=self._message_id, delta=safe_text)
+
+    async def flush_remaining(self, final_text: str) -> None:
+        if self._stream_sink is None:
+            return
+        remaining = final_text[self._emitted_length:]
+        if remaining:
+            self._emitted_length += len(remaining)
+            await self._stream_sink.append_text(message_id=self._message_id, delta=remaining)
+
+
+def _normalize_response_text(
+    response_text: str,
+    unexplored_types: list[WorkType],
+    logger: logging.Logger,
+) -> tuple[str, bool, bool, float, BaseException | None]:
+    exploring_type_finished = False
+    finished = False
+    penalty = 0.0
+    error: BaseException | None = None
+    normalized_text = response_text.strip()
+    conversation_prematurely_ended_penalty_level = 0
+
+    if _END_OF_WORKTYPE_TOKEN in normalized_text:
+        if normalized_text != _END_OF_WORKTYPE_TOKEN:
+            logger.warning("The response contains '%s' and additional text: %s", _END_OF_WORKTYPE_TOKEN, normalized_text)
+        exploring_type_finished = True
+        finished = False
+        normalized_text = t("messages", "collectExperiences.moveToOtherExperiences")
+
+    if _END_OF_CONVERSATION_TOKEN in normalized_text:
+        if normalized_text != _END_OF_CONVERSATION_TOKEN:
+            logger.warning("The response contains '%s' and additional text: %s", _END_OF_CONVERSATION_TOKEN, normalized_text)
+
+        pre_token_text, _, _ = normalized_text.partition(_END_OF_CONVERSATION_TOKEN)
+        pre_token_text = pre_token_text.strip()
+        if pre_token_text:
+            normalized_text = pre_token_text
+        else:
+            normalized_text = t("messages", "collectExperiences.finalMessage")
+
+        exploring_type_finished = False
+        if len(unexplored_types) > 0:
+            penalty = get_penalty(conversation_prematurely_ended_penalty_level)
+            error = ValueError(f"LLM response contains '{_END_OF_CONVERSATION_TOKEN}' but there are unexplored types: {unexplored_types}")
+            logger.error(error)
+            finished = False
+        else:
+            finished = True
+
+    return normalized_text, exploring_type_finished, finished, penalty, error
+
+
 class _ConversationLLM:
 
     @staticmethod
@@ -137,17 +213,19 @@ class _ConversationLLM:
                       unexplored_types: list[WorkType],
                       explored_types: list[WorkType],
                       last_referenced_experience_index: int,
-                      logger: logging.Logger) -> ConversationLLMAgentOutput:
+                      logger: logging.Logger,
+                      stream_sink: ConversationStreamingSink | None = None,
+                      message_id: str | None = None) -> ConversationLLMAgentOutput:
         async def _callback(attempt: int, max_retries: int) -> tuple[ConversationLLMAgentOutput, float, BaseException | None]:
-            # Call the LLM to get the next message for the user
-            # Add some temperature and top_p variation to prompt the LLM to return different results on each retry.
-            # Exponentially increase the temperature and top_p to avoid the LLM returning the same result every time.
             temperature_config = get_config_variation(start_temperature=0.25, end_temperature=0.5,
                                                       start_top_p=0.8, end_top_p=1,
                                                       attempt=attempt, max_retries=max_retries)
             logger.debug("Calling _ConversationLLM with temperature: %s, top_p: %s",
                          temperature_config["temperature"],
                          temperature_config["top_p"])
+            # Only stream on the first attempt. Retries use buffered generation
+            # to avoid emitting duplicate/garbled deltas to the client.
+            attempt_sink = stream_sink if attempt == 1 else None
             return await _ConversationLLM._internal_execute(
                 temperature_config=temperature_config,
                 first_time_visit=first_time_visit,
@@ -160,7 +238,9 @@ class _ConversationLLM:
                 unexplored_types=unexplored_types,
                 explored_types=explored_types,
                 last_referenced_experience_index=last_referenced_experience_index,
-                logger=logger
+                logger=logger,
+                stream_sink=attempt_sink,
+                message_id=message_id,
             )
 
         result, _result_penalty, _error = await Retry[ConversationLLMAgentOutput].call_with_penalty(callback=_callback, logger=logger)
@@ -179,7 +259,9 @@ class _ConversationLLM:
                                 unexplored_types: list[WorkType],
                                 explored_types: list[WorkType],
                                 last_referenced_experience_index: int,
-                                logger: logging.Logger) -> tuple[ConversationLLMAgentOutput, float, BaseException | None]:
+                                logger: logging.Logger,
+                                stream_sink: ConversationStreamingSink | None = None,
+                                message_id: str | None = None) -> tuple[ConversationLLMAgentOutput, float, BaseException | None]:
         """
         Converses with the user and asks probing questions to collect experiences.
         :param first_time_visit: If this is the first time the user is visiting the agent.
@@ -204,22 +286,25 @@ class _ConversationLLM:
         msg = user_input.message.strip()  # Remove leading and trailing whitespaces
         llm_start_time = time.time()
 
-        exploring_type_finished = False
-        finished = False
+        if message_id is None:
+            message_id = user_input.message_id
+
         llm_response: LLMResponse
         llm_input: LLMInput | str
         system_instructions: list[str] | str | None = None
+        streamer = _SafeStreamingAccumulator(stream_sink=stream_sink, message_id=message_id)
+        if stream_sink is not None:
+            await stream_sink.start_message(message_id=message_id)
         if first_time_visit:
-            # If this is the first time the user has visited the agent, the agent should get to the point
-            # and not introduce itself or ask how the user is doing.
+            first_visit_config = {**temperature_config, "max_output_tokens": 512}
             llm = GeminiGenerativeLLM(config=LLMConfig(
-                generation_config=temperature_config
+                generation_config=first_visit_config
             ))
             llm_input = _ConversationLLM._get_first_time_generative_prompt(
                 country_of_user=country_of_user,
                 persona_type=persona_type,
                 exploring_type=exploring_type)
-            llm_response = await llm.generate_content(llm_input=llm_input)
+            llm_response = await llm.stream_content(llm_input=llm_input, on_chunk=streamer.on_chunk)
         else:
             system_instructions = _ConversationLLM._get_system_instructions(country_of_user=country_of_user,
                                                                             persona_type=persona_type,
@@ -228,11 +313,12 @@ class _ConversationLLM:
                                                                             unexplored_types=unexplored_types,
                                                                             explored_types=explored_types,
                                                                             last_referenced_experience_index=last_referenced_experience_index)
+            conversation_config = {**temperature_config, "max_output_tokens": 512}
             llm = GeminiGenerativeLLM(
                 system_instructions=system_instructions,
                 config=LLMConfig(
-                    language_model_name=AgentsConfig.deep_reasoning_model,
-                    generation_config=temperature_config
+                    language_model_name=AgentsConfig.default_model,
+                    generation_config=conversation_config
                 ))
             # Drop the first message from the conversation history, which is the welcome message from the welcome agent.
             # This message is treated as an instruction and causes the conversation to go off track.
@@ -245,10 +331,9 @@ class _ConversationLLM:
                 model_response_instructions=None,
                 context=filtered_context,
                 user_input=msg)
-            llm_response = await llm.generate_content(llm_input=llm_input)
+            llm_response = await llm.stream_content(llm_input=llm_input, on_chunk=streamer.on_chunk)
 
         llm_output_empty_penalty_level = 1
-        conversation_prematurely_ended_penalty_level = 0
 
         llm_end_time = time.time()
         llm_stats = LLMStats(prompt_token_count=llm_response.prompt_token_count,
@@ -266,6 +351,7 @@ class _ConversationLLM:
             )
             _didnt_understand = t("messages", "collectExperiences.didNotUnderstand")
             return ConversationLLMAgentOutput(
+                message_id=message_id,
                 message_for_user=_didnt_understand,
                 exploring_type_finished=False,
                 finished=False,
@@ -273,39 +359,15 @@ class _ConversationLLM:
                 agent_response_time_in_sec=round(llm_end_time - llm_start_time, 2),
                 llm_stats=[llm_stats]), get_penalty(llm_output_empty_penalty_level), ValueError("Conversation LLM response is empty")
 
-        penalty: float = 0
-        error: BaseException | None = None
-
-        # Test if the response is the same as the previous two
-        if llm_response.text.find("<END_OF_WORKTYPE>") != -1:
-            # We finished a work type (and it is not the last one) we need to move to the next one
-            if llm_response.text != "<END_OF_WORKTYPE>":
-                logger.warning("The response contains '<END_OF_WORKTYPE>' and additional text: %s", llm_response.text)
-            exploring_type_finished = True
-            finished = False
-            llm_response.text = t("messages", "collectExperiences.moveToOtherExperiences")
-
-        if llm_response.text.find("<END_OF_CONVERSATION>") != -1:
-            if llm_response.text != "<END_OF_CONVERSATION>":
-                logger.warning("The response contains '<END_OF_CONVERSATION>' and additional text: %s", llm_response.text)
-
-            pre_token_text, _, _ = llm_response.text.partition("<END_OF_CONVERSATION>")
-            pre_token_text = pre_token_text.strip()
-            if pre_token_text:
-                llm_response.text = pre_token_text
-            else:
-                llm_response.text = t("messages", "collectExperiences.finalMessage")
-
-            exploring_type_finished = False
-            if len(unexplored_types) > 0:
-                penalty = get_penalty(conversation_prematurely_ended_penalty_level)
-                error = ValueError(f"LLM response contains '<END_OF_CONVERSATION>' but there are unexplored types: {unexplored_types}")
-                logger.error(error)
-                finished = False
-            else:
-                finished = True
+        llm_response.text, exploring_type_finished, finished, penalty, error = _normalize_response_text(
+            llm_response.text,
+            unexplored_types,
+            logger,
+        )
+        await streamer.flush_remaining(llm_response.text)
 
         return ConversationLLMAgentOutput(
+            message_id=message_id,
             message_for_user=llm_response.text,
             exploring_type_finished=exploring_type_finished,
             finished=finished,

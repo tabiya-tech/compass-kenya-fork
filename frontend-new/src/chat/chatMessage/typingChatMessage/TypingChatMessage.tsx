@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Box, keyframes, Typography } from "@mui/material";
+import { Box, keyframes, Typography, useTheme } from "@mui/material";
 import ChatBubble from "src/chat/chatMessage/components/chatBubble/ChatBubble";
 import { MessageContainer } from "src/chat/chatMessage/userChatMessage/UserChatMessage";
 import { ConversationMessageSender } from "src/chat/ChatService/ChatService.types";
@@ -25,6 +25,8 @@ export const TYPING_CHAT_MESSAGE_TYPE = `typing-message-${uniqueId}`;
 export interface TypingChatMessageProps {
   waitBeforeThinking?: number;
   thinkingMessage?: string;
+  message?: string;
+  status?: string;
 }
 
 const dotAnimation = keyframes`
@@ -46,12 +48,20 @@ const textVariants = {
 const TypingChatMessage: React.FC<TypingChatMessageProps> = ({
   waitBeforeThinking = WAIT_BEFORE_THINKING,
   thinkingMessage,
+  message,
+  status,
 }) => {
   const { t } = useTranslation();
-  const [displayText, setDisplayText] = useState(t(UI_TEXT_KEYS.TYPING));
+  const theme = useTheme();
+  const [displayText, setDisplayText] = useState(message ?? t(UI_TEXT_KEYS.TYPING));
 
   useEffect(() => {
-    // Change text after waitBeforeThinking duration
+    if (message) {
+      setDisplayText(message);
+      return;
+    }
+
+    setDisplayText(t(UI_TEXT_KEYS.TYPING));
     const textChangeTimer = setTimeout(
       () => {
         setDisplayText(thinkingMessage ?? t(UI_TEXT_KEYS.THINKING));
@@ -63,21 +73,33 @@ const TypingChatMessage: React.FC<TypingChatMessageProps> = ({
     return () => {
       clearTimeout(textChangeTimer);
     };
-  }, [waitBeforeThinking, t, thinkingMessage]);
+  }, [waitBeforeThinking, t, thinkingMessage, message]);
 
   return (
-    <AnimatePresence mode="wait" initial={false}>
-      <motion.div
-        key={displayText}
-        initial="hidden"
-        animate="visible"
-        exit="hidden"
-        variants={textVariants}
-        transition={{ duration: 0.3 }}
-      >
-        <MessageContainer
-          origin={ConversationMessageSender.COMPASS}
-          data-testid={DATA_TEST_ID.TYPING_CHAT_MESSAGE_CONTAINER}
+    <MessageContainer
+      origin={ConversationMessageSender.COMPASS}
+      data-testid={DATA_TEST_ID.TYPING_CHAT_MESSAGE_CONTAINER}
+    >
+      {status && (
+        <Typography
+          variant="body2"
+          sx={{
+            color: theme.palette.grey[500],
+            fontSize: "0.8125rem",
+            marginBottom: 0.5,
+          }}
+        >
+          {status}
+        </Typography>
+      )}
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={displayText}
+          initial="hidden"
+          animate="visible"
+          exit="hidden"
+          variants={textVariants}
+          transition={{ duration: 0.3 }}
         >
           <ChatBubble message="" sender={ConversationMessageSender.COMPASS}>
             <Box display="flex" alignItems="baseline">
@@ -101,9 +123,9 @@ const TypingChatMessage: React.FC<TypingChatMessageProps> = ({
               </Box>
             </Box>
           </ChatBubble>
-        </MessageContainer>
-      </motion.div>
-    </AnimatePresence>
+        </motion.div>
+      </AnimatePresence>
+    </MessageContainer>
   );
 };
 

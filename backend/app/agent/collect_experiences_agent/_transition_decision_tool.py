@@ -84,9 +84,10 @@ class TransitionDecisionTool:
                 language_style=get_language_style()
             ),
             config=LLMConfig(
-                language_model_name=AgentsConfig.deep_reasoning_model,
+                language_model_name=AgentsConfig.default_model,
                 generation_config=ZERO_TEMPERATURE_GENERATION_CONFIG
                 | JSON_GENERATION_CONFIG
+                | {"max_output_tokens": 512}
                 | temperature_config
                 | with_response_schema(_TransitionDecisionOutput)
             ))

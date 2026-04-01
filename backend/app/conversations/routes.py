@@ -6,6 +6,7 @@ from http import HTTPStatus
 from typing import Annotated
 
 from fastapi import FastAPI, APIRouter, Request, Depends, HTTPException, Path
+from fastapi.responses import StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.agent.agent_director.llm_agent_director import LLMAgentDirector
@@ -70,7 +71,7 @@ def add_conversation_routes(app: FastAPI, authentication: Authentication):
 
     conversation_router = APIRouter(prefix="/conversations/{session_id}", tags=["conversations"])
 
-    @conversation_router.post(path="/messages", status_code=HTTPStatus.CREATED, response_model=ConversationResponse,
+    @conversation_router.post(path="/messages", status_code=HTTPStatus.CREATED,
                               responses={HTTPStatus.BAD_REQUEST: {"model": HTTPErrorResponse},
                                          # user is not allowed to send a message on a session where the conversation is already concluded
                                          HTTPStatus.FORBIDDEN: {"model": HTTPErrorResponse},
@@ -112,9 +113,26 @@ def add_conversation_routes(app: FastAPI, authentication: Authentication):
             # set the client_id in the context variable.
             client_id_ctx_var.set(current_user_preferences.client_id)
 
-            return await service.send(user_id, session_id, user_input, clear_memory, filter_pii,
+            await service.ensure_conversation_not_concluded(session_id, clear_memory)
+
+            async def _event_stream():
+                async for chunk in service.stream_send(user_id, session_id, user_input, clear_memory, filter_pii,
                                       city=current_user_preferences.city,
-                                      province=current_user_preferences.province)
+                                      province=current_user_preferences.province):
+                    if await request.is_disconnected():
+                        break
+                    yield chunk
+
+            return StreamingResponse(
+                _event_stream(),
+                status_code=HTTPStatus.OK,
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                },
+            )
         except ConversationAlreadyConcludedError as e:
             warning_msg = str(e)
             logger.warning(warning_msg)

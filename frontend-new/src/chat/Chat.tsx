@@ -1,5 +1,6 @@
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { TranslationKey } from "src/react-i18next";
 import ChatService from "src/chat/ChatService/ChatService";
 import ChatList from "src/chat/chatList/ChatList";
 import { IChatMessage } from "src/chat/Chat.types";
@@ -135,6 +136,7 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
   );
   const [currentUserId] = useState<string | null>(authenticationStateService.getInstance().getUser()?.id ?? null);
   const [currentPhase, setCurrentPhase] = useState<CurrentPhase>(defaultCurrentPhase);
+  const [streamStatusMessage, setStreamStatusMessage] = useState<string | null>(null);
   // CV upload states
   const [isUploadingCv, setIsUploadingCv] = useState<boolean>(false);
   const [cvUploadError, setCvUploadError] = useState<string | null>(null);
@@ -165,11 +167,141 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
     setMessages((prevMessages) => [...prevMessages, message]);
   }, []);
 
+  const upsertMessageInChat = useCallback((message: IChatMessage<any>) => {
+    setMessages((prevMessages) => {
+      const existingIndex = prevMessages.findIndex((msg) => msg.message_id === message.message_id);
+      if (existingIndex === -1) {
+        return [...prevMessages, message];
+      }
+      const nextMessages = [...prevMessages];
+      nextMessages[existingIndex] = message;
+      return nextMessages;
+    });
+  }, []);
+
+  const pendingDeltasRef = useRef<Map<string, string>>(new Map());
+  const rafIdRef = useRef<number | null>(null);
+
+  const flushPendingDeltas = useCallback(() => {
+    rafIdRef.current = null;
+    const pending = pendingDeltasRef.current;
+    if (pending.size === 0) {
+      return;
+    }
+    const snapshot = new Map(pending);
+    pending.clear();
+
+    setMessages((prevMessages) => {
+      const appendedMessageIds = new Set<string>();
+      const nextMessages = prevMessages.map((message) => {
+        const delta = snapshot.get(message.message_id);
+        if (!delta || !message.type.startsWith("compass-message-")) {
+          return message;
+        }
+        appendedMessageIds.add(message.message_id);
+        return {
+          ...message,
+          payload: {
+            ...(message.payload as CompassChatMessageProps),
+            message: ((message.payload as CompassChatMessageProps).message ?? "") + delta,
+            animateChunks: true,
+            streamVersion: ((message.payload as CompassChatMessageProps).streamVersion ?? 0) + 1,
+          },
+        };
+      });
+
+      snapshot.forEach((delta, messageId) => {
+        if (!appendedMessageIds.has(messageId)) {
+          nextMessages.push(
+            generateCompassMessage(messageId, delta, new Date().toISOString(), null, {
+              animateChunks: true,
+              streamVersion: 1,
+            })
+          );
+        }
+      });
+
+      return nextMessages;
+    });
+  }, []);
+
+  const appendTextToCompassMessage = useCallback(
+    (messageId: string, delta: string) => {
+      if (!delta) {
+        return;
+      }
+      const pending = pendingDeltasRef.current;
+      pending.set(messageId, (pending.get(messageId) ?? "") + delta);
+
+      if (rafIdRef.current === null) {
+        rafIdRef.current = requestAnimationFrame(flushPendingDeltas);
+      }
+    },
+    [flushPendingDeltas]
+  );
+
+  const clearPendingDeltasForMessage = useCallback((messageId: string) => {
+    pendingDeltasRef.current.delete(messageId);
+  }, []);
+
   const removeMessageFromChat = useCallback((messageId: string) => {
     setMessages((prevMessages) => prevMessages.filter((msg) => msg.message_id !== messageId));
   }, []);
 
+  const createChatMessageFromConversationMessage = useCallback(
+    (messageItem: ConversationMessage): IChatMessage<any> => {
+      if (messageItem.message_type === "BWS_TASK" && messageItem.metadata) {
+        return generateBWSTaskMessage(
+          messageItem.message_id,
+          messageItem.metadata,
+          (t, b, w) => handleBWSSubmitRef.current?.(t, b, w) ?? Promise.resolve()
+        );
+      }
+
+      return generateCompassMessage(
+        messageItem.message_id,
+        messageItem.message,
+        messageItem.sent_at,
+        messageItem.reaction
+      );
+    },
+    []
+  );
+
   const { showSkillsRanking } = useSkillsRanking(addMessageToChat, removeMessageFromChat);
+
+  const getActiveTypingMessage = useCallback(() => {
+    if (currentPhase.phase === ConversationPhase.PREFERENCE_ELICITATION) {
+      return t("chat.chatMessage.typingChatMessage.thinkingPreferenceElicitation");
+    }
+    return undefined;
+  }, [currentPhase.phase, t]);
+
+  const formatStreamStatusMessage = useCallback(
+    (label: string, detail?: string | null) => {
+      const i18nKey = `chat.chatMessage.streamingStatus.${label}` as TranslationKey;
+      const translated = t(i18nKey);
+      const baseMessage =
+        translated !== i18nKey
+          ? translated
+          : label
+              .split("_")
+              .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+              .join(" ");
+
+      if (!detail || detail === "phase_started" || detail === "phase_progressed" || detail === "phase_entered") {
+        return baseMessage;
+      }
+      if (detail === "response_ready" || detail === "db6_save_started" || detail === "db6_save_finished") {
+        return baseMessage;
+      }
+      if (/^\d+$/.test(detail) || /^[A-Z_]+$/.test(detail)) {
+        return baseMessage;
+      }
+      return `${baseMessage}: ${detail}`;
+    },
+    [t]
+  );
 
   useEffect(() => {
     if (!currentUserId || networkInfoSentRef.current) {
@@ -189,30 +321,35 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
     }
   }, [currentUserId]);
 
-  // Depending on the typing state, add or remove the typing message from the messages list
   const addOrRemoveTypingMessage = useCallback(
-    (userIsTyping: boolean) => {
+    (userIsTyping: boolean, typingMessage?: string, statusMessage?: string) => {
       if (userIsTyping) {
-        // Only add typing message if it doesn't already exist
-        const thinkingMessage =
-          currentPhase.phase === ConversationPhase.PREFERENCE_ELICITATION
-            ? t("chat.chatMessage.typingChatMessage.thinkingPreferenceElicitation")
-            : undefined;
         setMessages((prevMessages) => {
           const lastMessage = prevMessages[prevMessages.length - 1];
           const hasTypingMessage = lastMessage?.type?.startsWith("typing-message-") ?? false;
 
           if (!hasTypingMessage) {
-            return [...prevMessages, generateTypingMessage(undefined, thinkingMessage)];
+            return [...prevMessages, generateTypingMessage(undefined, undefined, typingMessage, statusMessage)];
           }
-          return prevMessages;
+          return prevMessages.map((message) => {
+            if (!message.type.startsWith("typing-message-")) {
+              return message;
+            }
+            return {
+              ...message,
+              payload: {
+                ...message.payload,
+                message: typingMessage,
+                status: statusMessage,
+              },
+            };
+          });
         });
       } else {
-        // filter out the typing message
         setMessages((prevMessages) => prevMessages.filter((message) => !message.type.startsWith("typing-message-")));
       }
     },
-    [currentPhase.phase, t]
+    []
   );
 
   const recordChatResponseMetrics = useCallback(
@@ -648,6 +785,7 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
   const sendMessage = useCallback(
     async (userMessage: string, sessionId: number, displayMessage?: string) => {
       setAiIsTyping(true);
+      setStreamStatusMessage(null);
       // displayMessage="" suppresses the bubble; undefined = use userMessage as display
       const chatText = displayMessage !== undefined ? displayMessage : userMessage;
       if (chatText) {
@@ -658,10 +796,64 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
 
       const startTimeMs = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
       const previousExploredExperiences = exploredExperiences;
+      let sawVisibleAssistantContent = false;
+
+      const markAssistantVisible = () => {
+        if (sawVisibleAssistantContent) {
+          return;
+        }
+        sawVisibleAssistantContent = true;
+        setStreamStatusMessage(null);
+        setAiIsTyping(false);
+      };
 
       try {
         // Send the user's message
-        const response = await ChatService.getInstance().sendMessage(sessionId, userMessage);
+        const response = await ChatService.getInstance().sendMessage(sessionId, userMessage, {
+          onTurnStarted: (event) => {
+            if (event.current_phase) {
+              setCurrentPhase((_previousCurrentPhase) =>
+                parseConversationPhase(event.current_phase!, _previousCurrentPhase)
+              );
+            }
+          },
+          onStatusUpdated: (event) => {
+            if (event.current_phase) {
+              setCurrentPhase((_previousCurrentPhase) =>
+                parseConversationPhase(event.current_phase!, _previousCurrentPhase)
+              );
+            }
+            setStreamStatusMessage(formatStreamStatusMessage(event.label, event.detail));
+          },
+          onPhaseUpdated: (event) => {
+            setCurrentPhase((_previousCurrentPhase) =>
+              parseConversationPhase(event.current_phase, _previousCurrentPhase)
+            );
+          },
+          onMessageStarted: (event) => {
+            if (event.message_type === "BWS_TASK") {
+              setStreamStatusMessage(formatStreamStatusMessage("ranking_work_activities"));
+            }
+          },
+          onMessageDelta: (event) => {
+            markAssistantVisible();
+            appendTextToCompassMessage(event.message_id, event.delta);
+          },
+          onMessageCompleted: (messageItem) => {
+            markAssistantVisible();
+            clearPendingDeltasForMessage(messageItem.message_id);
+            upsertMessageInChat(createChatMessageFromConversationMessage(messageItem));
+          },
+          onTurnCompleted: (event) => {
+            setCurrentPhase((_previousCurrentPhase) =>
+              parseConversationPhase(event.current_phase, _previousCurrentPhase)
+            );
+            setStreamStatusMessage(null);
+          },
+          onError: () => {
+            setStreamStatusMessage(null);
+          },
+        });
         const endTimeMs = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
         const durationMs = Math.round(endTimeMs - startTimeMs);
         recordChatResponseMetrics({
@@ -679,42 +871,39 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
           await fetchExperiences();
         }
 
-        response.messages.forEach((messageItem, idx) => {
-          const isConclusionMessage = response.conversation_completed && idx === response.messages.length - 1;
-          if (!isConclusionMessage) {
-            if (messageItem.message_type === "BWS_TASK" && messageItem.metadata) {
-              if (messageItem.metadata.task_number === 1) {
+        if (!sawVisibleAssistantContent) {
+          response.messages.forEach((messageItem, idx) => {
+            const isConclusionMessage = response.conversation_completed && idx === response.messages.length - 1;
+            if (!isConclusionMessage) {
+              if (messageItem.message_type === "BWS_TASK" && messageItem.metadata) {
+                if (messageItem.metadata.task_number === 1) {
+                  addMessageToChat(
+                    generateCompassMessage(
+                      `bws-transition-${messageItem.message_id}`,
+                      "Now I'd like to understand what you value most in a job. I'll show you a few sets of work activities — for each, choose the one you'd **most** prefer and the one you'd **least** prefer.",
+                      messageItem.sent_at,
+                      null
+                    )
+                  );
+                }
                 addMessageToChat(
-                  generateCompassMessage(
-                    `bws-transition-${messageItem.message_id}`,
-                    "Now I'd like to understand what you value most in a job. I'll show you a few sets of work activities — for each, choose the one you'd **most** prefer and the one you'd **least** prefer.",
-                    messageItem.sent_at,
-                    null
+                  generateBWSTaskMessage(
+                    messageItem.message_id,
+                    messageItem.metadata,
+                    (t, b, w) => handleBWSSubmitRef.current?.(t, b, w) ?? Promise.resolve()
                   )
                 );
+              } else {
+                upsertMessageInChat(createChatMessageFromConversationMessage(messageItem));
               }
-              addMessageToChat(
-                generateBWSTaskMessage(
-                  messageItem.message_id,
-                  messageItem.metadata,
-                  (t, b, w) => handleBWSSubmitRef.current?.(t, b, w) ?? Promise.resolve()
-                )
-              );
-            } else {
-              addMessageToChat(
-                generateCompassMessage(
-                  messageItem.message_id,
-                  messageItem.message,
-                  messageItem.sent_at,
-                  messageItem.reaction
-                )
-              );
             }
-          }
-        });
+          });
+        }
+
         // Handle the conclusion message and skills ranking flow for new messages
         if (response.conversation_completed && response.messages.length) {
           const lastMessage = response.messages[response.messages.length - 1];
+          removeMessageFromChat(lastMessage.message_id);
 
           if (SkillsRankingService.getInstance().isSkillsRankingFeatureEnabled()) {
             // Check if skill ranking is already completed
@@ -749,15 +938,22 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
         console.error(new ChatError("Failed to send message:", error));
         addMessageToChat(generatePleaseRepeatMessage());
       } finally {
+        setStreamStatusMessage(null);
         setAiIsTyping(false);
       }
     },
     [
       addMessageToChat,
+      appendTextToCompassMessage,
+      clearPendingDeltasForMessage,
+      createChatMessageFromConversationMessage,
       exploredExperiences,
       fetchExperiences,
+      formatStreamStatusMessage,
       activeSessionId,
+      removeMessageFromChat,
       showSkillsRanking,
+      upsertMessageInChat,
       recordChatResponseMetrics,
     ]
   );
@@ -1013,10 +1209,9 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
     }
   }, [exploredExperiencesNotification]);
 
-  // add a message when the compass is typing
   useEffect(() => {
-    addOrRemoveTypingMessage(aiIsTyping);
-  }, [aiIsTyping, addOrRemoveTypingMessage]);
+    addOrRemoveTypingMessage(aiIsTyping, getActiveTypingMessage(), streamStatusMessage ?? undefined);
+  }, [aiIsTyping, addOrRemoveTypingMessage, getActiveTypingMessage, streamStatusMessage]);
 
   // Fetch experiences when the active session id changes
   // And when not currentPhase is not `INITIALIZING`.

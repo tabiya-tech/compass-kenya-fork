@@ -14,7 +14,7 @@ from lib.std_pulumi import getconfig, getstackref, parse_realm_env_name_from_sta
 
 
 def main():
-    _, _, stack_name = parse_realm_env_name_from_stack()
+    realm_name, environment_name, stack_name = parse_realm_env_name_from_stack()
 
     # Load environment variables.
     load_dot_realm_env(stack_name)
@@ -39,10 +39,19 @@ def main():
     frontend_bucket_name = getstackref(frontend_stack_ref, "bucket_name")
     frontend_bucket_name.apply(lambda name: print(f"Using frontend bucket name: {name}"))
 
-    # Get stack reference for backend
+    # Get the ESPv2 Cloud Run service from the backend stack.
     backend_stack_ref = pulumi.StackReference(f"tabiya-tech/compass-backend/{stack_name}")
-    api_gateway_id = getstackref(backend_stack_ref, "apigateway_id")
-    api_gateway_id.apply(lambda _id: print(f"Using API gateway id: {_id}"))
+    espv2_cloud_run_name = getstackref(backend_stack_ref, "espv2_cloud_run_name")
+    espv2_cloud_run_name.apply(lambda name: print(f"Using ESPv2 Cloud Run service: {name}"))
+
+    # Look up the ESPv2 Cloud Run service resource by name so we can pass it to deploy_common.
+    import pulumi_gcp as gcp
+    espv2_cloudrun_service = gcp.cloudrunv2.Service.get(
+        "espv2-gateway-lookup",
+        id=pulumi.Output.all(project=project, location=location, name=espv2_cloud_run_name).apply(
+            lambda args: f"projects/{args['project']}/locations/{args['location']}/services/{args['name']}"
+        ),
+    )
 
     # Deploy common
     deploy_common(
@@ -53,7 +62,7 @@ def main():
         frontend_bucket_name=frontend_bucket_name,
         frontend_url=frontend_url,
         backend_url=backend_url,
-        api_gateway_id=api_gateway_id)
+        espv2_cloudrun_service=espv2_cloudrun_service)
 
 
 if __name__ == "__main__":
