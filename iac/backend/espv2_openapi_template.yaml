@@ -104,3 +104,7 @@ securityDefinitions:
     x-google-issuer: "https://securetoken.google.com/__FIREBASE_PROJECT_ID__"
     x-google-jwks_uri: "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"
     x-google-audiences: "__FIREBASE_PROJECT_ID__"
+  api_key:
+    type: "apiKey"
+    name: "x-api-key"
+    in: "header"

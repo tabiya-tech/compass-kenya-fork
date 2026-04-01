@@ -26,8 +26,9 @@ def add_skill_search_routes(app: APIRouter) -> None:
     @app.get("/search/skills",
              response_model=SkillsResponse,
              description="""
-             Semantically search for skills based on a query. The search is based on the embeddings of the skills, 
+             Semantically search for skills based on a query. The search is based on the embeddings of the skills,
              and uses the cosine similarity to find the most similar skills.""",
+             openapi_extra={"security": [{"gcp_api_key": []}]},
              )
     async def _search_skills(
             query: Annotated[str, Query(max_length=3000, description="The text to search for matching skills")],

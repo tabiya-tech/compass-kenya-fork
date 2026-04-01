@@ -23,9 +23,10 @@ def add_occupation_search_routes(app: APIRouter) -> None:
     @app.get("/search/occupations",
              response_model=OccupationsResponse,
              description="""
-             Semantically search for occupations based on a query. 
+             Semantically search for occupations based on a query.
              The search is based on the embeddings of the occupations, and uses
              the cosine similarity to find the most similar occupations.""",
+             openapi_extra={"security": [{"gcp_api_key": []}]},
              )
     async def _search_occupations(
             query: Annotated[str, Query(max_length=3000, description="The text to search for matching occupations")],
@@ -47,9 +48,10 @@ def add_occupation_search_routes(app: APIRouter) -> None:
     @app.get("/search/occupations-skills",
              response_model=OccupationsSkillsResponse,
              description="""
-             Semantically search for occupations based on a query. 
+             Semantically search for occupations based on a query.
              The search is based on the embeddings of the occupations, and uses
              the cosine similarity to find the most similar occupations.""",
+             openapi_extra={"security": [{"gcp_api_key": []}]},
              )
     async def _search_occupations(
             query: Annotated[str, Query(max_length=3000, description="The text to search for matching occupations")],

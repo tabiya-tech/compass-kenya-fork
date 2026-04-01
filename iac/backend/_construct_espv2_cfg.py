@@ -85,9 +85,13 @@ def _build_espv2_spec(
     Build the ESPv2 Swagger 2.0 OpenAPI spec.
 
     Substitutes hostname/backend/firebase values into the template, then walks
-    the FastAPI OpenAPI 3 spec to find paths where NO operation declares
-    ``security``.  Those public paths are injected with ``security: []`` before
-    the wildcard ``/{path=**}`` catch-all, so ESPv2 skips JWT validation for them.
+    the FastAPI OpenAPI 3 spec to classify each path and inject explicit entries
+    before the wildcard ``/{path=**}`` catch-all:
+
+    - Public paths (no ``security`` on any operation) → ``security: []``
+    - API-key paths (``gcp_api_key`` security on every operation) → ``security: [{api_key: []}]``
+      ESPv2 validates the GCP API key from the ``x-api-key`` request header.
+    - Firebase-protected paths → no injection; handled by the wildcard catch-all.
 
     :param openapi3: Parsed OpenAPI 3 spec from the FastAPI backend.
     :param template_str: Raw YAML text of espv2_openapi_template.yaml.
@@ -107,7 +111,15 @@ def _build_espv2_spec(
     )
     spec["securityDefinitions"]["firebase"]["x-google-audiences"] = firebase_project_id
 
-    # Identify public paths: every HTTP method in the path has no ``security`` field.
+    # The FastAPI scheme name used on API-key-protected routes (must match ApiKeyAuth's scheme_name).
+    _FASTAPI_API_KEY_SCHEME = "gcp_api_key"
+    # The ESPv2 security definition name for the x-api-key header (must match espv2_openapi_template.yaml).
+    _ESPV2_API_KEY_SCHEME = "api_key"
+
+    # Walk FastAPI's OpenAPI 3 paths and inject explicit entries into the ESPv2 Swagger 2.0 spec for:
+    #   - Public paths: every operation has no ``security`` field → inject security: []
+    #   - API-key paths: every operation declares gcp_api_key security → inject security: [{api_key: []}]
+    # Firebase-protected paths are handled by the wildcard ``/{path=**}`` catch-all and need no injection.
     for path, path_item in openapi3.get("paths", {}).items():
         # path_item values can be non-dict (e.g. summary strings) — skip those.
         operations = {
@@ -119,22 +131,28 @@ def _build_espv2_spec(
             continue
 
         is_public = all("security" not in op for op in operations.values())
-        if not is_public:
+        is_api_key_protected = all(
+            op.get("security") == [{_FASTAPI_API_KEY_SCHEME: []}]
+            for op in operations.values()
+        )
+
+        if not is_public and not is_api_key_protected:
             continue
 
-        # Inject an explicit ``security: []`` entry for each method so ESPv2
-        # allows unauthenticated access to this path.
+        espv2_security: list = [] if is_public else [{_ESPV2_API_KEY_SCHEME: []}]
+
         for method, op_obj in operations.items():
             entry: dict = {
                 "operationId": op_obj.get("operationId") or f"{method}_{path.replace('/', '_')}",
-                "security": [],
+                "security": espv2_security,
                 "responses": {"200": {"description": "OK"}},
             }
             if "parameters" in op_obj:
                 entry["parameters"] = _convert_params(op_obj["parameters"])
             spec["paths"].setdefault(path, {})[method] = entry
 
-        pulumi.info(f"ESPv2: injecting public (no-auth) path: {path}")
+        label = "public (no-auth)" if is_public else "api-key-protected (x-api-key header)"
+        pulumi.info(f"ESPv2: injecting {label} path: {path}")
 
     yaml_bytes = yaml.dump(
         spec,

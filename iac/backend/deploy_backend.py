@@ -136,6 +136,14 @@ def _deploy_espv2_proxy(*,
         opts=pulumi.ResourceOptions(depends_on=[proxy_sa], provider=basic_config.provider),
     )
 
+    # Enable the Cloud API Keys API — required to create and validate GCP API keys.
+    apikeys_service = gcp.projects.Service(
+        get_resource_name(resource="apikeys-api", resource_type="project-service"),
+        service="apikeys.googleapis.com",
+        project=basic_config.project,
+        opts=pulumi.ResourceOptions(depends_on=dependencies, provider=basic_config.provider),
+    )
+
     # ESPv2 Cloud Run service name — set explicitly and stable across deploys.
     espv2_service_name = "espv2-gateway"
 
@@ -247,6 +255,28 @@ def _deploy_espv2_proxy(*,
     )
 
     pulumi.export("espv2_cloud_run_name", espv2_cloudrun.name)
+
+    # Create a GCP API key for callers of the search endpoints.
+    # Restricted to the Cloud Endpoints service so it cannot be used against other GCP APIs.
+    search_api_key = gcp.apikeys.Key(
+        get_resource_name(resource="search-api-key", resource_type="api-key"),
+        project=basic_config.project,
+        display_name="Search API Key — grants access to /search/* endpoints via x-api-key header",
+        restrictions=gcp.apikeys.KeyRestrictionsArgs(
+            api_targets=[
+                gcp.apikeys.KeyRestrictionsApiTargetArgs(
+                    service=endpoints_service_name,
+                )
+            ]
+        ),
+        opts=pulumi.ResourceOptions(
+            depends_on=[apikeys_service, endpoints_service],
+            provider=basic_config.provider,
+        ),
+    )
+    # Export the key string so it can be distributed to authorised callers.
+    # Treat this output as a secret — do not log or commit it.
+    pulumi.export("search_api_key_string", pulumi.Output.secret(search_api_key.key_string))
 
     return espv2_cloudrun
 

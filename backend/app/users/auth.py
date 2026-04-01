@@ -171,11 +171,17 @@ class Authentication:
 
 class ApiKeyAuth:
     """
-    This class is used to api calls using API keys in the header.
-    see https://cloud.google.com/endpoints/docs/openapi/authentication-method for more details.
+    Enforces API key authentication via the ``x-api-key`` request header.
+
+    ESPv2 validates the GCP API key against Service Control before the request reaches the backend.
+    This dependency registers the ``gcp_api_key`` security scheme in FastAPI's OpenAPI spec so that
+    ``_construct_espv2_cfg.py`` can detect API-key-protected routes and emit the correct ESPv2
+    security definition for them.  It also rejects requests that somehow bypass ESPv2 (e.g. direct
+    Cloud Run calls during development) by raising a 403 if the header is absent.
+
+    See https://cloud.google.com/endpoints/docs/openapi/authentication-method for more details.
     """
     async def __call__(self, api_key: str = Depends(APIKeyHeader(scheme_name="gcp_api_key", name="x-api-key", auto_error=True))):
-        # Currently, there's not much to do here as the API Gateway validates the key.
-        # Additionally, since APIKeyHeader is used with auto_error=True, it will raise an exception if the header key is missing.
-        # In the future, the key can be checked against roles and permissions.
+        # ESPv2 has already validated the key value before this point.
+        # APIKeyHeader with auto_error=True raises HTTP 403 if the header is missing entirely.
         return api_key
