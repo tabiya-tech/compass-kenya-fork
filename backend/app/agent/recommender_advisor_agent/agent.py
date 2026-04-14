@@ -445,8 +445,16 @@ class RecommenderAdvisorAgent(Agent):
         job_lines: list[str] = []
         for i, job in enumerate(recs.opportunity_recommendations, start=1):
             job_lines.append(f"{i}. {job.opportunity_title}")
+            if job.employer:
+                job_lines.append(f"   Employer: {job.employer}")
+            if job.location:
+                job_lines.append(f"   Location: {job.location}")
+            if job.salary_range:
+                job_lines.append(f"   Salary: {job.salary_range}")
             if job.justification:
-                job_lines.append(f"   Description: {job.justification}")
+                job_lines.append(f"   Why it matches you: {job.justification}")
+            if job.application_deadline:
+                job_lines.append(f"   Closing date: {job.application_deadline}")
             if job.posting_url:
                 job_lines.append(f"   Apply here: {job.posting_url}")
 
@@ -454,28 +462,28 @@ class RecommenderAdvisorAgent(Agent):
         jobs_block = "\n".join(job_lines) if job_lines else "No job opportunities available."
 
         prompt = f"""You are a career advisor presenting personalised recommendations to a job seeker.
-        Present the following career and job recommendations clearly and encouragingly.
-        Do NOT add any extra recommendations, scores, or information beyond what is provided.
-        Do NOT invite further discussion — this is a one-time display.
+Present the following career and job recommendations clearly and encouragingly.
+Do NOT add any extra recommendations, scores, or information beyond what is provided.
+Do NOT invite further discussion — this is a one-time display.
 
-        CAREER OPPORTUNITIES (show title and description only):
-        {careers_block}
+CAREER OPPORTUNITIES (show title and description only):
+{careers_block}
 
-        JOB OPPORTUNITIES (show title, description, and application link):
-        {jobs_block}
+JOB OPPORTUNITIES (show each field that is available: title, employer, location, salary, why it matches, closing date, and application link):
+{jobs_block}
 
-        Write a warm, clear message that:
-        1. Opens with a brief one-sentence introduction (e.g. "Here are your personalised recommendations:")
-        2. Lists each career opportunity with its title and description
-        3. Lists each job opportunity with its title, description, and the application link labelled "Apply here:"
-        4. Closes with one encouraging sentence
+Write a warm, clear message that:
+1. Opens with a brief one-sentence introduction
+2. Lists each career opportunity with its title and description
+3. Lists each job opportunity showing all available fields (employer, location, salary, why it matches you, closing date, and the application link labelled "Apply here:")
+4. Closes with one encouraging sentence
 
-        Respond in JSON with this exact shape:
-        {{
-        "reasoning": "<brief note on how you presented the data>",
-        "message": "<the full formatted message for the user>",
-        "finished": true
-        }}"""
+Respond in JSON with this exact shape:
+{{
+  "reasoning": "<brief note on how you presented the data>",
+  "message": "<the full formatted message for the user>",
+  "finished": true
+}}"""
 
         response, llm_stats = await self._conversation_caller.call_llm(
             llm=self._conversation_llm,

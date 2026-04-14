@@ -639,11 +639,19 @@ class Node2VecRecommendations(BaseModel):
         mapped_opportunities = []
         for opp in raw_opportunities:
             mapped = dict(opp)
-            # Preserve the posting URL before any field renaming
+            # URL → posting_url (the job application link)
             if "URL" in mapped:
                 mapped.setdefault("posting_url", mapped.pop("URL"))
+            # salary_text → salary_range
+            if "salary_text" in mapped:
+                mapped.setdefault("salary_range", mapped.pop("salary_text"))
+            # closing_date → application_deadline
+            if "closing_date" in mapped:
+                mapped.setdefault("application_deadline", mapped.pop("closing_date"))
+            # originUuid defaults to uuid when not explicitly provided
             mapped.setdefault("originUuid", mapped.get("uuid", "unknown"))
-            mapped.pop("opportunity_description", None)  # extra field not in model
+            # opportunity_description is just contract_type duplicated — drop it
+            mapped.pop("opportunity_description", None)
             mapped_opportunities.append(mapped)
 
         # Convert skill gaps to training recommendations
