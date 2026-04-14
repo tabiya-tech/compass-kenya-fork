@@ -259,11 +259,22 @@ class PresentPhaseHandler(BasePhaseHandler):
         ]
         for i, opp in enumerate(opportunities, 1):
             lines.append(f"{i}. **{opp.opportunity_title}** (Rank: {opp.rank})")
-            lines.append(f"   - Location: {opp.location}")
+            if opp.employer:
+                lines.append(f"   - Employer: {opp.employer}")
+            if opp.location:
+                lines.append(f"   - Location: {opp.location}")
+            if opp.salary_range:
+                lines.append(f"   - Salary: {opp.salary_range}")
+            if opp.justification:
+                lines.append(f"   - Why it matches you: {opp.justification}")
+            if opp.application_deadline:
+                lines.append(f"   - Closing date: {opp.application_deadline}")
             if opp.final_score is not None:
                 lines.append(f"   - Match Score: {opp.final_score:.0%}")
             eligible_label = "Yes" if opp.is_eligible else "No"
             lines.append(f"   - Eligible: {eligible_label}")
+            if opp.posting_url:
+                lines.append(f"   - Apply here: {opp.posting_url}")
             lines.append("")
         return '\n'.join(lines)
 
