@@ -40,6 +40,18 @@ class RecommenderAdvisorAgentState(BaseModel):
     
     # === SESSION IDENTIFICATION ===
     session_id: int = Field(description="Unique session identifier")
+
+    # === FLOW CONTROL ===
+    discuss_recommendations: bool = Field(
+        default=True,
+        description=(
+            "When True, runs the full conversational recommender flow. "
+            "When False (set during manual whitelisting), skips the multi-phase "
+            "discussion and returns a single structured message with career and job "
+            "recommendations only."
+        )
+    )
+
     conversation_phase: ConversationPhase = Field(
         default=ConversationPhase.INTRO,
         description="Current phase of the conversation"

@@ -481,7 +481,8 @@ async def test_intro_phase():
             conversation_phase=ConversationPhase.INTRO,
             recommendations=create_sample_recommendations(),
             skills_vector=create_sample_skills_vector(),
-            preference_vector=create_sample_preference_vector()
+            preference_vector=create_sample_preference_vector(),
+            discuss_recommendations=False
         )
 
         # Create context
@@ -549,7 +550,8 @@ async def test_present_phase():
             conversation_phase=ConversationPhase.PRESENT_RECOMMENDATIONS,
             recommendations=recommendations,
             skills_vector=create_sample_skills_vector(),
-            preference_vector=create_sample_preference_vector()
+            preference_vector=create_sample_preference_vector(),
+            discuss_recommendations=False
         )
 
         # Display recommendations first
@@ -1193,6 +1195,96 @@ async def test_wrapup_phase():
         traceback.print_exc()
 
 
+async def test_simple_flow():
+    """
+    Test the simple flow (discuss_recommendations=False).
+
+    Creates a RecommenderAdvisorAgent with the real matching service, sets
+    discuss_recommendations=False on the state, and runs a single execute() call.
+    No LLM is involved — the simple flow fetches recommendations then formats a
+    structured message and marks finished=True.
+    """
+    print_header("Testing Simple Flow (discuss_recommendations=False)")
+    print_info(
+        "This flow bypasses all conversation phases. The agent fetches recommendations "
+        "from the matching service and returns a single message with careers and jobs."
+    )
+
+    try:
+        from app.agent.recommender_advisor_agent.agent import RecommenderAdvisorAgent
+        from app.agent.recommender_advisor_agent.matching_service_client import MatchingServiceClient
+
+        # Build matching service client directly from env vars (no app_config required)
+        matching_service_url = os.environ.get("MATCHING_SERVICE_URL")
+        matching_service_api_key = os.environ.get("MATCHING_SERVICE_API_KEY")
+        matching_service_client = None
+        if matching_service_url and matching_service_api_key:
+            matching_service_client = MatchingServiceClient(
+                base_url=matching_service_url,
+                api_key=matching_service_api_key
+            )
+            print_success(f"Matching service client ready: {matching_service_url}")
+        else:
+            print_info("Matching service not configured — will use stub recommendations.")
+
+        # Initialize the agent (occupation_search_service=None is fine for simple flow)
+        agent = RecommenderAdvisorAgent(
+            matching_service_client=matching_service_client,
+            occupation_search_service=None,
+            db6_client=None,
+            node2vec_client=None,
+        )
+
+        # State with discuss_recommendations=False
+        state = RecommenderAdvisorAgentState(
+            session_id=99999,
+            youth_id="simple_flow_test_user",
+            country_of_user=TEST_COUNTRY,
+            city="Nairobi",
+            province="Nairobi",
+            discuss_recommendations=False,
+            skills_vector=create_sample_skills_vector(),
+            preference_vector=create_sample_preference_vector(),
+        )
+        agent.set_state(state)
+
+        # Minimal conversation context
+        conversation_history = ConversationHistory()
+        context = ConversationContext(
+            all_history=conversation_history,
+            history=conversation_history,
+            summary=""
+        )
+
+        user_input = AgentInput(message="(start)", is_artificial=True)
+
+        print_info("Calling agent.execute() …")
+        with console.status("[bold green]Fetching recommendations & formatting message…", spinner="dots"):
+            output = await agent.execute(user_input, context)
+
+        # Display the agent response
+        print_agent(output.message_for_user)
+
+        # Summary panel
+        print_section("Result")
+        console.print(f"[cyan]finished:[/]  [bold]{'✓ Yes' if output.finished else '✗ No'}[/]")
+        console.print(f"[cyan]latency:[/]   {output.agent_response_time_in_sec:.2f}s")
+        if hasattr(output, "reasoning"):
+            console.print(f"[cyan]reasoning:[/] [dim]{output.reasoning}[/]")
+
+        if not output.finished:
+            print_error("Expected finished=True for the simple flow — check the implementation.")
+        else:
+            print_success("Simple flow completed successfully.")
+
+    except Exception as e:
+        print_error(f"Error testing simple flow: {e}")
+        import traceback
+        traceback.print_exc()
+
+    console.input("\n[dim]Press Enter to continue…[/]")
+
+
 async def test_full_conversation():
     """Test a full conversation flow."""
     print_header("Interactive Conversation Test")
@@ -1413,6 +1505,7 @@ async def main_menu():
             "Test SKILLS_UPGRADE_PIVOT Phase",
             "Test WRAPUP Phase",
             "Full Interactive Conversation (all phases)",
+            "Test Simple Flow (discuss_recommendations=False) [no LLM]",
             "View Sample Data (recommendations, skills, preferences)",
             "Change Logging Level",
             "Exit"
@@ -1439,6 +1532,8 @@ async def main_menu():
         elif choice == 10:
             await test_full_conversation()
         elif choice == 11:
+            await test_simple_flow()
+        elif choice == 12:
             print_section("Sample Data")
 
             print_info("Sample Skills:")
@@ -1453,7 +1548,7 @@ async def main_menu():
             display_recommendations(create_sample_recommendations())
 
             console.input("\n[dim]Press Enter to continue...[/]")
-        elif choice == 12:
+        elif choice == 13:
             # Change logging level
             print_section("Change Logging Level")
             new_log_choice = display_menu([
@@ -1463,7 +1558,7 @@ async def main_menu():
             ])
             setup_logging(log_levels[new_log_choice])
             print_success(f"Logging changed to {logging.getLevelName(log_levels[new_log_choice])} level")
-        elif choice == 13:
+        elif choice == 14:
             print_info("Exiting...")
             break
 
