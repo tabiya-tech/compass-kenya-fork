@@ -42,6 +42,7 @@ class TestRecommenderAdvisorAgent:
         state = MagicMock(spec=RecommenderAdvisorAgentState)
         state.conversation_phase = ConversationPhase.INTRO
         state.turn_count = 0
+        state.discuss_recommendations = True  # default: full conversational flow
         return state
 
     @pytest.fixture

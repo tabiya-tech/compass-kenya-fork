@@ -632,11 +632,17 @@ class Node2VecRecommendations(BaseModel):
             mapped.setdefault("description", mapped.pop("occupation_description", None))
             mapped_occupations.append(mapped)
 
-        # Map opportunity fields: service uses URL instead of originUuid
+        # Map opportunity fields from Node2Vec schema to internal model:
+        # - URL → posting_url (the job application link)
+        # - originUuid defaults to uuid when not explicitly provided
+        # - opportunity_description is not in the internal model so drop it
         mapped_opportunities = []
         for opp in raw_opportunities:
             mapped = dict(opp)
-            mapped.setdefault("originUuid", mapped.pop("URL", mapped.get("uuid", "unknown")))
+            # Preserve the posting URL before any field renaming
+            if "URL" in mapped:
+                mapped.setdefault("posting_url", mapped.pop("URL"))
+            mapped.setdefault("originUuid", mapped.get("uuid", "unknown"))
             mapped.pop("opportunity_description", None)  # extra field not in model
             mapped_opportunities.append(mapped)
 

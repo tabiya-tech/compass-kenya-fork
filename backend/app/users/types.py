@@ -80,6 +80,12 @@ class UserPreferencesRepositoryUpdateRequest(BaseModel):
     }
     """
 
+    discuss_recommendations: bool | None = None
+    """
+    discuss_recommendations - When set, overrides the user's recommender flow mode.
+    True = full conversational flow. False = show-only mode (set during whitelisting).
+    """
+
     class Config:
         extra = "forbid"
 
@@ -174,6 +180,14 @@ class UserPreferences(BaseModel):
     }
     """
 
+    discuss_recommendations: bool = Field(default=True)
+    """
+    discuss_recommendations - When True, the user goes through the full conversational
+    recommender flow. When False (set during manual whitelisting), only career and job
+    recommendations are shown as a single structured message without the multi-phase
+    discussion flow.
+    """
+
     @staticmethod
     def from_document(doc: Mapping[str, Any]) -> "UserPreferences":
         """
@@ -196,6 +210,7 @@ class UserPreferences(BaseModel):
             city=doc.get("city"),
             province=doc.get("province"),
             experiments=doc.get("experiments", {}),
+            discuss_recommendations=doc.get("discuss_recommendations", True),
         )
 
     class Config:

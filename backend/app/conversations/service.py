@@ -52,7 +52,8 @@ class IConversationService(ABC):
     async def send(self, user_id: str, session_id: int, user_input: str, clear_memory: bool,
                    filter_pii: bool,
                    city: str | None = None,
-                   province: str | None = None) -> ConversationResponse:
+                   province: str | None = None,
+                   discuss_recommendations: bool = True) -> ConversationResponse:
         # TODO: discuss filter pii and clear_memory
         """
         Get a message from the user and return a response from Compass, save the message and response into the application state
@@ -99,7 +100,8 @@ class ConversationService(IConversationService):
     async def send(self, user_id: str, session_id: int, user_input: str, clear_memory: bool,
                    filter_pii: bool,
                    city: str | None = None,
-                   province: str | None = None) -> ConversationResponse:
+                   province: str | None = None,
+                   discuss_recommendations: bool = True) -> ConversationResponse:
         if clear_memory:
             await self._application_state_metrics_recorder.delete_state(session_id)
         if filter_pii:
@@ -143,6 +145,9 @@ class ConversationService(IConversationService):
 
         # Prepare recommender state with skills and preferences if not already set
         await self._prepare_recommender_state_if_needed(state, user_id)
+
+        # Apply discuss_recommendations flag from user profile
+        state.recommender_advisor_agent_state.discuss_recommendations = discuss_recommendations
 
         self._agent_director.get_recommender_advisor_agent().set_state(state.recommender_advisor_agent_state)
         self._conversation_memory_manager.set_state(state.conversation_memory_manager_state)
