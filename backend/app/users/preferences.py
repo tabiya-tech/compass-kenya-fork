@@ -136,6 +136,7 @@ async def _create_user_preferences(
             sessions=sessions,
             city=preferences.city,
             province=preferences.province,
+            discuss_recommendations=preferences.discuss_recommendations,
         ))
 
         # Record user account creation metric

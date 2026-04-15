@@ -114,7 +114,8 @@ def add_conversation_routes(app: FastAPI, authentication: Authentication):
 
             return await service.send(user_id, session_id, user_input, clear_memory, filter_pii,
                                       city=current_user_preferences.city,
-                                      province=current_user_preferences.province)
+                                      province=current_user_preferences.province,
+                                      discuss_recommendations=current_user_preferences.discuss_recommendations)
         except ConversationAlreadyConcludedError as e:
             warning_msg = str(e)
             logger.warning(warning_msg)
