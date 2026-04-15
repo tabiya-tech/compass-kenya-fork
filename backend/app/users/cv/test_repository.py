@@ -4,6 +4,7 @@ from typing import Awaitable
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
+from app.users.cv.constants import MAX_USER_UPLOADS_RETURNED
 from app.users.cv.repository import UserCVRepository
 from app.users.cv.types import UserCVUpload, UploadProcessState
 from app.users.cv.errors import DuplicateCVUploadError
@@ -337,6 +338,25 @@ class TestUserCVRepository:
         for result, expected in zip(results, sorted_uploads):
             assert result.upload_id == expected.upload_id
             assert result.filename == expected.filename
+
+    @pytest.mark.asyncio
+    async def test_list_uploads_is_capped_at_max(self, get_user_cv_repository: Awaitable[UserCVRepository]):
+        repository = await get_user_cv_repository
+        now = datetime.now(timezone.utc)
+        user_id = "user-limit"
+        over_limit = MAX_USER_UPLOADS_RETURNED + 5
+
+        # GIVEN more uploads than the cap
+        for i in range(over_limit):
+            upload = _get_upload(user_id=user_id, created_at=now - timedelta(minutes=i), suffix=str(i), md5_hash=f"hash_limit_{i}")
+            upload.upload_process_state = UploadProcessState.COMPLETED
+            await repository.insert_upload(upload)
+
+        # WHEN listing uploads
+        results = await repository.get_user_uploads(user_id=user_id)
+
+        # THEN the result is capped at MAX_USER_UPLOADS_RETURNED
+        assert len(results) == MAX_USER_UPLOADS_RETURNED
 
     @pytest.mark.asyncio
     async def test_store_structured_extraction_updates_document(self, get_user_cv_repository: Awaitable[UserCVRepository]):

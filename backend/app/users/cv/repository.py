@@ -6,6 +6,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from pymongo.errors import DuplicateKeyError
 
 from app.server_dependencies.database_collections import Collections
+from app.users.cv.constants import MAX_USER_UPLOADS_RETURNED
 from app.users.cv.errors import DuplicateCVUploadError
 from app.users.cv.types import UserCVUpload, UploadProcessState, CVStructuredExtractionResponse
 from common_libs.time_utilities import get_now, datetime_to_mongo_date, mongo_date_to_datetime
@@ -152,7 +153,9 @@ class UserCVRepository(IUserCVRepository):
                 is_compound_index = 'user_id_1_md5_hash_1' in error_msg
 
             if is_compound_index:
-                # Allow re-upload if the previous record is in a terminal state (FAILED or CANCELLED)
+                # Allow re-upload of the same file content (same md5) if the previous attempt
+                # ended in a terminal state (FAILED or CANCELLED). This lets users retry after
+                # a network error or processing failure without being blocked by the dedup index.
                 existing = await self._collection.find_one({
                     "user_id": upload.user_id,
                     "md5_hash": upload.md5_hash,
@@ -326,7 +329,7 @@ class UserCVRepository(IUserCVRepository):
         }
 
         cursor = self._collection.find(query, sort=[("created_at", -1)])  # Most recent first
-        docs = await cursor.to_list(length=50)
+        docs = await cursor.to_list(length=MAX_USER_UPLOADS_RETURNED)
 
         self._logger.debug(
             "Fetched %d COMPLETED CV uploads for user_id=%s", len(docs), user_id

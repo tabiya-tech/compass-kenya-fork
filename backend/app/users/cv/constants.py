@@ -22,3 +22,7 @@ MARKDOWN_CONVERSION_TIMEOUT_SECONDS = 60
 DEFAULT_MAX_UPLOADS_PER_USER = 3
 DEFAULT_RATE_LIMIT_PER_MINUTE = 2
 RATE_LIMIT_WINDOW_MINUTES = 1
+
+# Maximum number of completed CV uploads returned in a single listing query.
+# Keeps memory usage predictable; users are unlikely to need more than this.
+MAX_USER_UPLOADS_RETURNED = 50

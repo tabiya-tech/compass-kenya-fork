@@ -23,7 +23,8 @@ def map_cv_to_collected_data(
     for cv_exp in cv_experiences:
         # Map work_type string to valid WorkType enum name, clearing if invalid
         work_type_name = cv_exp.work_type
-        if work_type_name and WorkType.from_string_key(work_type_name) is None:
+        wt = WorkType.from_string_key(work_type_name) if work_type_name else None
+        if work_type_name and wt is None:
             logger.warning(
                 "cv_to_agent_mapper: unrecognised work_type '%s' for experience '%s', setting to None",
                 work_type_name, cv_exp.experience_title
@@ -32,8 +33,7 @@ def map_cv_to_collected_data(
 
         # Infer paid_work from work_type
         paid_work = None
-        if work_type_name:
-            wt = WorkType.from_string_key(work_type_name)
+        if wt is not None:
             if wt == WorkType.FORMAL_SECTOR_WAGED_EMPLOYMENT:
                 paid_work = True
             elif wt == WorkType.UNSEEN_UNPAID:
