@@ -270,6 +270,11 @@ class CreateUserPreferencesRequest(BaseModel):
     province - The province/state of the user
     """
 
+    discuss_recommendations: bool | None = None
+    """
+    discuss_recommendations - When set, overrides the user's recommender flow mode.
+    """
+
     class Config:
         extra = "forbid"
 
