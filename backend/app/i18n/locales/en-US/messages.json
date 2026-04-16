@@ -25,7 +25,13 @@
       "location": "location"
     },
     "askAboutType": "Ask me about experiences that include: {experience_type}",
-    "recapPrompt": "Let's recap, and give me a chance to correct any mistakes."
+    "recapPrompt": "Let's recap, and give me a chance to correct any mistakes.",
+    "education": {
+      "askAboutEducation": "Before we explore your work experiences, have you completed any post-secondary education — for example university, TVET, college, or vocational training?",
+      "courseTitle": "course or programme name",
+      "institution": "institution",
+      "transitionToWork": "Thanks for sharing your education background. Now let's talk about your work experiences."
+    }
   },
   "exploreExperiences": {
     "noMoreExperiences": "It looks like, there are no experiences to discuss further.",
@@ -60,7 +66,8 @@
     "question": {
       "formalWaged": "What do you think is important when working in such a company?",
       "selfEmployment": "What do you think is important when you are your own boss?",
-      "unseenUnpaid": "What do you think is most important when helping out in the community or caring for others?"
+      "unseenUnpaid": "What do you think is most important when helping out in the community or caring for others?",
+      "education": "What area of your studies are you most confident applying in a work setting?"
     }
   }
 }

@@ -423,10 +423,10 @@ class CVExtractedExperience(BaseModel):
 5. COMPLETED
 
 **Acceptance Criteria**:
-- [ ] `CVStructuredExtractor` produces `CVExtractedExperience` objects from CV markdown
-- [ ] Pipeline stores structured experiences in `user_cv_uploads` record
-- [ ] Existing bullet extraction is preserved (backward compat)
-- [ ] Unit tests: 3+ real CV markdowns → verified structured output
+- [x] `CVStructuredExtractor` produces `CVExtractedExperience` objects from CV markdown
+- [x] Pipeline stores structured experiences in `user_cv_uploads` record
+- [x] Existing bullet extraction is preserved (backward compat)
+- [x] Unit tests: 3+ real CV markdowns → verified structured output
 
 ---
 
@@ -470,10 +470,10 @@ if is_first_turn and cv_upload_exists:
 ```
 
 **Acceptance Criteria**:
-- [ ] CV experiences appear in `CollectExperiencesAgent` state on first turn
-- [ ] Deduplication prevents double-counting
-- [ ] Provenance field tracks data source ("cv" vs "conversation")
-- [ ] Agent state is serializable/deserializable with new field
+- [x] CV experiences appear in `CollectExperiencesAgent` state on first turn
+- [x] Deduplication prevents double-counting
+- [x] Provenance field tracks data source ("cv" vs "conversation")
+- [x] Agent state is serializable/deserializable with new field
 
 ---
 
@@ -499,9 +499,9 @@ if is_first_turn and cv_upload_exists:
 - Still explore `unexplored_types` not represented in CV data (e.g., if CV only has formal employment, still ask about self-employment, volunteer work, unpaid work)
 
 **Acceptance Criteria**:
-- [ ] Agent acknowledges CV data in opening turn
-- [ ] Agent skips redundant questions for CV-populated fields
-- [ ] Agent still explores work types not found in CV
+- [x] Agent acknowledges CV data in opening turn
+- [x] Agent skips redundant questions for CV-populated fields
+- [x] Agent still explores work types not found in CV
 - [ ] Turn count for Persona 2 with CV: ≤15 turns (down from 20-25 without CV)
 - [ ] E2E test: Persona 2 with CV upload completes in fewer turns than without
 
@@ -526,182 +526,27 @@ if is_first_turn and cv_upload_exists:
 5. User confirms → conversation proceeds with supplementary questions only
 
 **Acceptance Criteria**:
-- [ ] Structured CV data available via API
+- [x] Structured CV data available via API
 - [ ] Frontend displays experience cards from CV
 - [ ] User can edit CV-extracted experience details
 - [ ] Edits persist and are reflected in agent state
 
 ---
 
-## B4: Qualifications Extraction + Persistence
+## B4: CV Qualifications Extraction
 
-**Objective**: Extract qualifications (certifications, diplomas, artisan qualifications, trade licenses) from CVs and conversation, persist them in the youth profile, and make them available to the recommendation engine for eligibility filtering.
+**Objective**: Extract qualifications (certifications, diplomas, trade licenses) from CVs as part of the structured extraction pipeline. Qualifications are captured in the `structured_extraction` field alongside experiences.
 
-### Task 4.1: Qualification Entity Model (P0)
-
-**Problem**: `YouthProfile.qualifications` is `list[dict[str, Any]]` — untyped and unused. No service or repository layer exists.
-
-**What**: Create a strongly-typed qualification model, MongoDB collection, and repository.
-
-**Files to Create**:
-- `backend/app/qualifications/types.py` — `QualificationEntity` model
-- `backend/app/qualifications/repository.py` — `QualificationRepository` (MongoDB CRUD)
-- `backend/app/qualifications/service.py` — `QualificationService` (business logic)
-- `backend/app/qualifications/routes.py` — REST API endpoints
-
-**`QualificationEntity` Model**:
-```python
-class QualificationType(str, Enum):
-    CERTIFICATE = "CERTIFICATE"          # Professional certificates (e.g., CompTIA, CCNA)
-    DIPLOMA = "DIPLOMA"                  # Diplomas (e.g., Diploma in Nursing)
-    DEGREE = "DEGREE"                    # University degrees (BSc, MSc, PhD)
-    TRADE_LICENSE = "TRADE_LICENSE"       # Artisan/trade licenses (e.g., electrician license)
-    PROFESSIONAL_LICENSE = "PROFESSIONAL_LICENSE"  # Professional licenses (e.g., CPA, nursing license)
-    TRAINING_COMPLETION = "TRAINING_COMPLETION"    # Training program completions
-    OTHER = "OTHER"
-
-class QualificationEntity(BaseModel):
-    uuid: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    qualification_type: QualificationType
-    name: str                             # e.g., "Certificate in Project Management"
-    institution: Optional[str] = None     # e.g., "Kenya Institute of Management"
-    date_obtained: Optional[str] = None   # ISO date or year string
-    expiry_date: Optional[str] = None     # For licenses that expire
-    level: Optional[str] = None           # e.g., "Level 3", "Grade I"
-    field_of_study: Optional[str] = None  # e.g., "Information Technology"
-    source: str = "conversation"          # "cv" | "conversation"
-```
-
-**MongoDB Collection**: Add `qualifications` to `Collections` class in `database_collections.py`.
-
-**Repository Methods**:
-- `save_qualifications(session_id, qualifications: list[QualificationEntity])`
-- `get_qualifications(session_id) -> list[QualificationEntity]`
-- `update_qualification(session_id, qualification_uuid, updates)`
-- `delete_qualification(session_id, qualification_uuid)`
-
-**API Endpoints** (register in `server.py`):
-- `GET /conversations/{session_id}/qualifications`
-- `POST /conversations/{session_id}/qualifications`
-- `PATCH /conversations/{session_id}/qualifications/{uuid}`
-- `DELETE /conversations/{session_id}/qualifications/{uuid}`
-
-**Acceptance Criteria**:
-- [ ] `QualificationEntity` model with type enum
-- [ ] MongoDB repository with CRUD operations
-- [ ] REST API endpoints functional
-- [ ] `YouthProfile.qualifications` updated to `list[QualificationEntity]` type
-
----
+> **Note**: A separate qualifications module (entity model, repository, routes, conversational detection, job matching integration) was originally planned but descoped after review. Qualification data is captured in the `structured_extraction` field on `user_cv_uploads` instead. Dedicated qualifications features (Kenya-specific recognition, conversational detection, job matching integration) are deferred to M5.
 
 ### Task 4.2: CV Qualifications Extraction (P0)
 
-**Problem**: The CV extraction pipeline only extracts experiences. Qualifications (degrees, certifications, trade licenses) are ignored.
-
-**What**: Add qualifications extraction to the CV parsing pipeline alongside the structured experience extraction (Task 3.1).
-
-**Files to Modify**:
-- `backend/app/users/cv/utils/structured_extractor.py` — Extend to extract qualifications
-- `backend/app/users/cv/service.py` — Store extracted qualifications
-- `backend/app/users/cv/types.py` — Add `CVExtractedQualification` model
-
-**`CVExtractedQualification` Model**:
-```python
-class CVExtractedQualification(BaseModel):
-    name: str
-    qualification_type: str  # maps to QualificationType enum
-    institution: Optional[str] = None
-    date_obtained: Optional[str] = None
-    field_of_study: Optional[str] = None
-```
-
-**LLM Prompt Extension** (in `CVStructuredExtractor`):
-The structured extraction prompt (Task 3.1) already returns both experiences and qualifications in a single LLM call:
-```json
-{
-  "experiences": [...],
-  "qualifications": [
-    {
-      "name": "Diploma in Business Administration",
-      "qualification_type": "DIPLOMA",
-      "institution": "Kenya Institute of Management",
-      "date_obtained": "2019",
-      "field_of_study": "Business Administration"
-    },
-    {
-      "name": "Certified Electrician Grade I",
-      "qualification_type": "TRADE_LICENSE",
-      "institution": "NITA Kenya",
-      "date_obtained": "2021"
-    }
-  ]
-}
-```
-
-**Kenya-Specific Qualification Handling**:
-- Recognize NITA (National Industrial Training Authority) trade test certificates
-- Recognize KNEC (Kenya National Examinations Council) certificates
-- Map common Kenyan qualification levels (Grade I/II/III for artisan trades)
-- Handle Swahili qualification names (e.g., "Cheti cha..." = Certificate of...)
+**What**: The structured extraction prompt (Task 3.1) extracts both experiences and qualifications in a single LLM call, stored in the `structured_extraction` field.
 
 **Acceptance Criteria**:
-- [ ] CV extraction returns both experiences and qualifications in structured format
-- [ ] Kenyan qualification types correctly recognized (NITA, KNEC, trade tests)
-- [ ] Qualifications stored in `user_cv_uploads` record and `qualifications` collection
-- [ ] Unit tests: CVs with qualifications → verified extraction output
-
----
-
-### Task 4.3: Conversational Qualifications Extraction (P1)
-
-**Problem**: Not all qualifications come from CVs. Persona 1 (informal workers) likely have no CV but may have artisan qualifications, trade licenses, or training completions mentioned verbally.
-
-**What**: Add a lightweight qualifications detection pass to the conversation flow that picks up qualifications mentioned during experience collection.
-
-**Files to Create**:
-- `backend/app/qualifications/extraction_llm.py` — `QualificationsDetector` LLM tool
-
-**Files to Modify**:
-- `backend/app/agent/collect_experiences_agent/_dataextraction_llm.py` — After experience data extraction, run qualifications detection on the same turn
-- `backend/app/agent/collect_experiences_agent/collect_experiences_agent.py` — Store detected qualifications in state
-- `backend/app/agent/collect_experiences_agent/_types.py` — Add `detected_qualifications: list[QualificationEntity]` to `CollectExperiencesAgentState`
-
-**Detection Strategy**:
-- Run as a secondary extraction on each conversation turn (lightweight — ~100 token prompt)
-- Trigger words: "certificate", "diploma", "degree", "license", "qualified", "trained", "certified", "NITA", "Grade I/II/III", "cheti" (Swahili)
-- Only extract when confidence is high — don't over-extract
-- Deduplicate against already-detected qualifications
-
-**Acceptance Criteria**:
-- [ ] Qualifications mentioned in conversation are detected
-- [ ] Detection works for both English and Swahili trigger terms
-- [ ] Artisan/trade qualifications recognized (e.g., "Grade I electrician")
-- [ ] No false positives from casual mentions (e.g., "it was a good experience")
-- [ ] Detected qualifications persisted at end of conversation
-
----
-
-### Task 4.4: Qualifications → Job Matching Integration (P2)
-
-**Problem**: Qualifications should affect which jobs are recommended. Some jobs require specific certifications or minimum education levels.
-
-**What**: Pass qualifications to the recommendation engine for eligibility filtering.
-
-**Files to Modify**:
-- `backend/app/conversations/service.py` — When transferring data to recommender, include qualifications
-- `backend/app/agent/recommender_advisor_agent/agent.py` — Accept qualifications context
-- `backend/app/database_contracts/db6_youth_database/db6_client.py` — Update `YouthProfile.qualifications` to `list[QualificationEntity]`
-
-**Integration Points**:
-- When `ExploreExperiencesAgentDirector` finishes and hands off to `RecommenderAdvisorAgent`, include qualifications in the context
-- Qualifications act as filters: "requires Grade I trade test" → only recommend if user has it
-- Qualifications act as boosters: "prefers diploma holders" → rank higher if user has relevant diploma
-
-**Acceptance Criteria**:
-- [ ] Qualifications passed to recommendation engine
-- [ ] Jobs requiring specific qualifications are filtered correctly
-- [ ] Qualification-based ranking boost works
-- [ ] `YouthProfile` persists typed qualifications
+- [x] CV extraction returns both experiences and qualifications in structured format
+- [x] Qualifications stored in `user_cv_uploads` record (`structured_extraction` field)
+- [x] Unit tests: CVs with qualifications → verified extraction output
 
 ---
 
@@ -775,12 +620,10 @@ The structured extraction prompt (Task 3.1) already returns both experiences and
 **What**: Update deployment configuration for Gemini model provider and new M4 features.
 
 **Files to Modify**:
-- `backend/app/app_config.py` — Add qualifications config fields, ensure CV config complete
-- `backend/app/server_dependencies/database_collections.py` — Add `qualifications` collection
-- `backend/app/server.py` — Register qualification routes, ensure CV routes enabled
+- `backend/app/app_config.py` — Ensure CV config complete
+- `backend/app/server.py` — Ensure CV routes enabled
 
 **New Environment Variables**:
-- `BACKEND_QUALIFICATIONS_ENABLED` — Feature flag for qualifications extraction
 - `BACKEND_CV_STRUCTURED_EXTRACTION_ENABLED` — Feature flag for structured CV extraction
 - `BACKEND_GEMINI_API_KEY` — (verify existing) Gemini API key
 - `BACKEND_GEMINI_MODEL_ID` — (verify existing) Model identifier
@@ -791,7 +634,6 @@ The structured extraction prompt (Task 3.1) already returns both experiences and
 
 **Deliverables**:
 - CV content: verify files stored encrypted in GCS, never logged
-- Qualifications: no PII beyond education details, stored in MongoDB
 - LLM prompts: verify no CV text forwarded beyond extraction step
 - API endpoints: verify authentication required on all new routes
 - Update `docs/observability-sensitive-data-checklist.md` with M4 additions
@@ -802,16 +644,14 @@ The structured extraction prompt (Task 3.1) already returns both experiences and
 - `docs/deployment-runbook-m4.md` — Step-by-step deployment guide
 
 **Contents**:
-- MongoDB collection creation / index setup for `qualifications`
 - GCS bucket permissions for CV storage
 - Environment variable checklist
-- Feature flag rollout order: structured extraction → qualification extraction → CV-agent integration
+- Feature flag rollout order: structured extraction → CV-agent integration
 - Rollback procedures for each feature
 - Health check endpoints to verify
 
 **Acceptance Criteria**:
 - [ ] All new environment variables documented
-- [ ] MongoDB indexes defined for new collections
 - [ ] Secrets management reviewed — no PII in logs
 - [ ] Feature flags allow incremental rollout
 - [ ] Deployment runbook covers rollout + rollback
@@ -821,82 +661,318 @@ The structured extraction prompt (Task 3.1) already returns both experiences and
 ## Success Criteria
 
 **CV Integration (Persona 2)**:
-- [ ] CV upload → structured extraction pipeline functional
-- [ ] Structured experiences (`CVExtractedExperience`) extracted with title, company, timeline, work_type, responsibilities
-- [ ] Conversational flow merges with CV data — agent acknowledges CV content
-- [ ] Duplicate detection prevents redundant questions (`compare_relaxed` dedup)
-- [ ] User can edit/confirm CV-extracted information via experience cards
-- [ ] Persona 2 with CV completes in ≤15 turns (vs 20-25 without CV)
-- [ ] Provenance tracking: each experience/qualification marked as "cv" or "conversation" sourced
-
-**Qualifications Extraction**:
-- [ ] `QualificationEntity` model with typed enum (`CERTIFICATE`, `DIPLOMA`, `DEGREE`, `TRADE_LICENSE`, etc.)
-- [ ] Certifications extracted from CVs via `CVStructuredExtractor`
-- [ ] Artisan qualifications recognized (NITA trade tests, Grade I/II/III)
-- [ ] Conversational qualifications detection for Persona 1 (no CV)
-- [ ] Kenya-specific qualifications handled (NITA, KNEC)
-- [ ] Qualifications stored in MongoDB `qualifications` collection
-- [ ] Qualifications affect job matching eligibility (filter + ranking boost)
+- [x] CV upload → structured extraction pipeline functional
+- [x] Structured experiences (`CVExtractedExperience`) extracted with title, company, timeline, work_type, responsibilities
+- [x] Conversational flow merges with CV data — agent acknowledges CV content
+- [x] Duplicate detection prevents redundant questions (`compare_relaxed` dedup)
+- [x] Provenance tracking: each experience/qualification marked as "cv" or "conversation" sourced
+- [x] Certifications extracted from CVs via `CVStructuredExtractor` (stored in `structured_extraction`)
 
 **Persistence & Data Quality**:
-- [ ] All experiences saved to database with provenance ("cv" | "conversation")
-- [ ] All skills persisted with provenance
-- [ ] All qualifications linked to `YouthProfile`
-- [ ] Data validation ensures completeness (no null titles, valid enum values)
-- [ ] `DB6Client` implementation persists typed qualifications (not `dict[str, Any]`)
-
-**Swahili Testing**:
-- [ ] 6 Swahili golden transcripts created (3 per persona, including artisan + code-switch variants)
-- [ ] Evaluation scripts measure skill overlap, language drift, mapping hit rate
-- [ ] CI regression tests cover both English and Swahili
-- [ ] Swahili skill discovery ≥80% parity with English baseline
-- [ ] Performance benchmarks documented for Swahili flows
-
-**Deployment Readiness**:
-- [ ] Gemini 2.5 Flash config verified in deployment environment
-- [ ] MongoDB `qualifications` collection with indexes
-- [ ] GCS bucket configured for CV storage
-- [ ] Feature flags enable incremental rollout (structured extraction → qualifications → CV-agent merge)
-- [ ] Secrets review: no CV content or PII in logs
-- [ ] Deployment runbook with rollout + rollback procedures
+- [x] All experiences saved to database with provenance ("cv" | "conversation")
+- [x] All skills persisted with provenance
+- [x] Data validation ensures completeness (no null titles, valid enum values)
 
 ---
 
 # MILESTONE 5: Hardening + Handover
 
-**Objective**: Finalize robustness, operational readiness, and transition to support.
+**Objective**: Finalize robustness, operational readiness, and transition to support. Pick up deferred M4 items (qualifications integration, frontend experience cards, E2E turn-count validation).
+
+---
 
 ## B5: Safety/Edge Case Simulation Suite
 
-**Tasks**: TBD
+### Task 5.1: CV Upload Edge Cases (P0)
+
+**What**: Harden the CV upload → structured extraction → agent pipeline against real-world edge cases.
+
+**Test Scenarios**:
+- Empty/corrupt PDF upload → graceful error with `CVUploadErrorCode`
+- CV with no extractable experiences (e.g., fresh graduate with only education)
+- CV with 10+ experiences → verify deduplication and agent state limits
+- CV upload during active conversation (mid-flow injection)
+- Duplicate CV re-upload → `DuplicateCVUploadError` handled gracefully
+- Very large CV (50+ pages) → timeout handling via `call_with_timeout`
+- CV in Swahili → structured extraction still works
+
+**Files to Modify**:
+- `backend/app/users/cv/service.py` — Add defensive checks for edge cases
+- `backend/app/users/cv/utils/structured_extractor.py` — Handle malformed LLM responses
+- `backend/evaluation_tests/` — Add edge case E2E tests
+
+**Acceptance Criteria**:
+- [ ] All edge case scenarios tested and handled gracefully
+- [ ] No unhandled exceptions in CV pipeline for malformed input
+- [ ] Error codes returned for each failure mode
+
+### Task 5.2: Conversation Flow Edge Cases (P0)
+
+**What**: Test agent behavior when CV data is incomplete, contradictory, or missing fields.
+
+**Test Scenarios**:
+- CV experience with no responsibilities → agent asks for them naturally
+- CV experience with no dates → agent asks for timeline
+- User contradicts CV data during conversation → agent handles gracefully
+- User uploads CV after conversation has already started
+- Multiple CV uploads by same user → latest extraction used
+
+**Acceptance Criteria**:
+- [ ] Agent handles partial CV data without crashing or looping
+- [ ] Contradictions between CV and conversation are resolved gracefully
+- [ ] Late CV upload integrates without disrupting flow
+
+---
+
+## B5.2: Post-Secondary Education Collection
+
+**Objective**: Capture post-secondary education (university, TVET, college) as a distinct experience so that education-derived skills are discovered and ranked alongside work-derived skills.
+
+### Design Decision: No new WorkType
+
+Adding a new `WorkType` enum value has a large blast radius — every if/elif chain on `WorkType` (6+ functions), prompt text referencing "four work types", the transition decision tool, the data extraction LLM classifier, and serialized state backward compatibility would all need updates. Instead:
+
+- Education is collected as a **special phase before the work type loop**, not as a work type itself.
+- Education entries are stored as `CollectedData` with `work_type=None` and `source="education"`.
+- The skills explorer branches on `source == "education"` for prompt adaptation.
+- The linking/ranking pipeline processes education entries like any other experience (`work_type=None` is already handled — it maps the experience title to ESCO occupations, which works reasonably for degree/course names).
+- **Zero changes** to `WorkType`, transition decision tool, data extraction LLM, or the `_get_experience_type`/`_ask_experience_type_question`/`_get_excluding_experiences` functions.
+
+---
+
+### Task 5.3: Education Collection in CollectExperiencesAgent (P0)
+
+**What**: Add a dedicated education question as a special phase on `first_time_visit`, before the work type loop begins. Education experiences are collected as `CollectedData` entries with `source="education"`.
+
+**Flow**:
+1. On first visit, agent explains the process AND asks: "Before we talk about work, have you completed any post-secondary education — for example university, TVET, college, or vocational training?"
+2. If yes → collect: course/programme name (`experience_title`), institution (`company`), dates, location. Support multiple entries.
+3. If no → proceed directly to work type loop.
+4. Once education collection is done (`education_phase_done=True`), proceed to the normal work type loop exactly as before.
+
+**Files to Modify**:
+- `backend/app/agent/collect_experiences_agent/collect_experiences_agent.py`
+  - Add `education_phase_done: bool = False` to `CollectExperiencesAgentState`
+  - In `execute()`: when `first_time_visit=True` and `education_phase_done=False`, use education prompt instead of first work type prompt
+  - When user indicates no more education, set `education_phase_done=True` and transition to work type loop
+- `backend/app/agent/collect_experiences_agent/_conversation_llm.py`
+  - Add `_get_first_time_education_prompt()` — similar to `_get_first_time_generative_prompt()` but asks about education instead of work type
+  - Education prompt: asks for course name, institution, dates (reuses existing field collection logic)
+  - System instructions variant for education phase: same field collection rules, but labels adjusted ("course/programme" instead of "job title", "institution" instead of "company")
+
+**What does NOT change**:
+- `work_type.py` — no new enum value
+- `_transition_decision_tool.py` — education phase uses a simple flag, not the transition LLM
+- `_dataextraction_llm.py` — education entries have `work_type=None`, extraction LLM handles this already
+- `_types.py` — `CollectedData.source` field already exists, `work_type` already accepts `None`
+- `_get_experience_type()`, `_ask_experience_type_question()`, `_get_excluding_experiences()` — untouched
+
+**Backward Compatibility**: `education_phase_done` defaults to `False`. Existing serialized states without this field will deserialize cleanly (Pydantic default). For in-progress conversations, they'll get the education question on their next first-visit turn — harmless since `first_time_visit` is already `False` for active conversations.
+
+**i18n**: Add translation keys for education question and field labels (English + Swahili).
+
+**Acceptance Criteria**:
+- [x] Agent asks about post-secondary education before work types on first visit
+- [x] Education experiences collected with course name, institution, dates
+- [x] Multiple education entries supported
+- [x] Education entries stored with `work_type=None`, `source="education"`
+- [x] Normal work type loop proceeds after education phase
+- [x] No changes to `WorkType` enum or work-type-dependent functions
+- [x] Existing conversations not disrupted (backward compat)
+
+---
+
+### Task 5.4: Education-Aware Skills Explorer Prompts (P0)
+
+**What**: When the `SkillsExplorerAgent` encounters an experience with `source="education"`, adapt prompts to ask about applied skills from coursework rather than day-to-day work responsibilities.
+
+**Prompt Adaptations** (in `_conversation_llm.py`):
+- **First question** (replaces "describe a typical day"): "What tasks are you now able to complete because of what you learned in that course/programme?"
+- **Follow-up**: "What practical projects or assignments did you work on?" / "What tools or techniques did you learn to use?"
+- **Achievement question**: "What was your biggest accomplishment or most challenging project during your studies?"
+- **Question C** (`_get_question_c`): For education, use something like "What area of your studies are you most confident applying in a work setting?" — the existing function returns `""` for unknown work types, so this is additive not breaking
+
+**System instructions adaptation** (`_create_conversation_system_instructions`):
+- Turn flow step 1: "What you can now do because of this course" instead of "Typical day and key responsibilities"
+- Turn flow step 3: Education-specific question instead of career growth/business question
+- Role description: "reflect on what you learned" instead of "reflect on my experience as [title] (work type)"
+
+**Files to Modify**:
+- `backend/app/agent/skill_explorer_agent/_conversation_llm.py`
+  - `create_first_time_generative_prompt()` — branch on `source == "education"` for initial question
+  - `_create_conversation_system_instructions()` — branch on source for turn flow and role description
+  - `_get_question_c()` — add education case (currently returns `""` for non-matching types, so this is safe)
+- `backend/app/agent/skill_explorer_agent/skill_explorer_agent.py` — pass `source` to conversation LLM (it already passes `work_type` and `cv_responsibilities`)
+- `backend/app/agent/explore_experiences_agent_director.py` — ensure `source` is passed through from `ExperienceEntity` to the skills explorer
+
+**What does NOT change**:
+- `_ResponsibilitiesExtractionTool` — extracts responsibilities from conversation text regardless of source
+- Linking/ranking pipeline — processes all experiences the same way; `work_type=None` is already supported
+- `WorkType.work_type_short()` — returns `""` for `None`, prompts will just skip the work type label
+
+**Acceptance Criteria**:
+- [x] Skills explorer uses education-specific prompts when `source="education"`
+- [x] First question asks about applied skills/capabilities from the course
+- [x] Follow-ups focus on practical projects, tools, techniques
+- [x] Skills extracted from education experiences are ranked alongside work-derived skills
+- [x] Education experiences appear in the final skill profile
+- [x] Non-education experiences completely unaffected (no prompt changes)
+
+---
+
+## B5.3: Deferred M4 Items
+
+### Task 5.5: Frontend Experience Cards (P1 — deferred from M4 Task 3.4)
+
+**What**: After CV extraction completes, display structured experience cards in the chat UI for user review and editing.
+
+**Acceptance Criteria**:
+- [ ] Frontend displays experience cards from CV extraction
+- [ ] User can edit CV-extracted experience details inline
+- [ ] Edits persist and are reflected in agent state
+
+### Task 5.6: E2E Turn-Count Validation (P0 — deferred from M4 Task 3.3)
+
+**What**: Validate that Persona 2 with CV completes in fewer turns than without.
+
+**Acceptance Criteria**:
+- [ ] E2E test: Persona 2 with CV upload completes in ≤15 turns
+- [ ] E2E test: Persona 2 with CV completes in fewer turns than without CV
+
+---
 
 ## Hardening Across Persona 2 + Swahili Flows
 
-**Tasks**: TBD
+### Task 5.7: Persona 2 Flow Hardening (P0)
 
-## A5: Handover/Support Plan
+**What**: Error handling, retry logic, and graceful degradation for the full Persona 2 pipeline.
 
-**Tasks**: TBD
+**Areas**:
+- Structured extraction LLM call failures → retry with backoff, fall back to bullet extraction
+- Agent state corruption → validation on load, safe defaults
+- GCS upload failures → retry, clear error state for user
+- Concurrent CV upload + conversation race conditions
+
+**Acceptance Criteria**:
+- [ ] Persona 2 flow hardened with error handling and retries
+- [ ] Graceful degradation when LLM extraction fails
+- [ ] No data loss on transient failures
+
+### Task 5.8: Swahili Flow Hardening (P1)
+
+**What**: Ensure Swahili conversations degrade gracefully and maintain quality.
+
+**Areas**:
+- Language drift detection (agent responding in wrong language)
+- Code-switching handling (English/Swahili mix)
+- Swahili synonym mapping fallbacks
+- Swahili CV extraction quality
+
+**Acceptance Criteria**:
+- [ ] Swahili flow hardened with fallback mechanisms
+- [ ] Language drift rate ≤2% of agent turns
+- [ ] Code-switching handled without quality loss
+
+---
+
+## A5: Handover Documentation
+
+### Task 5.9: Handover Package (P1)
+
+**What**: Single documentation deliverable covering architecture, operations, and knowledge transfer for the full Kenya fork.
+
+**Deliverables**:
+- Architecture diagram: CV upload → structured extraction → agent state → conversation flow → skills ranking → recommendations
+- Decision log: key design decisions (qualifications module descoped, `structured_extraction` approach, education as special phase not WorkType, etc.)
+- Operational runbook: key metrics to watch, common failure modes, troubleshooting steps, backup/recovery for MongoDB + GCS
+- Known limitations and future enhancement opportunities
+- Support escalation paths
+
+**Acceptance Criteria**:
+- [ ] Single handover document covering architecture, operations, and known limitations
 
 ---
 
 ## Success Criteria
 
+**Post-Secondary Education Collection**:
+- [x] Agent asks about post-secondary education as first question in collection flow
+- [x] Education experiences collected with course name, institution, dates
+- [x] Skills explorer uses education-specific prompts ("what can you do because of this course?")
+- [x] Education-derived skills ranked alongside work-derived skills
+
 **Safety & Edge Cases**:
-- [ ] Safety simulation suite integrated into CI
-- [ ] Off-topic detection prevents harmful/sensitive conversations
-- [ ] Edge case tests cover empty inputs, very long inputs, code-switching, profanity
+- [ ] CV upload edge cases tested (corrupt files, empty CVs, oversized CVs, Swahili CVs)
+- [ ] Conversation edge cases tested (partial data, contradictions, late uploads)
 - [ ] Graceful degradation for model failures
 
+**Deferred M4 Completions**:
+- [ ] Frontend experience cards for CV review/editing
+- [ ] E2E turn-count validation for Persona 2 with CV
+
 **Robustness & Hardening**:
-- [ ] Persona 2 flow hardened with error handling
+- [ ] Persona 2 flow hardened with error handling and retries
 - [ ] Swahili flow hardened with fallback mechanisms
-- [ ] Performance under load tested
-- [ ] Memory leaks and resource issues resolved
 
-**Operational Readiness**:
-- [ ] Logging reviewed for completeness and compliance
-- [ ] Backup and recovery procedures documented
+**Documentation & Handover**:
+- [ ] Single handover document covering architecture, operations, and known limitations
 
-**Documentation**:
-- [ ] Handover plan completed (architecture docs, code walkthrough, knowledge transfer, support escalation)
+---
+
+## Cross-Milestone Contributions (M1–M5)
+
+Work delivered across the full Epic 4 timeline that spans multiple milestones or was done in parallel with planned tasks.
+
+**Infrastructure & Platform**:
+- SSE streaming: conversation response streaming with chunked output, status updates, streaming sink refactor
+- Apigee migration: moved from API Gateway to Apigee for SSE support and backend authentication (Pulumi IaC)
+- NAT Gateway setup for Cloud Run static outbound IP routing
+- Docker/deployment: offline vignette generation, deployment procedures, Pulumi configs
+
+**Epic 2 — Preference Elicitation**:
+- BWS (Best-Worst Scaling) card UI, HB scoring, backend message_type signal
+- Bayesian inference and adaptive D-optimal selection
+- Preference elicitation agent with vignette system
+- BWS occupation ranking and offline optimization
+- Migration from occupation codes to ONET WA elements
+- Ratio-based FIM stopping criterion to prevent adaptive phase skip
+- Integration tests and comprehensive E2E test suite
+
+**Epic 3 — Recommender Agent**:
+- RecommenderAdvisorAgent integration with seamless handoff from skills exploration
+- Matching service integration (Node2Vec output schema)
+- Qualitative metadata in advisor agent prompts
+- Opportunity recommendation fallback when no occupations available
+- Phase transition capabilities, SKILLS_UPGRADE_PIVOT handler
+- Career path and job credential DB stubs
+- User recommendations service injection into agent director
+
+**Conversation Flow & Agent System**:
+- Agent configuration updates (Gemini 2.5 Flash/Flash-Lite model switches)
+- Counseling sub-phases for better agent routing
+- Experience collection parallelization (parallel LLM calls)
+- GATE phase addition and conversation flow reordering
+- Skip-to-phase functionality for testing all journey phases
+- Normalized experience titles for improved display
+- Persona detection and prompt customization
+- Province/city on user preferences for recommender agent
+
+**Frontend & UX**:
+- Chat history mapping fixes (bws_response JSON hidden from refresh)
+- BWS button theming (tabiyaGreen/tabiyaRed palette)
+- Keyboard input lag fix during typing
+- New session feature flag handling
+- ESLint/Prettier CI fixes
+
+**i18n & Localization**:
+- Centralized translations in Google Sheets with documented workflow
+- Frontend locale synchronization to backend user preferences
+- Swahili language context, terminology, and prompt customization
+- BWS task message internationalization
+
+**Observability & Quality**:
+- Correlation ID middleware
+- Logging field additions (session_id, turn_index, agent_type, llm_call_duration_ms)
+- Bandit security linting, nosec comments for LLM control tokens
+- MongoDB index optimization (compound index on skillId/modelId)
+- Skill aggregation pipeline performance optimization

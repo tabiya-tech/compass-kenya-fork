@@ -36,6 +36,7 @@ class _ConversationLLM:
                       experience_title,
                       work_type: WorkType,
                       cv_responsibilities: list[str] | None = None,
+                      source: str | None = None,
                       logger: logging.Logger) -> AgentOutput:
 
         async def _callback(attempt: int, max_retries: int) -> tuple[AgentOutput, float, BaseException | None]:
@@ -62,6 +63,7 @@ class _ConversationLLM:
                 experience_title=experience_title,
                 work_type=work_type,
                 cv_responsibilities=cv_responsibilities,
+                source=source,
                 logger=logger
             )
 
@@ -83,6 +85,7 @@ class _ConversationLLM:
                                 experience_title,
                                 work_type: WorkType,
                                 cv_responsibilities: list[str] | None = None,
+                                source: str | None = None,
                                 logger: logging.Logger) -> tuple[AgentOutput, float, BaseException | None]:
         """
         The main conversation logic for the skill explorer agent.
@@ -122,6 +125,7 @@ class _ConversationLLM:
                 rich_response=rich_response,
                 work_type=work_type,
                 cv_responsibilities=cv_responsibilities,
+                source=source,
             )
             llm_response = await llm.generate_content(llm_input=llm_input)
         else:
@@ -132,7 +136,8 @@ class _ConversationLLM:
                 experience_title=experience_title,
                 experience_index=experience_index,
                 rich_response=rich_response,
-                work_type=work_type)
+                work_type=work_type,
+                source=source)
             llm = GeminiGenerativeLLM(
                 system_instructions=system_instructions,
                 config=LLMConfig(
@@ -186,7 +191,8 @@ class _ConversationLLM:
                                                  experience_title: str,
                                                  experience_index: int,
                                                  rich_response: bool,
-                                                 work_type: WorkType) -> str:
+                                                 work_type: WorkType,
+                                                 source: str | None = None) -> str:
         turn_target = 4 if experience_index == 0 else 3
         experience_phase_hint = ("This is the first experience. Use the full 4-turn flow."
                                  if experience_index == 0
@@ -194,18 +200,41 @@ class _ConversationLLM:
         rich_response_hint = ("The user has already provided rich detail. You may skip redundant follow-ups and end early "
                               "after asking one achievement or challenge question."
                               if rich_response else "Ask follow-up questions as needed to complete the flow.")
+
+        # Adapt turn flow and role context for education source
+        if source == "education":
+            role_context = "reflect on what I learned during my studies in"
+            turn_flow = dedent("""\
+            TURN FLOW:
+                1. What tasks I can now complete because of this course/programme
+                2. Achievements or most challenging project during studies (REQUIRED before ending)
+                3. Ask ONE of the following (do not combine them):
+                   - What practical projects or assignments did I work on?
+                   - {get_question_c}
+                4. Follow-up clarification if needed, then end""")
+        else:
+            role_context = "reflect on my experience as"
+            turn_flow = dedent("""\
+            TURN FLOW:
+                1. Typical day and key responsibilities
+                2. Achievements or challenges (REQUIRED before ending)
+                3. Ask ONE of the following (do not combine them):
+                   - Tasks NOT part of my role
+                   - {get_question_c}
+                4. Follow-up clarification if needed, then end""")
+
         system_instructions_template = dedent("""\
         #Role
             You are a conversation partner helping me, a young person{country_of_user_segment},
-            reflect on my experience as {experience_title}{work_type}.
-            
-            I have already shared basic information about this experience and we are now in the process 
+            {role_context} {experience_title}{work_type}.
+
+            I have already shared basic information about this experience and we are now in the process
             of reflecting on my experience in more detail.
-            
+
         {language_style}
-        
+
         {agent_character}
-        
+
         {persona_guidance}
 
         #Questions you must ask me
@@ -213,14 +242,8 @@ class _ConversationLLM:
             Ask 1-2 questions per turn. Complete in approximately {turn_target} turns.
             {experience_phase_hint}
             {rich_response_hint}
-            
-            TURN FLOW:
-                1. Typical day and key responsibilities
-                2. Achievements or challenges (REQUIRED before ending)
-                3. Ask ONE of the following (do not combine them):
-                   - Tasks NOT part of my role
-                   - {get_question_c}
-                4. Follow-up clarification if needed, then end
+
+            {turn_flow}
             If the target is 3 turns, you may skip step 4 unless it is needed for clarification.
             
             RULES:
@@ -283,7 +306,9 @@ class _ConversationLLM:
         return replace_placeholders_with_indent(
             system_instructions_template,
             country_of_user_segment=_get_country_of_user_segment(country_of_user),
-            get_question_c=_get_question_c(work_type),
+            role_context=role_context,
+            turn_flow=turn_flow,
+            get_question_c=_get_question_c(work_type, source=source),
             question_asked_until_now="\n".join(f"- \"{s}\"" for s in question_asked_until_now),
             agent_character=STD_AGENT_CHARACTER,
             language_style=get_language_style(),
@@ -304,7 +329,8 @@ class _ConversationLLM:
                                             experience_index: int,
                                             rich_response: bool,
                                             work_type: WorkType,
-                                            cv_responsibilities: list[str] | None = None) -> str:
+                                            cv_responsibilities: list[str] | None = None,
+                                            source: str | None = None) -> str:
         turn_target = 4 if experience_index == 0 else 3
         experience_phase_hint = ("This is the first experience. Use the full 4-turn flow."
                                  if experience_index == 0
@@ -313,8 +339,22 @@ class _ConversationLLM:
                               "after asking one achievement or challenge question."
                               if rich_response else "")
 
-        # Build the initial question block — CV-aware or default
-        if cv_responsibilities:
+        # Build the initial question block — education-aware, CV-aware, or default
+        if source == "education":
+            initial_question_instructions = dedent("""\
+            This experience is a post-secondary education programme, not a work experience.
+            Do NOT ask about a "typical day at work" or "daily responsibilities".
+
+            Instead, ask me: "What tasks are you now able to complete because of what you learned
+            in {experience_title}? Think about practical skills, tools, or techniques you picked up."
+
+            Follow-up questions should focus on:
+            - What practical projects or assignments did I work on?
+            - What tools, software, or techniques did I learn to use?
+            - What was my biggest accomplishment or most challenging project during my studies?""".format(
+                experience_title=f"'{experience_title}'"
+            ))
+        elif cv_responsibilities:
             cv_bullets = "\n".join(f"- {r}" for r in cv_responsibilities)
             initial_question_instructions = dedent(f"""\
             The user's CV already contains the following responsibilities for this role:
@@ -401,10 +441,12 @@ def _get_country_of_user_segment(country_of_user: Country) -> str:
     return f" living in {country_of_user.value}"
 
 
-def _get_question_c(work_type: WorkType) -> str:
+def _get_question_c(work_type: WorkType, source: str | None = None) -> str:
     """
-    Get the question for the specific work type
+    Get the question for the specific work type or source.
     """
+    if source == "education":
+        return t("messages", "exploreSkills.question.education")
     if work_type == WorkType.FORMAL_SECTOR_WAGED_EMPLOYMENT:
         return t("messages", "exploreSkills.question.formalWaged")
     elif work_type == WorkType.SELF_EMPLOYMENT:
