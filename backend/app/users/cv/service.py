@@ -248,8 +248,6 @@ class CVUploadService(ICVUploadService):
                         self._logger.warning("[Upload %s] Failed to persist FAILED state: %s", upload_id, str(e_mark_failed), exc_info=True)
 
             # Keep a strong reference to avoid GC of background task
-            if not hasattr(self, "_background_tasks"):
-                self._background_tasks: set[asyncio.Task] = set()
             task = asyncio.create_task(_pipeline())
             self._background_tasks.add(task)
             task.add_done_callback(lambda t: self._background_tasks.discard(t))

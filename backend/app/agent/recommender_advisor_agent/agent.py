@@ -331,10 +331,19 @@ class RecommenderAdvisorAgent(Agent):
         
         # Increment turn count
         self._state.increment_turn_count()
-        
+
+        # Simple flow: when discuss_recommendations=False, skip the multi-phase
+        # conversation and return a single structured message with careers and jobs.
+        if not self._state.discuss_recommendations:
+            try:
+                return await self._execute_simple_flow(agent_start_time)
+            except Exception as e:
+                self.logger.exception("Error in recommender simple flow: %s", str(e))
+                return self._create_error_response(agent_start_time)
+
         # Handle empty input
         msg = user_input.message.strip() if user_input.message else "(silence)"
-        
+
         # Route to appropriate phase handler
         try:
             response, llm_stats = await self._route_to_handler(msg, context)
@@ -398,6 +407,112 @@ class RecommenderAdvisorAgent(Agent):
                 finished=False
             ), []
     
+    async def _execute_simple_flow(self, agent_start_time: float) -> AgentOutput:
+        """
+        Simple flow for users with discuss_recommendations=False.
+
+        Fetches recommendations (or reuses already-loaded ones), then uses the LLM to
+        present career opportunities (title + description) and job opportunities
+        (title + description + application URL) in a clear, friendly format.
+        Marks the session as finished after a single message.
+        """
+        # Fetch recommendations if not already loaded (mirrors IntroPhaseHandler logic)
+        if self._state.recommendations is None:
+            self._state.recommendations = await self._recommendation_interface.generate_recommendations(
+                youth_id=self._state.youth_id,
+                city=self._state.city,
+                province=self._state.province,
+                preference_vector=self._state.preference_vector,
+                skills_vector=self._state.skills_vector,
+                bws_scores=self._state.bws_scores,
+            )
+            self.logger.info(
+                "Simple flow: generated recommendations for %s: %d occupations, %d opportunities",
+                self._state.youth_id,
+                len(self._state.recommendations.occupation_recommendations),
+                len(self._state.recommendations.opportunity_recommendations),
+            )
+
+        recs = self._state.recommendations
+
+        # Build structured data block for the LLM to present
+        career_lines: list[str] = []
+        for i, occ in enumerate(recs.occupation_recommendations, start=1):
+            career_lines.append(f"{i}. {occ.occupation}")
+            if occ.description:
+                career_lines.append(f"   Description: {occ.description}")
+
+        job_lines: list[str] = []
+        for i, job in enumerate(recs.opportunity_recommendations, start=1):
+            job_lines.append(f"{i}. {job.opportunity_title}")
+            if job.employer:
+                job_lines.append(f"   Employer: {job.employer}")
+            if job.location:
+                job_lines.append(f"   Location: {job.location}")
+            if job.salary_range:
+                job_lines.append(f"   Salary: {job.salary_range}")
+            if job.justification:
+                job_lines.append(f"   Why it matches you: {job.justification}")
+            if job.application_deadline:
+                job_lines.append(f"   Closing date: {job.application_deadline}")
+            if job.posting_url:
+                job_lines.append(f"   Apply here: {job.posting_url}")
+
+        careers_block = "\n".join(career_lines) if career_lines else "No career recommendations available."
+        jobs_block = "\n".join(job_lines) if job_lines else "No job opportunities available."
+
+        prompt = f"""You are a career advisor presenting personalised recommendations to a job seeker.
+Present the following career and job recommendations clearly and encouragingly.
+Do NOT add any extra recommendations, scores, or information beyond what is provided.
+Do NOT invite further discussion — this is a one-time display.
+
+CAREER OPPORTUNITIES (show title and description only):
+{careers_block}
+
+JOB OPPORTUNITIES (show each field that is available: title, employer, location, salary, why it matches, closing date, and application link):
+{jobs_block}
+
+Write a warm, clear message that:
+1. Opens with a brief one-sentence introduction
+2. Lists each career opportunity with its title and description
+3. Lists each job opportunity showing all available fields (employer, location, salary, why it matches you, closing date, and the application link labelled "Apply here:")
+4. Closes with one encouraging sentence
+
+Respond in JSON with this exact shape:
+{{
+  "reasoning": "<brief note on how you presented the data>",
+  "message": "<the full formatted message for the user>",
+  "finished": true
+}}"""
+
+        response, llm_stats = await self._conversation_caller.call_llm(
+            llm=self._conversation_llm,
+            llm_input=prompt,
+            logger=self.logger,
+        )
+
+        if response is None:
+            # LLM failed after retries — fall back to plain text
+            self.logger.error("Simple flow: LLM failed to respond, falling back to plain text.")
+            plain = f"Here are your personalised recommendations:\n\n**Career Opportunities**\n{careers_block}\n\n**Job Opportunities**\n{jobs_block}"
+            return AgentOutputWithReasoning(
+                message_for_user=plain,
+                finished=True,
+                reasoning="Simple flow: LLM unavailable, returned plain text fallback.",
+                agent_type=self.agent_type,
+                agent_response_time_in_sec=round(time.time() - agent_start_time, 2),
+                llm_stats=llm_stats,
+            )
+
+        return AgentOutputWithReasoning(
+            message_for_user=response.message.strip('"'),
+            finished=True,
+            reasoning="Simple flow: LLM presented career and job recommendations without multi-phase discussion.",
+            agent_type=self.agent_type,
+            agent_response_time_in_sec=round(time.time() - agent_start_time, 2),
+            llm_stats=llm_stats,
+        )
+
     def _create_error_response(self, start_time: float) -> AgentOutput:
         """Create an error response."""
         return AgentOutput(

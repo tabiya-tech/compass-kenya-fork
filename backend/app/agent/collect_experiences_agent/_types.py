@@ -48,10 +48,10 @@ class CollectedData(BaseModel):
     def compare_relaxed(item1: 'CollectedData', item2: 'CollectedData'):
         return (item1.experience_title == item2.experience_title and
                 item1.work_type == item2.work_type and
-                (item1.start_date == item2.start_date or item1.start_date == "" or item2.start_date == "") and
-                (item1.end_date == item2.end_date or item1.end_date == "" or item2.end_date == "") and
-                (item1.company == item2.company or item1.company == "" or item2.company == "") and
-                (item1.location == item2.location or item1.location == "" or item2.location == ""))
+                (item1.start_date == item2.start_date or item1.start_date is None or item2.start_date is None) and
+                (item1.end_date == item2.end_date or item1.end_date is None or item2.end_date is None) and
+                (item1.company == item2.company or item1.company is None or item2.company is None) and
+                (item1.location == item2.location or item1.location is None or item2.location is None))
 
     @staticmethod
     def all_fields_empty(experience: 'CollectedData'):

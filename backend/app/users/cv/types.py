@@ -8,6 +8,10 @@ from pydantic import BaseModel, Field
 
 class CVExtractedExperience(BaseModel):
     """A single work experience extracted from a CV."""
+
+    class Config:
+        extra = "forbid"
+
     experience_title: str
     company: Optional[str] = None
     location: Optional[str] = None
@@ -19,6 +23,10 @@ class CVExtractedExperience(BaseModel):
 
 class CVExtractedQualification(BaseModel):
     """A single qualification extracted from a CV."""
+
+    class Config:
+        extra = "forbid"
+
     name: str
     qualification_type: Optional[str] = None
     institution: Optional[str] = None
@@ -29,11 +37,18 @@ class CVExtractedQualification(BaseModel):
 
 class CVStructuredExtractionResponse(BaseModel):
     """The structured extraction result from a CV."""
+
+    class Config:
+        extra = "forbid"
+
     experiences: list[CVExtractedExperience] = Field(default_factory=list)
     qualifications: list[CVExtractedQualification] = Field(default_factory=list)
 
 
 class CVUploadStateResponse(BaseModel):
+    class Config:
+        extra = "forbid"
+
     upload_id: str
 
 
@@ -49,32 +64,7 @@ class UploadProcessState(str, Enum):
     CANCELLED = "CANCELLED"
 
 
-class ParsedCV(BaseModel):
-    experiences_data: list[str]
-    upload_id: str
-
-
-class CVUploadStatusResponse(BaseModel):
-    upload_id: str
-    user_id: str
-    filename: str
-    upload_process_state: UploadProcessState
-    cancel_requested: bool
-    created_at: datetime
-    last_activity_at: datetime
-    error_code: Optional['CVUploadErrorCode'] = None
-    error_detail: str | None = None
-    experience_bullets: list[str] | None = None
-
-
-class CVUploadResponseListItem(BaseModel):
-    upload_id: str
-    filename: str
-    uploaded_at: datetime
-    upload_process_state: UploadProcessState
-    experiences_data: Optional[list[str]] = None
-
-
+# Defined before response models that reference it to avoid forward references.
 class CVUploadErrorCode(str, Enum):
     DUPLICATE_CV_UPLOAD = "DUPLICATE_CV_UPLOAD"
     MARKDOWN_TOO_LONG = "MARKDOWN_TOO_LONG"
@@ -86,7 +76,45 @@ class CVUploadErrorCode(str, Enum):
     UNKNOWN_ERROR = "UNKNOWN_ERROR"
 
 
+class ParsedCV(BaseModel):
+    class Config:
+        extra = "forbid"
+
+    experiences_data: list[str]
+    upload_id: str
+
+
+class CVUploadStatusResponse(BaseModel):
+    class Config:
+        extra = "forbid"
+
+    upload_id: str
+    user_id: str
+    filename: str
+    upload_process_state: UploadProcessState
+    cancel_requested: bool
+    created_at: datetime
+    last_activity_at: datetime
+    error_code: Optional[CVUploadErrorCode] = None
+    error_detail: str | None = None
+    experience_bullets: list[str] | None = None
+
+
+class CVUploadResponseListItem(BaseModel):
+    class Config:
+        extra = "forbid"
+
+    upload_id: str
+    filename: str
+    uploaded_at: datetime
+    upload_process_state: UploadProcessState
+    experiences_data: Optional[list[str]] = None
+
+
 class UserCVUpload(BaseModel):
+    class Config:
+        extra = "forbid"
+
     user_id: str = Field(description="The user id")
     created_at: datetime = Field(description="The date and time the upload was recorded")
     filename: str = Field(description="Original filename used for upload")
@@ -111,7 +139,7 @@ class UserCVUpload(BaseModel):
     # Optional experiences populated when COMPLETED
     experience_bullets: list[str] | None = Field(default=None,
                                                  description="Extracted experiences bullets when available")
-    structured_extraction: Optional['CVStructuredExtractionResponse'] = Field(
+    structured_extraction: Optional[CVStructuredExtractionResponse] = Field(
         default=None,
         description="Structured extraction of experiences and qualifications from the CV"
     )
