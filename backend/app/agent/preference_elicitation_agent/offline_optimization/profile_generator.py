@@ -9,6 +9,11 @@ import itertools
 import logging
 from typing import Dict, List, Any
 from pathlib import Path
+import sys
+
+# Allow importing SchemaLoader from parent package
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
+from app.agent.preference_elicitation_agent.bayesian.schema_loader import SchemaLoader
 
 
 class ProfileGenerator:
@@ -28,7 +33,13 @@ class ProfileGenerator:
 
         self.config = self._load_config(config_path)
         self.attributes = self.config["attributes"]
-        self.attribute_directions = self.config["attribute_directions"]
+        # Load SchemaLoader for schema-driven encoding
+        self.schema_loader = SchemaLoader.from_file(str(config_path))
+        # Build attribute_directions from schema for backward compat
+        self.attribute_directions = {
+            attr["name"]: ("negative" if attr.get("direction") == "negative" else "positive")
+            for attr in self.attributes
+        }
 
     def _load_config(self, config_path: str) -> Dict:
         """Load configuration from JSON file."""
@@ -61,12 +72,13 @@ class ProfileGenerator:
             attr_name = attr["name"]
 
             # Get all possible values for this attribute
-            if attr["type"] == "ordered":
-                # For ordered attributes, use the numeric values
+            has_numeric_values = all("value" in level for level in attr["levels"])
+            if attr["type"] == "ordered" and has_numeric_values:
+                # Ordered with numeric values: use the numeric values directly
                 values = [level["value"] for level in attr["levels"]]
             else:
-                # For categorical, use binary encoding (0 for base, 1 for other)
-                values = [0, 1]
+                # Categorical or ordered-by-id: use level IDs
+                values = [level["id"] for level in attr["levels"]]
 
             attribute_combinations[attr_name] = values
 
@@ -97,108 +109,19 @@ class ProfileGenerator:
 
     def encode_profile(self, profile: Dict[str, Any]) -> List[float]:
         """
-        Encode a profile as a 7-dimensional preference feature vector.
+        Encode a profile as an N-dimensional preference feature vector.
 
-        Maps 10 job attributes to 7 preference dimensions using the same
-        logic as the online system (LikelihoodCalculator._extract_features).
-
-        Preference dimensions:
-        - Index 0: financial_importance (wage)
-        - Index 1: work_environment_importance (physical_demand, remote_work, commute_time)
-        - Index 2: career_growth_importance (career_growth)
-        - Index 3: work_life_balance_importance (flexibility, commute_time)
-        - Index 4: job_security_importance (job_security)
-        - Index 5: task_preference_importance (task_variety, social_interaction)
-        - Index 6: values_culture_importance (company_values)
+        Delegates to SchemaLoader so encoding is always consistent with
+        the online system (LikelihoodCalculator._extract_features).
 
         Args:
-            profile: Profile dictionary with attribute values
+            profile: Profile dictionary with attribute values (level IDs for
+                     categoricals, numeric values for ordered attributes)
 
         Returns:
-            Feature vector (7 dimensions matching preference dimensions)
+            Feature vector (N dimensions, one per preference dimension in schema)
         """
-        features = [0.0] * 7
-
-        # Index 0: Financial - normalize wage to 0-3.5 range
-        if "wage" in profile:
-            features[0] = float(profile["wage"]) / 10000
-
-        # Index 1: Work environment - aggregate physical_demand, remote_work, commute_time
-        # Higher value = better work environment
-        work_env_score = 0.0
-        work_env_count = 0
-
-        if "physical_demand" in profile:
-            # Low physical demand (0) = better (1.0), high demand (1) = worse (0.0)
-            work_env_score += (1.0 - float(profile["physical_demand"]))
-            work_env_count += 1
-
-        if "remote_work" in profile:
-            # Remote work possible (1) = better (1.0)
-            work_env_score += float(profile["remote_work"])
-            work_env_count += 1
-
-        if "commute_time" in profile:
-            # Shorter commute = better (normalize: 15min=1.0, 60min=0.0)
-            commute = float(profile["commute_time"])
-            work_env_score += max(0.0, (60 - commute) / 45)  # 60-15=45 range
-            work_env_count += 1
-
-        if work_env_count > 0:
-            features[1] = work_env_score / work_env_count
-
-        # Index 2: Career growth
-        if "career_growth" in profile:
-            # High growth (1) = better
-            features[2] = float(profile["career_growth"])
-
-        # Index 3: Work-life balance - aggregate flexibility and commute_time
-        wlb_score = 0.0
-        wlb_count = 0
-
-        if "flexibility" in profile:
-            # Flexible hours (1) = better
-            wlb_score += float(profile["flexibility"])
-            wlb_count += 1
-
-        if "commute_time" in profile:
-            # Shorter commute also contributes to work-life balance
-            commute = float(profile["commute_time"])
-            wlb_score += max(0.0, (60 - commute) / 45)
-            wlb_count += 1
-
-        if wlb_count > 0:
-            features[3] = wlb_score / wlb_count
-
-        # Index 4: Job security
-        if "job_security" in profile:
-            # Permanent/stable (1) = better
-            features[4] = float(profile["job_security"])
-
-        # Index 5: Task preference - aggregate task_variety and social_interaction
-        # This is preference-neutral in aggregate, but captures variation
-        task_score = 0.0
-        task_count = 0
-
-        if "task_variety" in profile:
-            # Varied tasks (1) vs routine (0)
-            task_score += float(profile["task_variety"])
-            task_count += 1
-
-        if "social_interaction" in profile:
-            # High collaboration (1) vs independent (0)
-            task_score += float(profile["social_interaction"])
-            task_count += 1
-
-        if task_count > 0:
-            features[5] = task_score / task_count
-
-        # Index 6: Values/culture
-        if "company_values" in profile:
-            # Mission-driven (1) vs standard (0)
-            features[6] = float(profile["company_values"])
-
-        return features
+        return self.schema_loader.extract_features(profile)
 
     def profile_to_string(self, profile: Dict[str, Any]) -> str:
         """
@@ -215,17 +138,20 @@ class ProfileGenerator:
             attr_name = attr["name"]
             value = profile[attr_name]
 
-            if attr["type"] == "ordered":
-                # Find the level with this value
+            has_numeric_values = all("value" in l for l in attr["levels"])
+            if attr["type"] == "ordered" and has_numeric_values:
+                # Find the level with this numeric value
                 level = next(
                     (l for l in attr["levels"] if l["value"] == value),
                     None
                 )
-                if level:
-                    parts.append(f"{attr['label']}: {level['label']}")
             else:
-                # Categorical: 0=base, 1=other
-                level = attr["levels"][int(value)]
+                # Categorical or ordered-by-id: match by level id
+                level = next(
+                    (l for l in attr["levels"] if l["id"] == value),
+                    None
+                )
+            if level:
                 parts.append(f"{attr['label']}: {level['label']}")
 
         return " | ".join(parts)

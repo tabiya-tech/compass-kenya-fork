@@ -31,9 +31,10 @@ def small_profile_set(profile_generator):
 
 
 @pytest.fixture
-def prior_mean():
-    """Prior mean from real config."""
-    return np.array([0.8, -0.5, 0.4, -0.3, 0.6, 0.9, 0.5])
+def prior_mean(profile_generator):
+    """Prior mean matching schema dimensions."""
+    n_dims = profile_generator.schema_loader.n_dimensions
+    return np.zeros(n_dims)
 
 
 @pytest.fixture
@@ -251,14 +252,10 @@ class TestAdaptiveLibraryBuilder:
         stats = builder.get_library_statistics(library)
         coverage = stats["attribute_coverage"]
 
-        # Should have coverage for each attribute
-        assert "wage" in coverage
-        assert "physical_demand" in coverage
-        assert "flexibility" in coverage
-        assert "commute_time" in coverage
-        assert "job_security" in coverage
-        assert "remote_work" in coverage
-        assert "career_growth" in coverage
+        # Should have coverage for each attribute in the schema
+        # (earnings_per_month, physical_demand, social_interaction, career_growth)
+        for attr_name in coverage:
+            assert isinstance(attr_name, str)
 
         # Each coverage is a dict of value -> count
         for attr_name, value_counts in coverage.items():

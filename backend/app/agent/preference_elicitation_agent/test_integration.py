@@ -18,19 +18,23 @@ from typing import List, Dict, Any
 
 from app.agent.preference_elicitation_agent.types import Vignette, VignetteOption
 from app.agent.preference_elicitation_agent.bayesian.likelihood_calculator import LikelihoodCalculator
+from app.agent.preference_elicitation_agent.bayesian.schema_loader import SchemaLoader
 from app.agent.preference_elicitation_agent.bayesian.posterior_manager import PosteriorManager
 from app.agent.preference_elicitation_agent.information_theory.fisher_information import FisherInformationCalculator
 from app.agent.preference_elicitation_agent.information_theory.stopping_criterion import StoppingCriterion
 from app.agent.preference_elicitation_agent.adaptive_selection.d_optimal_selector import DOptimalSelector
 
 
+# Schema path — always in sync with offline optimization output
+_SCHEMA_PATH = Path(__file__).parent / "offline_optimization" / "preference_parameters.json"
+
+
 # Fixtures for integration tests
 @pytest.fixture
 def offline_output_dir():
     """Path to offline optimization output."""
-    # Offline output is in backend root, not in agent directory
-    backend_root = Path(__file__).parent.parent.parent.parent
-    return backend_root / "offline_output"
+    # Output lives next to the offline_optimization scripts
+    return Path(__file__).parent / "offline_optimization" / "output"
 
 
 @pytest.fixture
@@ -88,36 +92,42 @@ def adaptive_library_vignettes(offline_output_dir):
 
 
 @pytest.fixture
-def preference_dimensions():
-    """Standard preference dimensions."""
-    return ["wage", "remote", "career_growth", "flexibility",
-            "job_security", "task_variety", "culture_alignment"]
+def schema_loader():
+    """Schema loader from the canonical preference_parameters.json (same as offline output)."""
+    return SchemaLoader.from_file(str(_SCHEMA_PATH))
 
 
 @pytest.fixture
-def prior_mean():
-    """Default prior mean (neutral preferences)."""
-    return np.zeros(7)
+def preference_dimensions(schema_loader):
+    """Preference dimensions derived from schema (not hardcoded)."""
+    return schema_loader.dimensions
 
 
 @pytest.fixture
-def prior_covariance():
-    """Default prior covariance (moderate uncertainty)."""
-    return np.eye(7) * 1.0
+def prior_mean(schema_loader):
+    """Prior mean sized to match schema dimensions."""
+    return np.zeros(schema_loader.n_dimensions)
 
 
 @pytest.fixture
-def likelihood_calculator():
-    """Create likelihood calculator."""
-    return LikelihoodCalculator(temperature=1.0)
+def prior_covariance(schema_loader):
+    """Prior covariance sized to match schema dimensions."""
+    return np.eye(schema_loader.n_dimensions) * 1.0
 
 
 @pytest.fixture
-def posterior_manager(prior_mean, prior_covariance, likelihood_calculator):
+def likelihood_calculator(schema_loader):
+    """Create likelihood calculator with test schema."""
+    return LikelihoodCalculator(schema_loader=schema_loader, temperature=1.0)
+
+
+@pytest.fixture
+def posterior_manager(prior_mean, prior_covariance, preference_dimensions, likelihood_calculator):
     """Create posterior manager with likelihood calculator."""
     pm = PosteriorManager(
         prior_mean=prior_mean,
-        prior_cov=prior_covariance
+        prior_cov=prior_covariance,
+        dimensions=preference_dimensions
     )
     # Attach likelihood calculator for convenience
     pm.likelihood_calculator = likelihood_calculator
@@ -263,7 +273,7 @@ class TestPosteriorUpdates:
         assert variances[-1] < variances[0]
 
     def test_different_choices_lead_to_different_posteriors(
-        self, prior_mean, prior_covariance, static_beginning_vignettes, likelihood_calculator
+        self, prior_mean, prior_covariance, preference_dimensions, static_beginning_vignettes, likelihood_calculator
     ):
         """Test that choosing A vs B leads to different posteriors."""
         vignette = static_beginning_vignettes[0]
@@ -271,12 +281,14 @@ class TestPosteriorUpdates:
         # Create two independent posterior managers
         pm1 = PosteriorManager(
             prior_mean=prior_mean,
-            prior_cov=prior_covariance
+            prior_cov=prior_covariance,
+            dimensions=preference_dimensions
         )
 
         pm2 = PosteriorManager(
             prior_mean=prior_mean,
-            prior_cov=prior_covariance
+            prior_cov=prior_covariance,
+            dimensions=preference_dimensions
         )
 
         # Create likelihood functions for different choices
@@ -307,11 +319,11 @@ class TestAdaptiveSelection:
     @pytest.mark.asyncio
     async def test_select_most_informative_vignette(
         self, d_optimal_selector, adaptive_library_vignettes,
-        posterior_manager, fisher_calculator
+        posterior_manager, fisher_calculator, schema_loader
     ):
         """Test that selector chooses most informative vignette."""
-        # Compute current FIM (empty initially)
-        current_fim = np.zeros((7, 7))
+        n = schema_loader.n_dimensions
+        current_fim = np.zeros((n, n))
 
         # Select next vignette
         selected = await d_optimal_selector.select_next_vignette(
@@ -326,10 +338,10 @@ class TestAdaptiveSelection:
 
     @pytest.mark.asyncio
     async def test_no_vignette_shown_twice(
-        self, d_optimal_selector, adaptive_library_vignettes, posterior_manager
+        self, d_optimal_selector, adaptive_library_vignettes, posterior_manager, schema_loader
     ):
         """Test that vignettes are not repeated."""
-        current_fim = np.eye(7) * 0.1
+        current_fim = np.eye(schema_loader.n_dimensions) * 0.1
         vignettes_shown = []
 
         # Select 3 vignettes
@@ -351,34 +363,42 @@ class TestAdaptiveSelection:
 
     @pytest.mark.asyncio
     async def test_selection_adapts_to_posterior(
-        self, d_optimal_selector, adaptive_library_vignettes, fisher_calculator
+        self, d_optimal_selector, adaptive_library_vignettes, fisher_calculator, schema_loader
     ):
         """Test that selection changes based on posterior beliefs."""
-        current_fim = np.eye(7) * 0.1
+        n = schema_loader.n_dimensions
+        dims = schema_loader.dimensions
+        current_fim = np.eye(n) * 0.1
 
-        # Posterior with low uncertainty in wage dimension
-        posterior_certain_wage = PosteriorManager(
-            prior_mean=np.array([2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
-            prior_cov=np.diag([0.01, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
+        # Posterior with high confidence in first dimension
+        mean_a = np.zeros(n)
+        mean_a[0] = 2.0
+        cov_a = np.eye(n)
+        cov_a[0, 0] = 0.01
+        posterior_certain_first = PosteriorManager(
+            prior_mean=mean_a, prior_cov=cov_a, dimensions=dims
         )
 
-        # Posterior with low uncertainty in remote dimension
-        posterior_certain_remote = PosteriorManager(
-            prior_mean=np.array([0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
-            prior_cov=np.diag([1.0, 0.01, 1.0, 1.0, 1.0, 1.0, 1.0])
+        # Posterior with high confidence in second dimension
+        mean_b = np.zeros(n)
+        mean_b[1] = 2.0
+        cov_b = np.eye(n)
+        cov_b[1, 1] = 0.01
+        posterior_certain_second = PosteriorManager(
+            prior_mean=mean_b, prior_cov=cov_b, dimensions=dims
         )
 
         # Selections should potentially differ
         selected_1 = await d_optimal_selector.select_next_vignette(
             vignettes=adaptive_library_vignettes,
-            posterior=posterior_certain_wage.posterior,
+            posterior=posterior_certain_first.posterior,
             current_fim=current_fim,
             vignettes_shown=[]
         )
 
         selected_2 = await d_optimal_selector.select_next_vignette(
             vignettes=adaptive_library_vignettes,
-            posterior=posterior_certain_remote.posterior,
+            posterior=posterior_certain_second.posterior,
             current_fim=current_fim,
             vignettes_shown=[]
         )
@@ -390,9 +410,9 @@ class TestAdaptiveSelection:
 class TestStoppingCriterion:
     """Test stopping criterion integration."""
 
-    def test_continues_below_minimum(self, stopping_criterion, posterior_manager):
+    def test_continues_below_minimum(self, stopping_criterion, posterior_manager, schema_loader):
         """Test that elicitation continues below minimum vignettes."""
-        current_fim = np.eye(7) * 0.1
+        current_fim = np.eye(schema_loader.n_dimensions) * 0.1
 
         should_continue, reason = stopping_criterion.should_continue(
             posterior=posterior_manager.posterior,
@@ -403,9 +423,9 @@ class TestStoppingCriterion:
         assert should_continue is True
         assert "minimum" in reason.lower()
 
-    def test_stops_at_maximum(self, stopping_criterion, posterior_manager):
+    def test_stops_at_maximum(self, stopping_criterion, posterior_manager, schema_loader):
         """Test that elicitation stops at maximum vignettes."""
-        current_fim = np.eye(7) * 0.1
+        current_fim = np.eye(schema_loader.n_dimensions) * 0.1
 
         should_continue, reason = stopping_criterion.should_continue(
             posterior=posterior_manager.posterior,
@@ -416,15 +436,17 @@ class TestStoppingCriterion:
         assert should_continue is False
         assert "maximum" in reason.lower()
 
-    def test_stops_when_uncertainty_low(self, stopping_criterion):
+    def test_stops_when_uncertainty_low(self, stopping_criterion, schema_loader):
         """Test that elicitation stops when uncertainty is sufficiently low."""
+        n = schema_loader.n_dimensions
         # Create posterior with very low uncertainty
         low_uncertainty_posterior = PosteriorManager(
-            prior_mean=np.ones(7),
-            prior_cov=np.eye(7) * 0.01  # Very low uncertainty
+            prior_mean=np.ones(n),
+            prior_cov=np.eye(n) * 0.01,  # Very low uncertainty
+            dimensions=schema_loader.dimensions
         )
 
-        current_fim = np.eye(7) * 10.0  # High information
+        current_fim = np.eye(n) * 10.0  # High information
 
         should_continue, reason = stopping_criterion.should_continue(
             posterior=low_uncertainty_posterior.posterior,
@@ -443,11 +465,12 @@ class TestCompleteFlow:
     async def test_complete_session_flow(
         self, static_beginning_vignettes, static_end_vignettes,
         adaptive_library_vignettes, posterior_manager,
-        d_optimal_selector, stopping_criterion, fisher_calculator
+        d_optimal_selector, stopping_criterion, fisher_calculator, schema_loader
     ):
         """Test a complete user session from start to finish."""
+        n = schema_loader.n_dimensions
         vignettes_shown = []
-        current_fim = np.zeros((7, 7))
+        current_fim = np.zeros((n, n))
 
         # Phase 1: Show 4 static beginning vignettes
         for i in range(4):
@@ -547,7 +570,7 @@ class TestCompleteFlow:
         # Verify final posterior exists and is reasonable
         final_posterior = posterior_manager.posterior
         assert final_posterior is not None
-        assert len(final_posterior.mean) == 7
+        assert len(final_posterior.mean) == n
 
         # Verify uncertainty decreased
         final_variance = np.mean([
@@ -557,11 +580,12 @@ class TestCompleteFlow:
         assert final_variance < 1.0  # Should be less than prior variance
 
     def test_fim_increases_monotonically(
-        self, static_beginning_vignettes, fisher_calculator
+        self, static_beginning_vignettes, fisher_calculator, schema_loader
     ):
         """Test that FIM determinant increases as vignettes are shown."""
-        current_fim = np.zeros((7, 7))
-        beta = np.array([0.5, 0.3, 0.4, 0.2, 0.6, 0.1, 0.5])
+        n = schema_loader.n_dimensions
+        current_fim = np.zeros((n, n))
+        beta = np.zeros(n)
 
         determinants = [fisher_calculator.compute_d_efficiency(current_fim)]
 

@@ -7,14 +7,37 @@ import numpy as np
 from app.agent.preference_elicitation_agent.adaptive_selection.d_optimal_selector import DOptimalSelector
 from app.agent.preference_elicitation_agent.bayesian.posterior_manager import PosteriorDistribution
 from app.agent.preference_elicitation_agent.bayesian.likelihood_calculator import LikelihoodCalculator
+from app.agent.preference_elicitation_agent.bayesian.schema_loader import SchemaLoader
 from app.agent.preference_elicitation_agent.information_theory.fisher_information import FisherInformationCalculator
 from app.agent.preference_elicitation_agent.types import Vignette, VignetteOption, VignetteTemplate
+
+# Minimal schema matching the test vignette attributes (salary, remote)
+_TEST_SCHEMA = {
+    "attributes": [
+        {
+            "name": "salary", "label": "Salary", "group": "Financial",
+            "type": "ordered", "coding": "linear",
+            "levels": [
+                {"id": "low", "label": "Low", "value": 15000},
+                {"id": "high", "label": "High", "value": 35000},
+            ]
+        },
+        {
+            "name": "remote", "label": "Remote Work", "group": "Work Environment",
+            "type": "categorical", "coding": "dummy", "base_level_id": "no",
+            "levels": [
+                {"id": "no", "label": "Office"},
+                {"id": "yes", "label": "Remote"},
+            ]
+        },
+    ]
+}
 
 
 @pytest.fixture
 def likelihood_calculator():
-    """Create likelihood calculator."""
-    return LikelihoodCalculator(temperature=1.0)
+    """Create likelihood calculator with test schema."""
+    return LikelihoodCalculator(schema_loader=SchemaLoader(_TEST_SCHEMA), temperature=1.0)
 
 
 @pytest.fixture
@@ -33,16 +56,21 @@ def d_optimal_selector(fisher_calculator):
 
 
 @pytest.fixture
-def posterior():
-    """Create test posterior distribution."""
-    dimensions = ["wage", "remote", "career_growth", "flexibility",
-                  "job_security", "task_variety", "culture_alignment"]
+def schema_loader():
+    """Schema loader from _TEST_SCHEMA."""
+    return SchemaLoader(_TEST_SCHEMA)
 
-    mean = np.array([0.5, 0.3, 0.4, 0.2, 0.6, 0.1, 0.5])
-    covariance = np.eye(7) * 0.3
+
+@pytest.fixture
+def posterior(schema_loader):
+    """Create test posterior distribution sized to match _TEST_SCHEMA."""
+    dims = schema_loader.dimensions
+    n = schema_loader.n_dimensions
+    mean = np.zeros(n)
+    covariance = np.eye(n) * 0.3
 
     return PosteriorDistribution(
-        dimensions=dimensions,
+        dimensions=dims,
         mean=mean,
         covariance=covariance
     )
@@ -115,9 +143,9 @@ def vignettes():
 
 
 @pytest.fixture
-def current_fim():
-    """Create current FIM (some baseline information)."""
-    return np.eye(7) * 0.1
+def current_fim(schema_loader):
+    """Create current FIM sized to match _TEST_SCHEMA."""
+    return np.eye(schema_loader.n_dimensions) * 0.1
 
 
 class TestDOptimalSelector:

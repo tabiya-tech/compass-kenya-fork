@@ -19,10 +19,11 @@ class AdaptiveConfig(BaseModel):
         description="Enable adaptive D-efficiency mode"
     )
 
-    # Prior distribution (population defaults)
+    # Prior distribution (population defaults).
+    # Length is determined by the loaded schema, not hardcoded.
     prior_mean: List[float] = Field(
-        default=[0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5],
-        description="Prior mean for 7 preference dimensions"
+        default_factory=list,
+        description="Prior mean for each preference dimension (populated from schema at runtime)"
     )
 
     prior_variance: float = Field(
@@ -44,12 +45,12 @@ class AdaptiveConfig(BaseModel):
     )
 
     fim_det_threshold: float = Field(
-        default=1.0,
-        description="Stop if det(FIM)/det(prior_FIM) exceeds this ratio. "
-                    "Measures relative information gain. Lowered from 10.0 to 1.0 because "
-                    "with 7 dimensions and ≤12 two-option vignettes, det(FIM) grows slowly "
-                    "and 10.0 was unreachable — max_vignettes was the only criterion firing. "
-                    "1.0 triggers early stop around vignette 9-10 in typical sessions."
+        default=30.0,
+        description="Stop if det(FIM) exceeds this value (absolute mode, prior_fim_determinant=0). "
+                    "Calibrated for 3-dim schema: prior det=8.0, grows ~4/vignette after beginning phase. "
+                    "30.0 fires after ~3 adaptive vignettes (4 beginning + 3 adaptive + 2 end = ~9 total). "
+                    "Formula: prior_det * target_info_ratio = 2^n_dims * ratio. "
+                    "For 3-dim with target 4x info gain: 8 * 4 = 32 ~ 30."
     )
 
     max_variance_threshold: float = Field(
@@ -119,7 +120,7 @@ class AdaptiveConfig(BaseModel):
             enabled=os.getenv("ADAPTIVE_D_EFFICIENCY_ENABLED", "false").lower() == "true",
             min_vignettes=int(os.getenv("ADAPTIVE_MIN_VIGNETTES", "4")),
             max_vignettes=int(os.getenv("ADAPTIVE_MAX_VIGNETTES", "12")),
-            fim_det_threshold=float(os.getenv("ADAPTIVE_FIM_THRESHOLD", "1.0")),
+            fim_det_threshold=float(os.getenv("ADAPTIVE_FIM_THRESHOLD", "30.0")),
             max_variance_threshold=float(os.getenv("ADAPTIVE_VARIANCE_THRESHOLD", "0.25")),
             temperature=float(os.getenv("ADAPTIVE_TEMPERATURE", "1.0")),
             uncertainty_threshold=float(os.getenv("ADAPTIVE_UNCERTAINTY_THRESHOLD", "0.3"))
@@ -130,16 +131,18 @@ class AdaptiveConfig(BaseModel):
         Get prior covariance matrix.
 
         Returns:
-            7x7 covariance matrix (diagonal with prior_variance)
+            NxN covariance matrix (diagonal with prior_variance),
+            where N = len(self.prior_mean).
         """
-        return np.eye(7) * self.prior_variance
+        n = len(self.prior_mean)
+        return np.eye(n) * self.prior_variance
 
     def get_prior_mean_array(self) -> np.ndarray:
         """
         Get prior mean as numpy array.
 
         Returns:
-            Array of shape (7,)
+            Array of shape (N,)
         """
         return np.array(self.prior_mean)
 
@@ -150,15 +153,12 @@ class AdaptiveConfig(BaseModel):
         Returns:
             True if valid, False otherwise
         """
-        # Check vignette bounds
         if self.min_vignettes > self.max_vignettes:
             return False
 
-        # Check prior mean dimension
-        if len(self.prior_mean) != 7:
+        if len(self.prior_mean) == 0:
             return False
 
-        # Check positive values
         if self.prior_variance <= 0:
             return False
 

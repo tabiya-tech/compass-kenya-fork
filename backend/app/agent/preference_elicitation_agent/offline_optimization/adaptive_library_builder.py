@@ -23,8 +23,8 @@ class AdaptiveLibraryBuilder:
         """
         self.logger = logging.getLogger(self.__class__.__name__)
         self.profile_generator = profile_generator
-        # Always use 7 preference dimensions (not 10 attributes)
-        self.n_params = 7
+        # Derive dimension count from schema via SchemaLoader
+        self.n_params = profile_generator.schema_loader.n_dimensions
 
     def build_adaptive_library(
         self,
@@ -284,13 +284,9 @@ class AdaptiveLibraryBuilder:
         """
         Check if vignette has attribute cancellation that makes it uninformative.
 
-        Attribute cancellation occurs when attributes within an aggregated dimension
-        change in opposite directions, causing them to cancel out after averaging.
-
-        Example:
-        - task_variety: A=0, B=1 (difference = -1)
-        - social_interaction: A=1, B=0 (difference = +1)
-        - After aggregating: both options have (0+1)/2 = 0.5 → no difference!
+        Uses encoded feature vectors (via SchemaLoader) to detect cancellation:
+        if after encoding, a dimension difference is near zero because multiple
+        attributes within that dimension cancel out, the vignette is uninformative.
 
         Args:
             profile_a: First profile
@@ -299,51 +295,34 @@ class AdaptiveLibraryBuilder:
         Returns:
             True if vignette has significant cancellation (uninformative)
         """
-        # Define dimension groups that get aggregated
-        dimension_groups = {
-            "work_environment": ["physical_demand", "remote_work", "commute_time"],
-            "work_life_balance": ["flexibility", "commute_time"],
-            "task_preference": ["task_variety", "social_interaction"]
-        }
+        schema_loader = self.profile_generator.schema_loader
 
-        # For each aggregated dimension, check if attributes cancel
-        for dim_name, attributes in dimension_groups.items():
-            # Compute difference in each attribute
+        # Group attributes by dimension for cancellation detection
+        from collections import defaultdict
+        dim_to_attrs = defaultdict(list)
+        for spec in schema_loader._specs:
+            dim_to_attrs[spec.dimension].append(spec)
+
+        for dim, specs in dim_to_attrs.items():
+            if len(specs) < 2:
+                continue  # No cancellation possible with a single attribute
+
+            # Compute per-attribute encoded contributions
             diffs = []
-            for attr in attributes:
-                if attr in profile_a and attr in profile_b:
-                    val_a = float(profile_a[attr])
-                    val_b = float(profile_b[attr])
+            for spec in specs:
+                val_a = spec.encode(profile_a.get(spec.name))
+                val_b = spec.encode(profile_b.get(spec.name))
+                diffs.append(val_a - val_b)
 
-                    # Normalize commute_time to 0-1 range (like the encoder does)
-                    if attr == "commute_time":
-                        val_a = max(0.0, (60 - val_a) / 45)
-                        val_b = max(0.0, (60 - val_b) / 45)
-
-                    # Flip physical_demand (lower is better)
-                    if attr == "physical_demand":
-                        val_a = 1.0 - val_a
-                        val_b = 1.0 - val_b
-
-                    diff = val_a - val_b
-                    diffs.append(diff)
-
-            if len(diffs) >= 2:
-                # Check for cancellation: signs are mixed AND magnitudes are similar
-                signs = [np.sign(d) for d in diffs if abs(d) > 0.01]
-
-                if len(signs) >= 2:
-                    # If we have both positive and negative diffs, check if they cancel
-                    has_positive = any(s > 0 for s in signs)
-                    has_negative = any(s < 0 for s in signs)
-
-                    if has_positive and has_negative:
-                        # Compute net effect after averaging
-                        avg_diff = np.mean(diffs)
-
-                        # If net difference is very small, this is cancellation
-                        if abs(avg_diff) < 0.15:  # Threshold: less than 15% difference after averaging
-                            return True
+            # Check for cancellation: mixed signs + near-zero net effect
+            signs = [np.sign(d) for d in diffs if abs(d) > 0.01]
+            if len(signs) >= 2:
+                has_positive = any(s > 0 for s in signs)
+                has_negative = any(s < 0 for s in signs)
+                if has_positive and has_negative:
+                    avg_diff = np.mean(diffs)
+                    if abs(avg_diff) < 0.15:
+                        return True
 
         return False
 
@@ -463,8 +442,8 @@ class AdaptiveLibraryBuilder:
             True if wage gap is excessive (bad vignette - financial anchoring)
             False if wage gap is reasonable (good vignette)
         """
-        wage_a = profile_a.get('wage', 0)
-        wage_b = profile_b.get('wage', 0)
+        wage_a = profile_a.get('earnings_per_month') or profile_a.get('wage', 0)
+        wage_b = profile_b.get('earnings_per_month') or profile_b.get('wage', 0)
 
         if wage_a == 0 or wage_b == 0:
             return False  # No wage info, can't check

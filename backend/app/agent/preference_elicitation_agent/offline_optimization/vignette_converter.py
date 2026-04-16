@@ -49,34 +49,39 @@ class VignetteConverter:
             value_a = profile_a.get(attr_name, 0)
             value_b = profile_b.get(attr_name, 0)
 
-            if attr["type"] == "ordered":
+            has_numeric = all("value" in l for l in attr["levels"])
+            if attr["type"] == "ordered" and has_numeric:
                 # Normalize by range
-                values = [level["value"] for level in attr["levels"]]
-                value_range = max(values) - min(values)
+                num_values = [level["value"] for level in attr["levels"]]
+                value_range = max(num_values) - min(num_values)
                 if value_range > 0:
-                    normalized_diff = abs(value_a - value_b) / value_range
+                    normalized_diff = abs(float(value_a) - float(value_b)) / value_range
                 else:
                     normalized_diff = 0
             else:
-                # Categorical: 0 or 1 difference
-                normalized_diff = abs(value_a - value_b)
+                # Categorical or ordered-by-id: different level = 1, same = 0
+                normalized_diff = 0.0 if value_a == value_b else 1.0
 
             differences[attr_name] = normalized_diff
 
-        # Map attributes to preference categories
-        # Based on preference_parameters.json model parameters
-        category_mapping = {
-            "wage": "financial",
-            "physical_demand": "work_environment",
-            "flexibility": "work_life_balance",
-            "commute_time": "work_environment",
-            "job_security": "job_security",
-            "remote_work": "work_environment",
-            "career_growth": "career_advancement",
-            "task_variety": "task_preferences",
-            "social_interaction": "task_preferences",
-            "company_values": "values_culture"
-        }
+        # Map attributes to preference categories — derived from schema group names
+        # Build dynamically from profile_generator attributes if available,
+        # with a fallback hardcoded to current schema
+        category_mapping = {}
+        for attr in self.profile_generator.attributes:
+            group = attr.get("group", "").lower().replace(" ", "_")
+            # Map group → category label used in vignette scenario templates
+            group_to_category = {
+                "financial": "financial",
+                "work_environment": "work_environment",
+                "future_prospects": "career_advancement",
+                "career_growth": "career_advancement",
+                "work_life_balance": "work_life_balance",
+                "job_security": "job_security",
+                "task_preferences": "task_preferences",
+                "values_culture": "values_culture",
+            }
+            category_mapping[attr["name"]] = group_to_category.get(group, "mixed")
 
         # Find attribute with largest difference
         max_diff_attr = max(differences, key=differences.get)
@@ -142,10 +147,10 @@ class VignetteConverter:
         Returns:
             Option title string
         """
-        # Simple title based on key attributes
-        wage = profile.get("wage", "")
-        if wage:
-            return f"Option {option_id}: Job with KES {wage:,}/month"
+        # Simple title based on key attributes — use earnings if present
+        earnings = profile.get("earnings_per_month") or profile.get("wage")
+        if earnings:
+            return f"Option {option_id}: Job with KES {int(earnings):,}/month"
         else:
             return f"Option {option_id}: Job Opportunity"
 

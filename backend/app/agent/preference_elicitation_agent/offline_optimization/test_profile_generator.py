@@ -17,6 +17,7 @@ def minimal_config():
             {
                 "name": "wage",
                 "label": "Monthly wage",
+                "group": "Financial",
                 "type": "ordered",
                 "coding": "linear",
                 "levels": [
@@ -27,6 +28,7 @@ def minimal_config():
             {
                 "name": "flexibility",
                 "label": "Work schedule",
+                "group": "Work Life Balance",
                 "type": "categorical",
                 "coding": "dummy",
                 "base_level_id": "flex_fixed",
@@ -106,7 +108,7 @@ class TestProfileGenerator:
             assert "wage" in profile
             assert "flexibility" in profile
             assert profile["wage"] in [10000, 20000]
-            assert profile["flexibility"] in [0, 1]
+            assert profile["flexibility"] in ["flex_fixed", "flex_flexible"]
 
     def test_generate_all_profiles_with_max_limit(self, config_file):
         """Test profile generation with max limit."""
@@ -118,31 +120,32 @@ class TestProfileGenerator:
     def test_encode_profile_linear_coding(self, config_file):
         """Test profile encoding for linear attributes."""
         generator = ProfileGenerator(config_path=config_file)
-        profile = {"wage": 10000, "flexibility": 0}
+        # Use level IDs as expected by SchemaLoader for non-numeric profiles
+        profile = {"wage": 10000, "flexibility": "flex_fixed"}
 
         features = generator.encode_profile(profile)
 
-        # ProfileGenerator always returns 7 dimensions (preference dimensions)
-        assert len(features) == 7
-        assert features[0] == 1.0  # financial: 10000 / 10000
-        assert features[3] == 0.0  # work_life_balance includes flexibility
+        # minimal_config has 2 groups (Financial, Work Life Balance) → 2 dimensions
+        assert len(features) == 2
+        assert features[0] == 0.0  # financial: min wage → normalised 0.0
+        assert features[1] == 0.0  # work_life_balance: base level flex_fixed → 0.0
 
     def test_encode_profile_categorical_coding(self, config_file):
         """Test profile encoding for categorical attributes."""
         generator = ProfileGenerator(config_path=config_file)
-        profile = {"wage": 20000, "flexibility": 1}
+        profile = {"wage": 20000, "flexibility": "flex_flexible"}
 
         features = generator.encode_profile(profile)
 
-        # ProfileGenerator always returns 7 dimensions (preference dimensions)
-        assert len(features) == 7
-        assert features[0] == 2.0  # financial: 20000 / 10000
-        assert features[3] == 1.0  # work_life_balance includes flexibility
+        # minimal_config has 2 groups (Financial, Work Life Balance) → 2 dimensions
+        assert len(features) == 2
+        assert features[0] == 1.0  # financial: max wage → normalised 1.0
+        assert features[1] == 1.0  # work_life_balance: non-base level flex_flexible → 1.0
 
     def test_profile_to_string(self, config_file):
         """Test profile to string conversion."""
         generator = ProfileGenerator(config_path=config_file)
-        profile = {"wage": 10000, "flexibility": 1}
+        profile = {"wage": 10000, "flexibility": "flex_flexible"}
 
         result = generator.profile_to_string(profile)
 
@@ -181,10 +184,9 @@ class TestProfileGenerator:
         generator = ProfileGenerator(config_path=str(config_path))
         profiles = generator.generate_all_profiles()
 
-        # Real config: 5 wage × 2 phys × 2 flex × 4 commute × 2 security × 2 remote × 2 growth
-        # × 2 task_variety × 2 social_interaction × 2 company_values
-        # = 5 × 2 × 2 × 4 × 2 × 2 × 2 × 2 × 2 × 2 = 5120
-        assert len(profiles) == 5120
+        # Real config (v1.1.0): 4 earnings × 2 physical_demand × 3 social_interaction × 3 career_growth
+        # = 4 × 2 × 3 × 3 = 72
+        assert len(profiles) == 72
 
     def test_encode_profile_with_real_config(self):
         """Test encoding with real configuration."""
@@ -197,8 +199,9 @@ class TestProfileGenerator:
 
         features = generator.encode_profile(profiles[0])
 
-        # Should have 7 features (7 model parameters)
-        assert len(features) == 7
+        # Real config (v1.1.0) has 3 preference dimensions:
+        # Financial, Work Environment, Future Prospects
+        assert len(features) == 3
         assert all(isinstance(f, float) for f in features)
 
     def test_profile_uniqueness(self, config_file):
@@ -222,4 +225,4 @@ class TestProfileGenerator:
 
         # Check flexibility coverage
         flexibilities = {p["flexibility"] for p in profiles}
-        assert flexibilities == {0, 1}
+        assert flexibilities == {"flex_fixed", "flex_flexible"}

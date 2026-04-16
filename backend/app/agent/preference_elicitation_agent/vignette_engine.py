@@ -90,6 +90,7 @@ class VignetteEngine:
         self._d_optimal_selector: Optional[DOptimalSelector] = None
         self._fisher_calculator: Optional[FisherInformationCalculator] = None
         self._likelihood_calculator: Optional[LikelihoodCalculator] = None
+        self._schema_loader = None  # Set externally by agent after SchemaLoader is initialized
 
         if use_offline_with_personalization:
             # Hybrid mode: offline vignettes WITH personalization
@@ -675,14 +676,17 @@ class VignetteEngine:
                 return None
 
             # Reconstruct posterior distribution
+            dimensions = self._schema_loader.dimensions if self._schema_loader else []
             posterior = PosteriorDistribution(
                 mean=state.posterior_mean,
-                covariance=state.posterior_covariance
+                covariance=state.posterior_covariance,
+                dimensions=dimensions
             )
 
             # Reconstruct FIM
+            n_dims = self._schema_loader.n_dimensions if self._schema_loader else len(state.posterior_mean)
             if state.fisher_information_matrix is None:
-                current_fim = np.zeros((7, 7))
+                current_fim = np.zeros((n_dims, n_dims))
             else:
                 current_fim = np.array(state.fisher_information_matrix)
 
@@ -895,7 +899,10 @@ class VignetteEngine:
     def _init_adaptive_components(self) -> None:
         """Lazy initialization of adaptive D-efficiency components."""
         if self._d_optimal_selector is None:
-            self._likelihood_calculator = LikelihoodCalculator()
+            if self._schema_loader is None:
+                self._logger.warning("schema_loader not set — skipping adaptive component init")
+                return
+            self._likelihood_calculator = LikelihoodCalculator(self._schema_loader)
             self._fisher_calculator = FisherInformationCalculator(self._likelihood_calculator)
             self._d_optimal_selector = DOptimalSelector(self._fisher_calculator)
             self._logger.info("Initialized adaptive D-efficiency components")

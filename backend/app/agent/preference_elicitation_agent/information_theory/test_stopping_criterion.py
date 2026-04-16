@@ -8,29 +8,29 @@ from app.agent.preference_elicitation_agent.information_theory.stopping_criterio
 from app.agent.preference_elicitation_agent.bayesian.posterior_manager import PosteriorDistribution
 
 
+# 3-dim schema matches current preference_parameters.json
+TEST_DIMS_3 = ["financial_importance", "work_environment_importance", "future_prospects_importance"]
+
+
 @pytest.fixture
 def stopping_criterion():
-    """Create default stopping criterion."""
+    """Create stopping criterion calibrated for 3-dim schema (det_threshold=30.0)."""
     return StoppingCriterion(
         min_vignettes=4,
         max_vignettes=12,
-        det_threshold=1e4,  # Updated to match new default
-        max_variance_threshold=0.5
+        det_threshold=30.0,
+        max_variance_threshold=0.25
     )
 
 
 @pytest.fixture
 def posterior():
-    """Create test posterior distribution."""
-    # 7 dimensions for preference weights
-    dimensions = ["wage", "remote", "career_growth", "flexibility",
-                  "job_security", "task_variety", "culture_alignment"]
-
-    mean = np.array([0.5, 0.3, 0.4, 0.2, 0.6, 0.1, 0.5])
-    covariance = np.eye(7) * 0.3  # Moderate uncertainty
+    """Create test posterior distribution (3-dim)."""
+    mean = np.array([0.5, 0.3, 0.4])
+    covariance = np.eye(3) * 0.3  # Moderate uncertainty
 
     return PosteriorDistribution(
-        dimensions=dimensions,
+        dimensions=TEST_DIMS_3,
         mean=mean,
         covariance=covariance
     )
@@ -38,16 +38,16 @@ def posterior():
 
 @pytest.fixture
 def high_information_fim():
-    """Create high-information FIM (determinant > threshold)."""
-    # Large diagonal values → high determinant
-    return np.eye(7) * 5.0
+    """Create high-information FIM: det > 30.0 threshold.
+    np.eye(3) * 4.0 → det = 4^3 = 64 > 30."""
+    return np.eye(3) * 4.0
 
 
 @pytest.fixture
 def low_information_fim():
-    """Create low-information FIM (determinant < threshold)."""
-    # Small diagonal values → low determinant
-    return np.eye(7) * 0.1
+    """Create low-information FIM: det < 30.0 threshold.
+    np.eye(3) * 0.5 → det = 0.5^3 = 0.125 < 30."""
+    return np.eye(3) * 0.5
 
 
 class TestStoppingCriterion:
@@ -59,7 +59,7 @@ class TestStoppingCriterion:
 
         assert criterion.min_vignettes == 4
         assert criterion.max_vignettes == 12
-        assert criterion.det_threshold == 10.0  # Ratio-based: 10x info gain over prior
+        assert criterion.det_threshold == 10.0
         assert criterion.max_variance_threshold == 0.25  # Must be < prior_variance (0.5)
 
     def test_init_custom(self):
@@ -91,10 +91,9 @@ class TestStoppingCriterion:
         """Test decision exactly at minimum vignettes."""
         # At minimum, should check other criteria
         # Create posterior with high variance to ensure continuation
-        dimensions = ["wage", "remote", "career_growth", "flexibility",
-                     "job_security", "task_variety", "culture_alignment"]
-        mean = np.array([0.5, 0.3, 0.4, 0.2, 0.6, 0.1, 0.5])
-        covariance = np.eye(7) * 2.0  # High uncertainty (> 0.5 threshold)
+        dimensions = TEST_DIMS_3
+        mean = np.array([0.5, 0.3, 0.4])
+        covariance = np.eye(3) * 2.0  # High uncertainty (> 0.25 threshold)
 
         high_variance_posterior = PosteriorDistribution(
             dimensions=dimensions,
@@ -147,10 +146,9 @@ class TestStoppingCriterion:
     def test_should_stop_low_variance(self, stopping_criterion, low_information_fim):
         """Test stopping when variance is sufficiently low."""
         # Create posterior with low variance
-        dimensions = ["wage", "remote", "career_growth", "flexibility",
-                     "job_security", "task_variety", "culture_alignment"]
-        mean = np.array([0.5, 0.3, 0.4, 0.2, 0.6, 0.1, 0.5])
-        covariance = np.eye(7) * 0.1  # Low uncertainty (< 0.5 threshold)
+        dimensions = TEST_DIMS_3
+        mean = np.array([0.5, 0.3, 0.4])
+        covariance = np.eye(3) * 0.1  # Low uncertainty (< 0.25 threshold)
 
         low_variance_posterior = PosteriorDistribution(
             dimensions=dimensions,
@@ -170,10 +168,9 @@ class TestStoppingCriterion:
     def test_should_continue_high_uncertainty(self, stopping_criterion, low_information_fim):
         """Test continuing when uncertainty is still high."""
         # Create posterior with high variance
-        dimensions = ["wage", "remote", "career_growth", "flexibility",
-                     "job_security", "task_variety", "culture_alignment"]
-        mean = np.array([0.5, 0.3, 0.4, 0.2, 0.6, 0.1, 0.5])
-        covariance = np.eye(7) * 2.0  # High uncertainty (> 0.5 threshold)
+        dimensions = TEST_DIMS_3
+        mean = np.array([0.5, 0.3, 0.4])
+        covariance = np.eye(3) * 2.0  # High uncertainty (> 0.25 threshold)
 
         high_variance_posterior = PosteriorDistribution(
             dimensions=dimensions,
@@ -195,7 +192,7 @@ class TestStoppingCriterion:
         report = stopping_criterion.get_uncertainty_report(posterior)
 
         # Should have entry for each dimension
-        assert len(report) == 7
+        assert len(report) == 3
         assert all(dim in report for dim in posterior.dimensions)
 
         # All variances should be positive
@@ -231,10 +228,9 @@ class TestStoppingCriterion:
     def test_stopping_priority_minimum_vignettes(self, stopping_criterion, high_information_fim):
         """Test that minimum vignettes takes priority over other criteria."""
         # Even with high information, should continue below minimum
-        dimensions = ["wage", "remote", "career_growth", "flexibility",
-                     "job_security", "task_variety", "culture_alignment"]
-        mean = np.zeros(7)
-        covariance = np.eye(7) * 0.01  # Very low uncertainty
+        dimensions = TEST_DIMS_3
+        mean = np.zeros(3)
+        covariance = np.eye(3) * 0.01  # Very low uncertainty
 
         low_variance_posterior = PosteriorDistribution(
             dimensions=dimensions,
@@ -254,10 +250,9 @@ class TestStoppingCriterion:
     def test_stopping_priority_maximum_vignettes(self, stopping_criterion, low_information_fim):
         """Test that maximum vignettes takes priority over other criteria."""
         # Even with low information, should stop at maximum
-        dimensions = ["wage", "remote", "career_growth", "flexibility",
-                     "job_security", "task_variety", "culture_alignment"]
-        mean = np.zeros(7)
-        covariance = np.eye(7) * 10.0  # Very high uncertainty
+        dimensions = TEST_DIMS_3
+        mean = np.zeros(3)
+        covariance = np.eye(3) * 10.0  # Very high uncertainty
 
         high_variance_posterior = PosteriorDistribution(
             dimensions=dimensions,
@@ -306,12 +301,11 @@ class TestStoppingCriterion:
     def test_diagnostics_with_edge_cases(self, stopping_criterion):
         """Test diagnostics with edge case inputs."""
         # Singular FIM
-        singular_fim = np.zeros((7, 7))
+        singular_fim = np.zeros((3, 3))
 
-        dimensions = ["wage", "remote", "career_growth", "flexibility",
-                     "job_security", "task_variety", "culture_alignment"]
-        mean = np.zeros(7)
-        covariance = np.eye(7)
+        dimensions = TEST_DIMS_3
+        mean = np.zeros(3)
+        covariance = np.eye(3)
 
         posterior = PosteriorDistribution(
             dimensions=dimensions,
@@ -348,7 +342,7 @@ class TestStoppingCriterion:
         """Test that variance calculations are consistent."""
         report = stopping_criterion.get_uncertainty_report(posterior)
         diagnostics = stopping_criterion.get_stopping_diagnostics(
-            posterior, np.eye(7), 6
+            posterior, np.eye(3), 6
         )
 
         # Max/min from diagnostics should match report values
@@ -360,7 +354,7 @@ class TestStoppingCriterion:
 
     def test_boundary_conditions(self, stopping_criterion, posterior):
         """Test boundary conditions for vignette counts."""
-        fim = np.eye(7) * 0.5
+        fim = np.eye(3) * 0.5
 
         # Test n=0
         should_continue_0, _ = stopping_criterion.should_continue(posterior, fim, 0)
@@ -377,3 +371,41 @@ class TestStoppingCriterion:
         # Test n>max
         should_continue_over, _ = stopping_criterion.should_continue(posterior, fim, 20)
         assert should_continue_over is False  # Over maximum
+
+    def test_3dim_threshold_calibration(self):
+        """
+        Validate threshold=30.0 gives the right adaptive vignette count for 3-dim schema.
+
+        With 3-dim schema:
+          - Prior FIM = 2*I_3, det(prior_FIM) = 8.0
+          - Each well-designed vignette adds ~4.0 to det(FIM)
+          - After 4 static beginning vignettes: det ≈ 21.6 < 30 → continue to adaptive
+          - After 3 adaptive vignettes: det ≈ 33.6 > 30 → stop
+          - Expected total: 4 beginning + ~3 adaptive + 2 end = ~9 vignettes
+
+        Formula: threshold = det(prior_FIM) * target_info_ratio
+                           = 2^n_dims * ratio = 8 * ~4x = ~30
+        """
+        criterion = StoppingCriterion(
+            min_vignettes=4,
+            max_vignettes=12,
+            det_threshold=30.0,
+            max_variance_threshold=0.25,
+        )
+        posterior = PosteriorDistribution(
+            dimensions=TEST_DIMS_3,
+            mean=np.array([0.5, 0.3, 0.4]),
+            covariance=np.eye(3) * 0.4,  # Moderate variance, above 0.25 threshold
+        )
+
+        # Simulate FIM growth matching observed eval logs (~+4 det per vignette)
+        # After 4 static beginning: det ≈ 21.6 → should NOT stop yet
+        fim_after_4 = np.eye(3) * (21.6 ** (1 / 3))  # cube root to get diagonal value
+        should_continue, reason = criterion.should_continue(posterior, fim_after_4, 4)
+        assert should_continue is True, f"Should continue after 4 vignettes (det≈21.6 < 30): {reason}"
+
+        # After 4 + 3 adaptive = 7 vignettes: det ≈ 33.6 → should stop
+        fim_after_7 = np.eye(3) * (33.6 ** (1 / 3))
+        should_continue, reason = criterion.should_continue(posterior, fim_after_7, 7)
+        assert should_continue is False, f"Should stop after 7 vignettes (det≈33.6 > 30): {reason}"
+        assert "determinant" in reason.lower()

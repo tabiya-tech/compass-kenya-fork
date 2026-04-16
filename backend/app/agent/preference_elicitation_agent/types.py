@@ -281,10 +281,10 @@ class PreferenceVector(BaseModel):
     """
 
     # === BAYESIAN METADATA (for advanced use/debugging) ===
-    posterior_mean: list[float] = Field(default_factory=lambda: [0.0] * 7)
-    """Raw Bayesian posterior mean vector (7 dimensions, unconstrained scale)"""
+    posterior_mean: list[float] = Field(default_factory=list)
+    """Raw Bayesian posterior mean vector (N dimensions, unconstrained scale)"""
 
-    posterior_covariance_diagonal: list[float] = Field(default_factory=lambda: [1.0] * 7)
+    posterior_covariance_diagonal: list[float] = Field(default_factory=list)
     """Diagonal of posterior covariance matrix (variances per dimension)"""
 
     fim_determinant: Optional[float] = None

@@ -25,6 +25,7 @@ from app.agent.preference_elicitation_agent.bayesian.likelihood_calculator impor
 from app.agent.preference_elicitation_agent.bayesian.posterior_manager import (
     PosteriorManager, PosteriorDistribution
 )
+from app.agent.preference_elicitation_agent.bayesian.schema_loader import SchemaLoader
 from app.agent.preference_elicitation_agent.information_theory.fisher_information import (
     FisherInformationCalculator
 )
@@ -40,71 +41,56 @@ from app.conversation_memory.conversation_memory_types import (
 )
 
 
-# ========== Vignette data from offline_output/static_vignettes_beginning.json ==========
+# ========== Vignette data using current schema (preference_parameters.json v1.1.0) ==========
+# Attributes: earnings_per_month (numeric), physical_demand, social_interaction, career_growth
 
 VIGNETTE_DATA = [
     {
         "id": "static_begin_001",
-        "category": "work_environment",
+        "category": "financial",
         "option_a": {
-            "wage": 20000, "physical_demand": 0, "flexibility": 1,
-            "commute_time": 15, "job_security": 1, "remote_work": 1,
-            "career_growth": 1, "task_variety": 0, "social_interaction": 0,
-            "company_values": 0
+            "earnings_per_month": 15000, "physical_demand": "phys_light",
+            "social_interaction": "soc_alone", "career_growth": "growth_high",
         },
         "option_b": {
-            "wage": 30000, "physical_demand": 1, "flexibility": 0,
-            "commute_time": 60, "job_security": 0, "remote_work": 0,
-            "career_growth": 0, "task_variety": 1, "social_interaction": 1,
-            "company_values": 1
+            "earnings_per_month": 70000, "physical_demand": "phys_heavy",
+            "social_interaction": "soc_customers", "career_growth": "growth_low",
         },
     },
     {
         "id": "static_begin_002",
         "category": "work_environment",
         "option_a": {
-            "wage": 25000, "physical_demand": 0, "flexibility": 1,
-            "commute_time": 15, "job_security": 0, "remote_work": 0,
-            "career_growth": 0, "task_variety": 0, "social_interaction": 0,
-            "company_values": 1
+            "earnings_per_month": 30000, "physical_demand": "phys_light",
+            "social_interaction": "soc_peers", "career_growth": "growth_med",
         },
         "option_b": {
-            "wage": 35000, "physical_demand": 1, "flexibility": 0,
-            "commute_time": 60, "job_security": 1, "remote_work": 0,
-            "career_growth": 1, "task_variety": 1, "social_interaction": 1,
-            "company_values": 0
+            "earnings_per_month": 50000, "physical_demand": "phys_heavy",
+            "social_interaction": "soc_alone", "career_growth": "growth_high",
         },
     },
     {
         "id": "static_begin_003",
-        "category": "work_life_balance",
+        "category": "future_prospects",
         "option_a": {
-            "wage": 25000, "physical_demand": 0, "flexibility": 0,
-            "commute_time": 60, "job_security": 1, "remote_work": 0,
-            "career_growth": 1, "task_variety": 1, "social_interaction": 1,
-            "company_values": 1
+            "earnings_per_month": 50000, "physical_demand": "phys_light",
+            "social_interaction": "soc_customers", "career_growth": "growth_low",
         },
         "option_b": {
-            "wage": 35000, "physical_demand": 0, "flexibility": 1,
-            "commute_time": 15, "job_security": 0, "remote_work": 1,
-            "career_growth": 0, "task_variety": 0, "social_interaction": 0,
-            "company_values": 0
+            "earnings_per_month": 15000, "physical_demand": "phys_heavy",
+            "social_interaction": "soc_peers", "career_growth": "growth_high",
         },
     },
     {
         "id": "static_begin_004",
-        "category": "work_life_balance",
+        "category": "financial",
         "option_a": {
-            "wage": 15000, "physical_demand": 0, "flexibility": 1,
-            "commute_time": 15, "job_security": 0, "remote_work": 1,
-            "career_growth": 1, "task_variety": 1, "social_interaction": 1,
-            "company_values": 0
+            "earnings_per_month": 70000, "physical_demand": "phys_heavy",
+            "social_interaction": "soc_peers", "career_growth": "growth_low",
         },
         "option_b": {
-            "wage": 25000, "physical_demand": 0, "flexibility": 0,
-            "commute_time": 60, "job_security": 1, "remote_work": 0,
-            "career_growth": 0, "task_variety": 0, "social_interaction": 0,
-            "company_values": 1
+            "earnings_per_month": 30000, "physical_demand": "phys_light",
+            "social_interaction": "soc_alone", "career_growth": "growth_high",
         },
     },
 ]
@@ -149,18 +135,25 @@ class TestFIMStoppingRegression:
 
     def _setup_math_components(self):
         """Set up the Bayesian/FIM math components with production defaults."""
+        schema_loader = SchemaLoader.from_file(
+            Path(__file__).parent / "offline_optimization" / "preference_parameters.json"
+        )
+        n_dim = schema_loader.n_dimensions
+        dimensions = schema_loader.dimensions
+
         config = AdaptiveConfig.from_env()
-        prior_mean = np.array(config.prior_mean)
-        prior_cov = np.diag([config.prior_variance] * 7)
+        prior_mean = np.zeros(n_dim)
+        prior_cov = np.diag([config.prior_variance] * n_dim)
 
         posterior_manager = PosteriorManager(
             prior_mean=prior_mean,
-            prior_cov=prior_cov
+            prior_cov=prior_cov,
+            dimensions=dimensions
         )
-        likelihood_calc = LikelihoodCalculator()
+        likelihood_calc = LikelihoodCalculator(schema_loader=schema_loader)
         fisher_calc = FisherInformationCalculator(likelihood_calc)
 
-        prior_fim = np.eye(7) / config.prior_variance
+        prior_fim = np.eye(n_dim) / config.prior_variance
         prior_fim_det = float(np.linalg.det(prior_fim))
 
         stopping = StoppingCriterion(
@@ -235,7 +228,8 @@ class TestFIMStoppingRegression:
             current_fim = current_fim + vignette_fim
 
             # 4. Compute ratio
-            det = float(np.linalg.det(current_fim + np.eye(7) * 1e-8))
+            n = current_fim.shape[0]
+            det = float(np.linalg.det(current_fim + np.eye(n) * 1e-8))
             ratio = det / prior_fim_det
             ratios.append(ratio)
 
@@ -267,44 +261,54 @@ class TestFIMStoppingRegression:
 
     def test_old_absolute_threshold_would_have_stopped(self):
         """
-        Verify that the OLD absolute threshold (100) would have incorrectly
-        stopped after any number of vignettes (including zero).
-        """
-        config, posterior_manager, likelihood_calc, fisher_calc, _, current_fim, _ = (
-            self._setup_math_components()
-        )
+        Verify that the OLD default threshold (1.0 absolute, no prior normalization) would have
+        incorrectly stopped BEFORE any vignettes because det(prior_FIM) = 2^n_dims > 1.0.
 
-        # Old stopping criterion with absolute threshold, no prior normalization
+        With 3-dim schema: det(2*I_3) = 8 > 1.0 → fires immediately (the bug).
+        Fixed by raising threshold to 30.0.
+        """
+        schema_loader = SchemaLoader.from_file(
+            Path(__file__).parent / "offline_optimization" / "preference_parameters.json"
+        )
+        n_dim = schema_loader.n_dimensions
+        prior_variance = 0.5
+        prior_fim = np.eye(n_dim) / prior_variance
+        prior_det = float(np.linalg.det(prior_fim))
+
+        # Old stopping criterion: absolute threshold=1.0, no prior normalization
         old_stopping = StoppingCriterion(
             min_vignettes=4,
             max_vignettes=12,
-            det_threshold=100.0,
+            det_threshold=1.0,
             prior_fim_determinant=0.0  # No normalization = absolute comparison
         )
 
-        vignettes = [_build_vignette(d) for d in VIGNETTE_DATA]
+        posterior = PosteriorDistribution(
+            mean=[0.0] * n_dim,
+            covariance=(np.eye(n_dim) * prior_variance).tolist(),
+            dimensions=schema_loader.dimensions
+        )
 
-        for i, (vignette, chosen) in enumerate(zip(vignettes, USER_CHOICES)):
-            likelihood_fn = likelihood_calc.create_likelihood_function(vignette, chosen)
-            updated_posterior = posterior_manager.update(
-                likelihood_fn=likelihood_fn,
-                observation={"vignette": vignette, "chosen_option": chosen}
-            )
-            vignette_fim = fisher_calc.compute_fim(
-                vignette, np.array(updated_posterior.mean)
-            )
-            current_fim = current_fim + vignette_fim
+        # With 3-dim schema, prior FIM det = 8 > 1.0 threshold
+        # But criterion should NOT stop at n=0 (below min_vignettes)
+        should_continue_at_zero, _ = old_stopping.should_continue(
+            posterior=posterior,
+            fim=prior_fim,
+            n_vignettes_shown=0
+        )
+        assert should_continue_at_zero, "Must continue below min_vignettes regardless of threshold"
 
-        # Old criterion should say STOP (the bug)
-        should_continue, reason = old_stopping.should_continue(
-            posterior=posterior_manager.posterior,
-            fim=current_fim,
+        # At n=4 (≥ min_vignettes), the threshold=1.0 would fire because det(prior_FIM)=8 > 1.0
+        should_continue_at_min, reason = old_stopping.should_continue(
+            posterior=posterior,
+            fim=prior_fim,
             n_vignettes_shown=4
         )
-        assert not should_continue, (
-            "Old absolute threshold of 100 should have (incorrectly) stopped"
+        assert not should_continue_at_min, (
+            f"Old threshold=1.0 should have (incorrectly) stopped at min_vignettes "
+            f"because prior det={prior_det:.1f} > 1.0"
         )
-        assert "exceeds threshold" in reason
+        assert "determinant" in reason.lower()
 
     def test_ratios_grow_monotonically(self):
         """
@@ -328,7 +332,8 @@ class TestFIMStoppingRegression:
                 vignette, np.array(updated_posterior.mean)
             )
             current_fim = current_fim + vignette_fim
-            det = float(np.linalg.det(current_fim + np.eye(7) * 1e-8))
+            n = current_fim.shape[0]
+            det = float(np.linalg.det(current_fim + np.eye(n) * 1e-8))
             ratios.append(det / prior_fim_det)
 
         # Each ratio should be >= the previous one
@@ -342,9 +347,14 @@ class TestFIMStoppingRegression:
         """Verify diagnostics report includes the ratio field."""
         _, _, _, _, stopping, current_fim, prior_fim_det = self._setup_math_components()
 
+        schema_loader = SchemaLoader.from_file(
+            Path(__file__).parent / "offline_optimization" / "preference_parameters.json"
+        )
+        n_dim = schema_loader.n_dimensions
         posterior = PosteriorDistribution(
-            mean=[0.5] * 7,
-            covariance=(np.eye(7) * 0.5).tolist()
+            mean=[0.5] * n_dim,
+            covariance=(np.eye(n_dim) * 0.5).tolist(),
+            dimensions=schema_loader.dimensions
         )
 
         diagnostics = stopping.get_stopping_diagnostics(
@@ -360,6 +370,7 @@ class TestFIMStoppingRegression:
 
 
 @pytest.mark.asyncio
+@pytest.mark.evaluation_test(label="integration")
 async def test_agent_adaptive_phase_not_skipped():
     """
     Integration test: run the agent through vignettes phase with mocked LLM calls
@@ -367,8 +378,7 @@ async def test_agent_adaptive_phase_not_skipped():
 
     This simulates the exact user transcript that exposed the bug.
     """
-    backend_root = Path(__file__).parent.parent.parent.parent
-    offline_output_dir = str(backend_root / "offline_output")
+    offline_output_dir = str(Path(__file__).parent / "offline_optimization" / "output")
 
     if not Path(offline_output_dir).exists():
         pytest.skip("Offline vignette files not generated")
@@ -382,10 +392,14 @@ async def test_agent_adaptive_phase_not_skipped():
         )
 
     # Configure prior
+    schema_loader = SchemaLoader.from_file(
+        Path(__file__).parent / "offline_optimization" / "preference_parameters.json"
+    )
+    n_dim = schema_loader.n_dimensions
     config = AdaptiveConfig.from_env()
-    prior_mean = np.array(config.prior_mean).tolist()
-    prior_cov = (np.eye(7) * config.prior_variance).tolist()
-    initial_fim = (np.eye(7) / config.prior_variance).tolist()
+    prior_mean = [0.0] * n_dim
+    prior_cov = (np.eye(n_dim) * config.prior_variance).tolist()
+    initial_fim = (np.eye(n_dim) / config.prior_variance).tolist()
 
     state = PreferenceElicitationAgentState(
         session_id=88888,
@@ -474,7 +488,7 @@ async def test_agent_adaptive_phase_not_skipped():
     agent._preference_extractor.extract_preferences = AsyncMock(side_effect=mock_extract_preferences)
 
     # Mock the likelihood extraction for Bayesian updates (use real calculator)
-    real_likelihood_calc = LikelihoodCalculator()
+    real_likelihood_calc = LikelihoodCalculator(schema_loader=schema_loader)
 
     async def mock_extract_likelihood(vignette, user_response, chosen_option):
         return real_likelihood_calc.create_likelihood_function(vignette, chosen_option)
@@ -548,22 +562,22 @@ async def test_agent_adaptive_phase_not_skipped():
     print(f"  stopping_reason: {state.stopping_reason}")
     print(f"  Completed IDs: {state.completed_vignettes}")
 
-    prior_fim_det = (1.0 / config.prior_variance) ** 7
+    prior_fim_det = (1.0 / config.prior_variance) ** n_dim
     if state.fim_determinant:
         ratio = state.fim_determinant / prior_fim_det
         print(f"  FIM det ratio: {ratio:.2f} (threshold: {config.fim_det_threshold})")
     print(f"{'='*60}")
 
-    # At least some vignettes should complete
+    # At least 4 static beginning + some adaptive should complete
     assert total_completed >= 4, (
         f"Expected at least 4 completed vignettes, got {total_completed}"
     )
 
-    # With threshold=1.0 (absolute mode), the adaptive phase legitimately completes
-    # after 4 static_begin vignettes (det ratio ~8-15 >> 1.0). GATE now fills the
-    # gap that adaptive vignettes used to handle. Verify the full flow completed:
-    # 4 static_begin + 2 static_end = 6 vignettes minimum, then GATE + BWS.
-    assert total_completed >= 6, (
-        f"Expected at least 6 completed vignettes (4 static_begin + 2 static_end), "
-        f"got {total_completed}: {state.completed_vignettes}"
+    # Regression guard: adaptive vignettes MUST appear (phase is not skipped)
+    # With threshold=30.0 we get 4 begin + multiple adaptive vignettes before stop.
+    # The exact count depends on FIM growth per vignette, but at least 1 adaptive
+    # must appear to prove the adaptive phase is not prematurely killed.
+    assert adaptive_count >= 1, (
+        f"Expected at least 1 adaptive vignette (adaptive phase must not be skipped), "
+        f"got {adaptive_count}: {state.completed_vignettes}"
     )
