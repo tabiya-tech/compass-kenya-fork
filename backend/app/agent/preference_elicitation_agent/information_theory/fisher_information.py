@@ -189,17 +189,14 @@ class FisherInformationCalculator:
 
             x_diff = x_A - x_B
 
-            # Compute uncertainty-weighted score
-            # High score if: vignette tests dimensions with high variance
             regularized_cov = posterior_covariance + np.eye(posterior_covariance.shape[0]) * 1e-8
 
-            # Weighted score: how much uncertainty does this vignette address?
-            # x_diff^T * Cov * x_diff measures variance in the direction of x_diff
-            directional_uncertainty = x_diff.T @ regularized_cov @ x_diff
-
-            # Bayesian score: standard FIM increase weighted by directional uncertainty
-            # Higher if vignette tests uncertain dimensions
-            bayesian_increase = standard_increase * (1.0 + directional_uncertainty)
+            # Bayesian optimal criterion: trace(FIM @ Cov) = p_A * p_B * x_diff^T @ Cov @ x_diff
+            # Directly measures expected reduction in posterior uncertainty in the tested direction.
+            # Focused vignettes (isolating one dimension) score high when that dimension is uncertain.
+            # Kitchen-sink vignettes score broadly — different personas get different orderings
+            # because each persona's Cov has different magnitudes per dimension.
+            bayesian_increase = float(np.trace(vignette_fim @ regularized_cov))
 
         except (np.linalg.LinAlgError, ValueError, AttributeError):
             # Fallback to standard D-optimal on error
