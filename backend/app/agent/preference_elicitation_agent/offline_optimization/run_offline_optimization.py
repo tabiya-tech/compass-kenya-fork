@@ -85,7 +85,7 @@ def main():
     parser.add_argument(
         "--config",
         type=str,
-        default="preference_parameters.json",
+        default=str(Path(__file__).parent.parent / "config" / "preference_parameters.json"),
         help="Path to preference_parameters.json config file"
     )
     parser.add_argument(
@@ -219,9 +219,9 @@ def main():
 
     optimizer = DEfficiencyOptimizer(profile_generator)
 
-    # Prior mean derived from schema (neutral prior = all zeros, N dimensions)
-    n_dims = profile_generator.schema_loader.n_dimensions
-    prior_mean = np.zeros(n_dims)
+    # Prior mean — neutral (0.0) for all MNL terms
+    n_terms = profile_generator.schema_loader.n_terms
+    prior_mean = np.zeros(n_terms)
 
     beginning_vignettes, end_vignettes = optimizer.select_static_vignettes(
         profiles=non_dominated_profiles,

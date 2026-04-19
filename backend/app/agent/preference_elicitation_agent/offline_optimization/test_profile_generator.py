@@ -177,7 +177,7 @@ class TestProfileGenerator:
     def test_real_config_profile_count(self):
         """Test profile generation with real configuration."""
         # This test assumes the real config exists in the same directory
-        config_path = Path(__file__).parent / "preference_parameters.json"
+        config_path = Path(__file__).parent.parent / "config" / "preference_parameters.json"
         if not config_path.exists():
             pytest.skip("Real config file not found")
 
@@ -190,7 +190,7 @@ class TestProfileGenerator:
 
     def test_encode_profile_with_real_config(self):
         """Test encoding with real configuration."""
-        config_path = Path(__file__).parent / "preference_parameters.json"
+        config_path = Path(__file__).parent.parent / "config" / "preference_parameters.json"
         if not config_path.exists():
             pytest.skip("Real config file not found")
 

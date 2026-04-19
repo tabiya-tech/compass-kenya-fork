@@ -23,8 +23,9 @@ class DEfficiencyOptimizer:
         """
         self.logger = logging.getLogger(self.__class__.__name__)
         self.profile_generator = profile_generator
-        # Derive dimension count from schema via SchemaLoader
-        self.n_params = profile_generator.schema_loader.n_dimensions
+        # Use term-level count (6 for current schema) so that individual attribute
+        # signals (soc_peers, soc_clients, etc.) are kept separate in the FIM.
+        self.n_params = profile_generator.schema_loader.n_terms
 
     def select_static_vignettes(
         self,
@@ -57,10 +58,9 @@ class DEfficiencyOptimizer:
             f"Selecting {num_static} static vignettes from {len(profiles)} profiles..."
         )
 
-        # Initialize prior
+        # Initialize prior (neutral 0.5 for every term)
         if prior_mean is None:
-            # We want to create the prior mean for all the 7 dimensions and initialize all weights to 0.5 which is a neutral/centered value
-            prior_mean = np.ones(7) * 0.5 # TODO: Make this configurable
+            prior_mean = np.ones(self.n_params) * 0.5
 
         # Calculate total possible pairs
         total_possible_pairs = len(profiles) * (len(profiles) - 1) // 2
@@ -195,9 +195,9 @@ class DEfficiencyOptimizer:
         Returns:
             7x7 Fisher Information Matrix
         """
-        # Encode profiles to feature vectors
-        x_a = np.array(self.profile_generator.encode_profile(profile_a))
-        x_b = np.array(self.profile_generator.encode_profile(profile_b))
+        # Encode profiles to term-level feature vectors
+        x_a = np.array(self.profile_generator.encode_profile_terms(profile_a))
+        x_b = np.array(self.profile_generator.encode_profile_terms(profile_b))
 
         # Compute utilities
         u_a = np.dot(x_a, preference_weights) / temperature
@@ -237,7 +237,7 @@ class DEfficiencyOptimizer:
             D-efficiency score
         """
         if prior_mean is None:
-            prior_mean = np.ones(7) * 0.5
+            prior_mean = np.ones(self.n_params) * 0.5
 
         # Initialize with prior FIM
         fim = np.eye(self.n_params) / prior_variance
@@ -249,7 +249,7 @@ class DEfficiencyOptimizer:
 
         # Compute D-efficiency
         det = np.linalg.det(fim)
-        d_efficiency = det ** (1 / 7)  # 7 parameters
+        d_efficiency = det ** (1 / self.n_params)
 
         return d_efficiency
 
@@ -271,7 +271,7 @@ class DEfficiencyOptimizer:
             Dictionary with optimization statistics
         """
         if prior_mean is None:
-            prior_mean = np.ones(7) * 0.5
+            prior_mean = np.ones(self.n_params) * 0.5
 
         # Compute FIM
         fim = np.eye(self.n_params) / prior_variance
@@ -287,7 +287,7 @@ class DEfficiencyOptimizer:
         return {
             "num_vignettes": len(vignettes),
             "fim_determinant": float(det),
-            "d_efficiency": float(det ** (1 / 7)),
+            "d_efficiency": float(det ** (1 / self.n_params)),
             "eigenvalues": eigenvalues.tolist(),
             "condition_number": float(condition_number),
             "min_eigenvalue": float(np.min(eigenvalues)),
@@ -320,8 +320,8 @@ class DEfficiencyOptimizer:
             True if wage gap is excessive (bad vignette - financial anchoring)
             False if wage gap is reasonable (good vignette)
         """
-        wage_a = profile_a.get('wage', 0)
-        wage_b = profile_b.get('wage', 0)
+        wage_a = profile_a.get('earnings_per_month') or profile_a.get('wage', 0)
+        wage_b = profile_b.get('earnings_per_month') or profile_b.get('wage', 0)
 
         if wage_a == 0 or wage_b == 0:
             return False  # No wage info, can't check
@@ -360,9 +360,9 @@ class DEfficiencyOptimizer:
             True if either profile dominates or quasi-dominates the other (bad vignette)
             False if neither dominates (good vignette - has meaningful trade-offs)
         """
-        # Encode profiles to 7-dimensional preference space
-        features_a = np.array(self.profile_generator.encode_profile(profile_a))
-        features_b = np.array(self.profile_generator.encode_profile(profile_b))
+        # Encode profiles to term-level preference space
+        features_a = np.array(self.profile_generator.encode_profile_terms(profile_a))
+        features_b = np.array(self.profile_generator.encode_profile_terms(profile_b))
 
         # Check strict dominance
         a_dominates_b = self._features_dominate(features_a, features_b)
@@ -371,14 +371,14 @@ class DEfficiencyOptimizer:
         if a_dominates_b or b_dominates_a:
             return True
 
-        # Check quasi-dominance: count dimensions where each option is better
+        # Check quasi-dominance: count terms where each option is better
         tolerance = 1e-6
         a_better_count = sum(1 for i in range(len(features_a))
                            if features_a[i] - features_b[i] > tolerance)
         b_better_count = sum(1 for i in range(len(features_b))
                            if features_b[i] - features_a[i] > tolerance)
 
-        # If either option is better in ≥ threshold dimensions, it's quasi-dominant
+        # If either option is better in ≥ threshold terms, it's quasi-dominant
         if a_better_count >= quasi_dominance_threshold or b_better_count >= quasi_dominance_threshold:
             return True
 
@@ -391,20 +391,13 @@ class DEfficiencyOptimizer:
         tolerance: float = 1e-6
     ) -> bool:
         """
-        Check if features_a dominates features_b in the 7-dimensional preference space.
+        Check if features_a dominates features_b in term-level preference space.
 
         Features A dominates Features B if:
-        - A is better than or equal to B in ALL 7 preference dimensions
-        - A is strictly better than B in AT LEAST ONE dimension
+        - A is better than or equal to B in ALL terms
+        - A is strictly better than B in AT LEAST ONE term
 
-        All 7 preference dimensions are "positive" (higher is better):
-        - Index 0: financial_importance (higher wage = better)
-        - Index 1: work_environment_importance (better conditions = higher)
-        - Index 2: career_growth_importance (high growth = higher)
-        - Index 3: work_life_balance_importance (better balance = higher)
-        - Index 4: job_security_importance (stable = higher)
-        - Index 5: task_preference_importance (varied/social = higher)
-        - Index 6: values_culture_importance (mission-driven = higher)
+        All terms are "positive" (higher is better) after direction encoding.
 
         Args:
             features_a: First feature vector (7D)

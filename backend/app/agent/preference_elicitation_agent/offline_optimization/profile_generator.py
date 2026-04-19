@@ -29,7 +29,7 @@ class ProfileGenerator:
         self.logger = logging.getLogger(self.__class__.__name__)
 
         if config_path is None:
-            config_path = Path(__file__).parent / "preference_parameters.json"
+            config_path = Path(__file__).parent.parent / "config" / "preference_parameters.json"
 
         self.config = self._load_config(config_path)
         self.attributes = self.config["attributes"]
@@ -109,19 +109,30 @@ class ProfileGenerator:
 
     def encode_profile(self, profile: Dict[str, Any]) -> List[float]:
         """
-        Encode a profile as an N-dimensional preference feature vector.
-
-        Delegates to SchemaLoader so encoding is always consistent with
-        the online system (LikelihoodCalculator._extract_features).
+        Encode a profile as a dimension-level feature vector (one per schema dimension).
 
         Args:
-            profile: Profile dictionary with attribute values (level IDs for
-                     categoricals, numeric values for ordered attributes)
+            profile: Profile dictionary with attribute values
 
         Returns:
             Feature vector (N dimensions, one per preference dimension in schema)
         """
         return self.schema_loader.extract_features(profile)
+
+    def encode_profile_terms(self, profile: Dict[str, Any]) -> List[float]:
+        """
+        Encode a profile as a term-level feature vector (one per MNL regression term).
+
+        Keeps individual attribute signals separate — e.g., soc_peers and soc_clients
+        are distinct terms rather than being averaged into work_environment.
+
+        Args:
+            profile: Profile dictionary with attribute values
+
+        Returns:
+            Feature vector (N terms, one per MNL term in schema)
+        """
+        return self.schema_loader.extract_term_features(profile)
 
     def profile_to_string(self, profile: Dict[str, Any]) -> str:
         """
