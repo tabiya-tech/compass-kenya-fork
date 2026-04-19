@@ -1,35 +1,35 @@
 {
   "metadata": {
-    "timestamp": "2026-04-19T13:18:44.051020",
+    "timestamp": "2026-03-28T02:00:06.389496",
     "type": "adaptive_library",
     "count": 40,
     "diversity_weight": 0.3,
     "library_stats": {
       "num_vignettes": 40,
-      "avg_pairwise_distance": 0.6590156089569428,
-      "min_pairwise_distance": 5.00000019165725e-09,
+      "avg_pairwise_distance": 1.0,
+      "min_pairwise_distance": 1.0,
       "max_pairwise_distance": 1.0,
-      "std_pairwise_distance": 0.2751930942955756,
+      "std_pairwise_distance": 0.0,
       "attribute_coverage": {
         "earnings_per_month": {
-          "15000": 16,
-          "30000": 27,
-          "50000": 29,
-          "70000": 8
+          "30000": 23,
+          "50000": 21,
+          "15000": 20,
+          "70000": 16
         },
         "physical_demand": {
-          "phys_light": 65,
-          "phys_heavy": 15
+          "phys_heavy": 39,
+          "phys_light": 41
         },
         "social_interaction": {
-          "soc_peers": 25,
-          "soc_customers": 24,
-          "soc_alone": 31
+          "soc_alone": 11,
+          "soc_peers": 35,
+          "soc_customers": 34
         },
         "career_growth": {
-          "growth_low": 30,
-          "growth_med": 26,
-          "growth_high": 24
+          "growth_high": 34,
+          "growth_low": 11,
+          "growth_med": 35
         }
       }
     },
@@ -44,23 +44,23 @@
       "options": [
         {
           "option_id": "A",
-          "title": "Option A: Job with KES 15,000/month",
-          "description": "Monthly Earnings: KES 15,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Few chances to learn new skills or move ahead",
+          "title": "Option A: Job with KES 30,000/month",
+          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work alone (independent) | Career Growth: Strong chances to learn skills and grow into better opportunities",
           "attributes": {
-            "earnings_per_month": 15000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_peers",
-            "career_growth": "growth_low"
+            "earnings_per_month": 30000,
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_alone",
+            "career_growth": "growth_high"
           }
         },
         {
           "option_id": "B",
-          "title": "Option B: Job with KES 15,000/month",
-          "description": "Monthly Earnings: KES 15,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Few chances to learn new skills or move ahead",
+          "title": "Option B: Job with KES 50,000/month",
+          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Few chances to learn new skills or move ahead",
           "attributes": {
-            "earnings_per_month": 15000,
+            "earnings_per_month": 50000,
             "physical_demand": "phys_light",
-            "social_interaction": "soc_customers",
+            "social_interaction": "soc_peers",
             "career_growth": "growth_low"
           }
         }
@@ -90,12 +90,12 @@
         {
           "option_id": "B",
           "title": "Option B: Job with KES 15,000/month",
-          "description": "Monthly Earnings: KES 15,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Some chances to build skills or improve your future options",
+          "description": "Monthly Earnings: KES 15,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Strong chances to learn skills and grow into better opportunities",
           "attributes": {
             "earnings_per_month": 15000,
             "physical_demand": "phys_light",
             "social_interaction": "soc_customers",
-            "career_growth": "growth_med"
+            "career_growth": "growth_high"
           }
         }
       ],
@@ -107,6 +107,176 @@
     },
     {
       "vignette_id": "adaptive_003",
+      "category": "career_advancement",
+      "scenario_text": "Consider these two job opportunities with different growth potential:",
+      "options": [
+        {
+          "option_id": "A",
+          "title": "Option A: Job with KES 15,000/month",
+          "description": "Monthly Earnings: KES 15,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work with coworkers (peers) | Career Growth: Some chances to build skills or improve your future options",
+          "attributes": {
+            "earnings_per_month": 15000,
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_peers",
+            "career_growth": "growth_med"
+          }
+        },
+        {
+          "option_id": "B",
+          "title": "Option B: Job with KES 15,000/month",
+          "description": "Monthly Earnings: KES 15,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work with coworkers (peers) | Career Growth: Strong chances to learn skills and grow into better opportunities",
+          "attributes": {
+            "earnings_per_month": 15000,
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_peers",
+            "career_growth": "growth_high"
+          }
+        }
+      ],
+      "follow_up_questions": [],
+      "targeted_dimensions": [
+        "career_advancement"
+      ],
+      "difficulty_level": "medium"
+    },
+    {
+      "vignette_id": "adaptive_004",
+      "category": "work_environment",
+      "scenario_text": "Consider these two job opportunities with different work environments:",
+      "options": [
+        {
+          "option_id": "A",
+          "title": "Option A: Job with KES 70,000/month",
+          "description": "Monthly Earnings: KES 70,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work with coworkers (peers) | Career Growth: Some chances to build skills or improve your future options",
+          "attributes": {
+            "earnings_per_month": 70000,
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_peers",
+            "career_growth": "growth_med"
+          }
+        },
+        {
+          "option_id": "B",
+          "title": "Option B: Job with KES 70,000/month",
+          "description": "Monthly Earnings: KES 70,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work closely with customers/clients | Career Growth: Strong chances to learn skills and grow into better opportunities",
+          "attributes": {
+            "earnings_per_month": 70000,
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_customers",
+            "career_growth": "growth_high"
+          }
+        }
+      ],
+      "follow_up_questions": [],
+      "targeted_dimensions": [
+        "work_environment"
+      ],
+      "difficulty_level": "medium"
+    },
+    {
+      "vignette_id": "adaptive_005",
+      "category": "career_advancement",
+      "scenario_text": "Consider these two job opportunities with different growth potential:",
+      "options": [
+        {
+          "option_id": "A",
+          "title": "Option A: Job with KES 30,000/month",
+          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Some chances to build skills or improve your future options",
+          "attributes": {
+            "earnings_per_month": 30000,
+            "physical_demand": "phys_light",
+            "social_interaction": "soc_customers",
+            "career_growth": "growth_med"
+          }
+        },
+        {
+          "option_id": "B",
+          "title": "Option B: Job with KES 30,000/month",
+          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Strong chances to learn skills and grow into better opportunities",
+          "attributes": {
+            "earnings_per_month": 30000,
+            "physical_demand": "phys_light",
+            "social_interaction": "soc_customers",
+            "career_growth": "growth_high"
+          }
+        }
+      ],
+      "follow_up_questions": [],
+      "targeted_dimensions": [
+        "career_advancement"
+      ],
+      "difficulty_level": "medium"
+    },
+    {
+      "vignette_id": "adaptive_006",
+      "category": "career_advancement",
+      "scenario_text": "Consider these two job opportunities with different growth potential:",
+      "options": [
+        {
+          "option_id": "A",
+          "title": "Option A: Job with KES 70,000/month",
+          "description": "Monthly Earnings: KES 70,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work with coworkers (peers) | Career Growth: Some chances to build skills or improve your future options",
+          "attributes": {
+            "earnings_per_month": 70000,
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_peers",
+            "career_growth": "growth_med"
+          }
+        },
+        {
+          "option_id": "B",
+          "title": "Option B: Job with KES 70,000/month",
+          "description": "Monthly Earnings: KES 70,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work with coworkers (peers) | Career Growth: Strong chances to learn skills and grow into better opportunities",
+          "attributes": {
+            "earnings_per_month": 70000,
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_peers",
+            "career_growth": "growth_high"
+          }
+        }
+      ],
+      "follow_up_questions": [],
+      "targeted_dimensions": [
+        "career_advancement"
+      ],
+      "difficulty_level": "medium"
+    },
+    {
+      "vignette_id": "adaptive_007",
+      "category": "work_environment",
+      "scenario_text": "Consider these two job opportunities with different work environments:",
+      "options": [
+        {
+          "option_id": "A",
+          "title": "Option A: Job with KES 50,000/month",
+          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work with coworkers (peers) | Career Growth: Some chances to build skills or improve your future options",
+          "attributes": {
+            "earnings_per_month": 50000,
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_peers",
+            "career_growth": "growth_med"
+          }
+        },
+        {
+          "option_id": "B",
+          "title": "Option B: Job with KES 50,000/month",
+          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work closely with customers/clients | Career Growth: Strong chances to learn skills and grow into better opportunities",
+          "attributes": {
+            "earnings_per_month": 50000,
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_customers",
+            "career_growth": "growth_high"
+          }
+        }
+      ],
+      "follow_up_questions": [],
+      "targeted_dimensions": [
+        "work_environment"
+      ],
+      "difficulty_level": "medium"
+    },
+    {
+      "vignette_id": "adaptive_008",
       "category": "work_environment",
       "scenario_text": "Consider these two job opportunities with different work environments:",
       "options": [
@@ -140,29 +310,29 @@
       "difficulty_level": "medium"
     },
     {
-      "vignette_id": "adaptive_004",
+      "vignette_id": "adaptive_009",
       "category": "career_advancement",
       "scenario_text": "Consider these two job opportunities with different growth potential:",
       "options": [
         {
           "option_id": "A",
-          "title": "Option A: Job with KES 15,000/month",
-          "description": "Monthly Earnings: KES 15,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work alone (independent) | Career Growth: Some chances to build skills or improve your future options",
+          "title": "Option A: Job with KES 50,000/month",
+          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Some chances to build skills or improve your future options",
           "attributes": {
-            "earnings_per_month": 15000,
+            "earnings_per_month": 50000,
             "physical_demand": "phys_light",
-            "social_interaction": "soc_alone",
+            "social_interaction": "soc_customers",
             "career_growth": "growth_med"
           }
         },
         {
           "option_id": "B",
-          "title": "Option B: Job with KES 15,000/month",
-          "description": "Monthly Earnings: KES 15,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work alone (independent) | Career Growth: Strong chances to learn skills and grow into better opportunities",
+          "title": "Option B: Job with KES 50,000/month",
+          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Strong chances to learn skills and grow into better opportunities",
           "attributes": {
-            "earnings_per_month": 15000,
+            "earnings_per_month": 50000,
             "physical_demand": "phys_light",
-            "social_interaction": "soc_alone",
+            "social_interaction": "soc_customers",
             "career_growth": "growth_high"
           }
         }
@@ -174,7 +344,41 @@
       "difficulty_level": "medium"
     },
     {
-      "vignette_id": "adaptive_005",
+      "vignette_id": "adaptive_010",
+      "category": "work_environment",
+      "scenario_text": "Consider these two job opportunities with different work environments:",
+      "options": [
+        {
+          "option_id": "A",
+          "title": "Option A: Job with KES 30,000/month",
+          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work with coworkers (peers) | Career Growth: Some chances to build skills or improve your future options",
+          "attributes": {
+            "earnings_per_month": 30000,
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_peers",
+            "career_growth": "growth_med"
+          }
+        },
+        {
+          "option_id": "B",
+          "title": "Option B: Job with KES 30,000/month",
+          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work closely with customers/clients | Career Growth: Some chances to build skills or improve your future options",
+          "attributes": {
+            "earnings_per_month": 30000,
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_customers",
+            "career_growth": "growth_med"
+          }
+        }
+      ],
+      "follow_up_questions": [],
+      "targeted_dimensions": [
+        "work_environment"
+      ],
+      "difficulty_level": "medium"
+    },
+    {
+      "vignette_id": "adaptive_011",
       "category": "career_advancement",
       "scenario_text": "Consider these two job opportunities with different growth potential:",
       "options": [
@@ -208,7 +412,7 @@
       "difficulty_level": "medium"
     },
     {
-      "vignette_id": "adaptive_006",
+      "vignette_id": "adaptive_012",
       "category": "career_advancement",
       "scenario_text": "Consider these two job opportunities with different growth potential:",
       "options": [
@@ -242,233 +446,29 @@
       "difficulty_level": "medium"
     },
     {
-      "vignette_id": "adaptive_007",
-      "category": "work_environment",
-      "scenario_text": "Consider these two job opportunities with different work environments:",
-      "options": [
-        {
-          "option_id": "A",
-          "title": "Option A: Job with KES 30,000/month",
-          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work alone (independent) | Career Growth: Few chances to learn new skills or move ahead",
-          "attributes": {
-            "earnings_per_month": 30000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_alone",
-            "career_growth": "growth_low"
-          }
-        },
-        {
-          "option_id": "B",
-          "title": "Option B: Job with KES 50,000/month",
-          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work alone (independent) | Career Growth: Few chances to learn new skills or move ahead",
-          "attributes": {
-            "earnings_per_month": 50000,
-            "physical_demand": "phys_heavy",
-            "social_interaction": "soc_alone",
-            "career_growth": "growth_low"
-          }
-        }
-      ],
-      "follow_up_questions": [],
-      "targeted_dimensions": [
-        "work_environment"
-      ],
-      "difficulty_level": "medium"
-    },
-    {
-      "vignette_id": "adaptive_008",
-      "category": "work_environment",
-      "scenario_text": "Consider these two job opportunities with different work environments:",
-      "options": [
-        {
-          "option_id": "A",
-          "title": "Option A: Job with KES 30,000/month",
-          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work alone (independent) | Career Growth: Some chances to build skills or improve your future options",
-          "attributes": {
-            "earnings_per_month": 30000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_alone",
-            "career_growth": "growth_med"
-          }
-        },
-        {
-          "option_id": "B",
-          "title": "Option B: Job with KES 50,000/month",
-          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work alone (independent) | Career Growth: Some chances to build skills or improve your future options",
-          "attributes": {
-            "earnings_per_month": 50000,
-            "physical_demand": "phys_heavy",
-            "social_interaction": "soc_alone",
-            "career_growth": "growth_med"
-          }
-        }
-      ],
-      "follow_up_questions": [],
-      "targeted_dimensions": [
-        "work_environment"
-      ],
-      "difficulty_level": "medium"
-    },
-    {
-      "vignette_id": "adaptive_009",
-      "category": "work_environment",
-      "scenario_text": "Consider these two job opportunities with different work environments:",
-      "options": [
-        {
-          "option_id": "A",
-          "title": "Option A: Job with KES 30,000/month",
-          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work alone (independent) | Career Growth: Strong chances to learn skills and grow into better opportunities",
-          "attributes": {
-            "earnings_per_month": 30000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_alone",
-            "career_growth": "growth_high"
-          }
-        },
-        {
-          "option_id": "B",
-          "title": "Option B: Job with KES 50,000/month",
-          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work alone (independent) | Career Growth: Strong chances to learn skills and grow into better opportunities",
-          "attributes": {
-            "earnings_per_month": 50000,
-            "physical_demand": "phys_heavy",
-            "social_interaction": "soc_alone",
-            "career_growth": "growth_high"
-          }
-        }
-      ],
-      "follow_up_questions": [],
-      "targeted_dimensions": [
-        "work_environment"
-      ],
-      "difficulty_level": "medium"
-    },
-    {
-      "vignette_id": "adaptive_010",
-      "category": "work_environment",
-      "scenario_text": "Consider these two job opportunities with different work environments:",
-      "options": [
-        {
-          "option_id": "A",
-          "title": "Option A: Job with KES 30,000/month",
-          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Few chances to learn new skills or move ahead",
-          "attributes": {
-            "earnings_per_month": 30000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_peers",
-            "career_growth": "growth_low"
-          }
-        },
-        {
-          "option_id": "B",
-          "title": "Option B: Job with KES 50,000/month",
-          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work alone (independent) | Career Growth: Few chances to learn new skills or move ahead",
-          "attributes": {
-            "earnings_per_month": 50000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_alone",
-            "career_growth": "growth_low"
-          }
-        }
-      ],
-      "follow_up_questions": [],
-      "targeted_dimensions": [
-        "work_environment"
-      ],
-      "difficulty_level": "medium"
-    },
-    {
-      "vignette_id": "adaptive_011",
-      "category": "work_environment",
-      "scenario_text": "Consider these two job opportunities with different work environments:",
-      "options": [
-        {
-          "option_id": "A",
-          "title": "Option A: Job with KES 30,000/month",
-          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Some chances to build skills or improve your future options",
-          "attributes": {
-            "earnings_per_month": 30000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_peers",
-            "career_growth": "growth_med"
-          }
-        },
-        {
-          "option_id": "B",
-          "title": "Option B: Job with KES 50,000/month",
-          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work alone (independent) | Career Growth: Some chances to build skills or improve your future options",
-          "attributes": {
-            "earnings_per_month": 50000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_alone",
-            "career_growth": "growth_med"
-          }
-        }
-      ],
-      "follow_up_questions": [],
-      "targeted_dimensions": [
-        "work_environment"
-      ],
-      "difficulty_level": "medium"
-    },
-    {
-      "vignette_id": "adaptive_012",
-      "category": "work_environment",
-      "scenario_text": "Consider these two job opportunities with different work environments:",
-      "options": [
-        {
-          "option_id": "A",
-          "title": "Option A: Job with KES 30,000/month",
-          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Strong chances to learn skills and grow into better opportunities",
-          "attributes": {
-            "earnings_per_month": 30000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_peers",
-            "career_growth": "growth_high"
-          }
-        },
-        {
-          "option_id": "B",
-          "title": "Option B: Job with KES 50,000/month",
-          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work alone (independent) | Career Growth: Strong chances to learn skills and grow into better opportunities",
-          "attributes": {
-            "earnings_per_month": 50000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_alone",
-            "career_growth": "growth_high"
-          }
-        }
-      ],
-      "follow_up_questions": [],
-      "targeted_dimensions": [
-        "work_environment"
-      ],
-      "difficulty_level": "medium"
-    },
-    {
       "vignette_id": "adaptive_013",
       "category": "work_environment",
       "scenario_text": "Consider these two job opportunities with different work environments:",
       "options": [
         {
           "option_id": "A",
-          "title": "Option A: Job with KES 30,000/month",
-          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Few chances to learn new skills or move ahead",
+          "title": "Option A: Job with KES 50,000/month",
+          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work with coworkers (peers) | Career Growth: Few chances to learn new skills or move ahead",
           "attributes": {
-            "earnings_per_month": 30000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_customers",
+            "earnings_per_month": 50000,
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_peers",
             "career_growth": "growth_low"
           }
         },
         {
           "option_id": "B",
           "title": "Option B: Job with KES 50,000/month",
-          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work alone (independent) | Career Growth: Few chances to learn new skills or move ahead",
+          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work closely with customers/clients | Career Growth: Few chances to learn new skills or move ahead",
           "attributes": {
             "earnings_per_month": 50000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_alone",
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_customers",
             "career_growth": "growth_low"
           }
         }
@@ -487,23 +487,23 @@
         {
           "option_id": "A",
           "title": "Option A: Job with KES 30,000/month",
-          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Some chances to build skills or improve your future options",
+          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Few chances to learn new skills or move ahead",
           "attributes": {
             "earnings_per_month": 30000,
             "physical_demand": "phys_light",
-            "social_interaction": "soc_customers",
-            "career_growth": "growth_med"
+            "social_interaction": "soc_peers",
+            "career_growth": "growth_low"
           }
         },
         {
           "option_id": "B",
-          "title": "Option B: Job with KES 50,000/month",
-          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work alone (independent) | Career Growth: Some chances to build skills or improve your future options",
+          "title": "Option B: Job with KES 30,000/month",
+          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Few chances to learn new skills or move ahead",
           "attributes": {
-            "earnings_per_month": 50000,
+            "earnings_per_month": 30000,
             "physical_demand": "phys_light",
-            "social_interaction": "soc_alone",
-            "career_growth": "growth_med"
+            "social_interaction": "soc_customers",
+            "career_growth": "growth_low"
           }
         }
       ],
@@ -520,353 +520,13 @@
       "options": [
         {
           "option_id": "A",
-          "title": "Option A: Job with KES 30,000/month",
-          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Strong chances to learn skills and grow into better opportunities",
-          "attributes": {
-            "earnings_per_month": 30000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_customers",
-            "career_growth": "growth_high"
-          }
-        },
-        {
-          "option_id": "B",
-          "title": "Option B: Job with KES 50,000/month",
-          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work alone (independent) | Career Growth: Strong chances to learn skills and grow into better opportunities",
-          "attributes": {
-            "earnings_per_month": 50000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_alone",
-            "career_growth": "growth_high"
-          }
-        }
-      ],
-      "follow_up_questions": [],
-      "targeted_dimensions": [
-        "work_environment"
-      ],
-      "difficulty_level": "medium"
-    },
-    {
-      "vignette_id": "adaptive_016",
-      "category": "career_advancement",
-      "scenario_text": "Consider these two job opportunities with different growth potential:",
-      "options": [
-        {
-          "option_id": "A",
-          "title": "Option A: Job with KES 30,000/month",
-          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work alone (independent) | Career Growth: Some chances to build skills or improve your future options",
-          "attributes": {
-            "earnings_per_month": 30000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_alone",
-            "career_growth": "growth_med"
-          }
-        },
-        {
-          "option_id": "B",
-          "title": "Option B: Job with KES 50,000/month",
-          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work alone (independent) | Career Growth: Few chances to learn new skills or move ahead",
-          "attributes": {
-            "earnings_per_month": 50000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_alone",
-            "career_growth": "growth_low"
-          }
-        }
-      ],
-      "follow_up_questions": [],
-      "targeted_dimensions": [
-        "career_advancement"
-      ],
-      "difficulty_level": "medium"
-    },
-    {
-      "vignette_id": "adaptive_017",
-      "category": "career_advancement",
-      "scenario_text": "Consider these two job opportunities with different growth potential:",
-      "options": [
-        {
-          "option_id": "A",
-          "title": "Option A: Job with KES 30,000/month",
-          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Some chances to build skills or improve your future options",
-          "attributes": {
-            "earnings_per_month": 30000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_peers",
-            "career_growth": "growth_med"
-          }
-        },
-        {
-          "option_id": "B",
-          "title": "Option B: Job with KES 50,000/month",
-          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Few chances to learn new skills or move ahead",
-          "attributes": {
-            "earnings_per_month": 50000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_peers",
-            "career_growth": "growth_low"
-          }
-        }
-      ],
-      "follow_up_questions": [],
-      "targeted_dimensions": [
-        "career_advancement"
-      ],
-      "difficulty_level": "medium"
-    },
-    {
-      "vignette_id": "adaptive_018",
-      "category": "career_advancement",
-      "scenario_text": "Consider these two job opportunities with different growth potential:",
-      "options": [
-        {
-          "option_id": "A",
-          "title": "Option A: Job with KES 30,000/month",
-          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Some chances to build skills or improve your future options",
-          "attributes": {
-            "earnings_per_month": 30000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_customers",
-            "career_growth": "growth_med"
-          }
-        },
-        {
-          "option_id": "B",
-          "title": "Option B: Job with KES 50,000/month",
-          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Few chances to learn new skills or move ahead",
-          "attributes": {
-            "earnings_per_month": 50000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_customers",
-            "career_growth": "growth_low"
-          }
-        }
-      ],
-      "follow_up_questions": [],
-      "targeted_dimensions": [
-        "career_advancement"
-      ],
-      "difficulty_level": "medium"
-    },
-    {
-      "vignette_id": "adaptive_019",
-      "category": "career_advancement",
-      "scenario_text": "Consider these two job opportunities with different growth potential:",
-      "options": [
-        {
-          "option_id": "A",
-          "title": "Option A: Job with KES 30,000/month",
-          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work alone (independent) | Career Growth: Strong chances to learn skills and grow into better opportunities",
-          "attributes": {
-            "earnings_per_month": 30000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_alone",
-            "career_growth": "growth_high"
-          }
-        },
-        {
-          "option_id": "B",
-          "title": "Option B: Job with KES 50,000/month",
-          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work alone (independent) | Career Growth: Few chances to learn new skills or move ahead",
-          "attributes": {
-            "earnings_per_month": 50000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_alone",
-            "career_growth": "growth_low"
-          }
-        }
-      ],
-      "follow_up_questions": [],
-      "targeted_dimensions": [
-        "career_advancement"
-      ],
-      "difficulty_level": "medium"
-    },
-    {
-      "vignette_id": "adaptive_020",
-      "category": "career_advancement",
-      "scenario_text": "Consider these two job opportunities with different growth potential:",
-      "options": [
-        {
-          "option_id": "A",
-          "title": "Option A: Job with KES 30,000/month",
-          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Strong chances to learn skills and grow into better opportunities",
-          "attributes": {
-            "earnings_per_month": 30000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_peers",
-            "career_growth": "growth_high"
-          }
-        },
-        {
-          "option_id": "B",
-          "title": "Option B: Job with KES 50,000/month",
-          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Few chances to learn new skills or move ahead",
-          "attributes": {
-            "earnings_per_month": 50000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_peers",
-            "career_growth": "growth_low"
-          }
-        }
-      ],
-      "follow_up_questions": [],
-      "targeted_dimensions": [
-        "career_advancement"
-      ],
-      "difficulty_level": "medium"
-    },
-    {
-      "vignette_id": "adaptive_021",
-      "category": "career_advancement",
-      "scenario_text": "Consider these two job opportunities with different growth potential:",
-      "options": [
-        {
-          "option_id": "A",
-          "title": "Option A: Job with KES 30,000/month",
-          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Strong chances to learn skills and grow into better opportunities",
-          "attributes": {
-            "earnings_per_month": 30000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_customers",
-            "career_growth": "growth_high"
-          }
-        },
-        {
-          "option_id": "B",
-          "title": "Option B: Job with KES 50,000/month",
-          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Few chances to learn new skills or move ahead",
-          "attributes": {
-            "earnings_per_month": 50000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_customers",
-            "career_growth": "growth_low"
-          }
-        }
-      ],
-      "follow_up_questions": [],
-      "targeted_dimensions": [
-        "career_advancement"
-      ],
-      "difficulty_level": "medium"
-    },
-    {
-      "vignette_id": "adaptive_022",
-      "category": "work_environment",
-      "scenario_text": "Consider these two job opportunities with different work environments:",
-      "options": [
-        {
-          "option_id": "A",
-          "title": "Option A: Job with KES 15,000/month",
-          "description": "Monthly Earnings: KES 15,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Few chances to learn new skills or move ahead",
-          "attributes": {
-            "earnings_per_month": 15000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_peers",
-            "career_growth": "growth_low"
-          }
-        },
-        {
-          "option_id": "B",
-          "title": "Option B: Job with KES 15,000/month",
-          "description": "Monthly Earnings: KES 15,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work alone (independent) | Career Growth: Strong chances to learn skills and grow into better opportunities",
-          "attributes": {
-            "earnings_per_month": 15000,
-            "physical_demand": "phys_heavy",
-            "social_interaction": "soc_alone",
-            "career_growth": "growth_high"
-          }
-        }
-      ],
-      "follow_up_questions": [],
-      "targeted_dimensions": [
-        "work_environment"
-      ],
-      "difficulty_level": "medium"
-    },
-    {
-      "vignette_id": "adaptive_023",
-      "category": "work_environment",
-      "scenario_text": "Consider these two job opportunities with different work environments:",
-      "options": [
-        {
-          "option_id": "A",
-          "title": "Option A: Job with KES 30,000/month",
-          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Few chances to learn new skills or move ahead",
-          "attributes": {
-            "earnings_per_month": 30000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_customers",
-            "career_growth": "growth_low"
-          }
-        },
-        {
-          "option_id": "B",
-          "title": "Option B: Job with KES 30,000/month",
-          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work alone (independent) | Career Growth: Some chances to build skills or improve your future options",
-          "attributes": {
-            "earnings_per_month": 30000,
-            "physical_demand": "phys_heavy",
-            "social_interaction": "soc_alone",
-            "career_growth": "growth_med"
-          }
-        }
-      ],
-      "follow_up_questions": [],
-      "targeted_dimensions": [
-        "work_environment"
-      ],
-      "difficulty_level": "medium"
-    },
-    {
-      "vignette_id": "adaptive_024",
-      "category": "work_environment",
-      "scenario_text": "Consider these two job opportunities with different work environments:",
-      "options": [
-        {
-          "option_id": "A",
-          "title": "Option A: Job with KES 30,000/month",
-          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Some chances to build skills or improve your future options",
-          "attributes": {
-            "earnings_per_month": 30000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_customers",
-            "career_growth": "growth_med"
-          }
-        },
-        {
-          "option_id": "B",
-          "title": "Option B: Job with KES 50,000/month",
-          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work alone (independent) | Career Growth: Few chances to learn new skills or move ahead",
-          "attributes": {
-            "earnings_per_month": 50000,
-            "physical_demand": "phys_heavy",
-            "social_interaction": "soc_alone",
-            "career_growth": "growth_low"
-          }
-        }
-      ],
-      "follow_up_questions": [],
-      "targeted_dimensions": [
-        "work_environment"
-      ],
-      "difficulty_level": "medium"
-    },
-    {
-      "vignette_id": "adaptive_025",
-      "category": "work_environment",
-      "scenario_text": "Consider these two job opportunities with different work environments:",
-      "options": [
-        {
-          "option_id": "A",
           "title": "Option A: Job with KES 70,000/month",
-          "description": "Monthly Earnings: KES 70,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Strong chances to learn skills and grow into better opportunities",
+          "description": "Monthly Earnings: KES 70,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work with coworkers (peers) | Career Growth: Some chances to build skills or improve your future options",
           "attributes": {
             "earnings_per_month": 70000,
-            "physical_demand": "phys_light",
+            "physical_demand": "phys_heavy",
             "social_interaction": "soc_peers",
-            "career_growth": "growth_high"
+            "career_growth": "growth_med"
           }
         },
         {
@@ -888,16 +548,220 @@
       "difficulty_level": "medium"
     },
     {
-      "vignette_id": "adaptive_026",
+      "vignette_id": "adaptive_016",
       "category": "work_environment",
       "scenario_text": "Consider these two job opportunities with different work environments:",
       "options": [
         {
           "option_id": "A",
           "title": "Option A: Job with KES 15,000/month",
-          "description": "Monthly Earnings: KES 15,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work alone (independent) | Career Growth: Some chances to build skills or improve your future options",
+          "description": "Monthly Earnings: KES 15,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work with coworkers (peers) | Career Growth: Strong chances to learn skills and grow into better opportunities",
           "attributes": {
             "earnings_per_month": 15000,
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_peers",
+            "career_growth": "growth_high"
+          }
+        },
+        {
+          "option_id": "B",
+          "title": "Option B: Job with KES 15,000/month",
+          "description": "Monthly Earnings: KES 15,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work closely with customers/clients | Career Growth: Strong chances to learn skills and grow into better opportunities",
+          "attributes": {
+            "earnings_per_month": 15000,
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_customers",
+            "career_growth": "growth_high"
+          }
+        }
+      ],
+      "follow_up_questions": [],
+      "targeted_dimensions": [
+        "work_environment"
+      ],
+      "difficulty_level": "medium"
+    },
+    {
+      "vignette_id": "adaptive_017",
+      "category": "work_environment",
+      "scenario_text": "Consider these two job opportunities with different work environments:",
+      "options": [
+        {
+          "option_id": "A",
+          "title": "Option A: Job with KES 70,000/month",
+          "description": "Monthly Earnings: KES 70,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Some chances to build skills or improve your future options",
+          "attributes": {
+            "earnings_per_month": 70000,
+            "physical_demand": "phys_light",
+            "social_interaction": "soc_peers",
+            "career_growth": "growth_med"
+          }
+        },
+        {
+          "option_id": "B",
+          "title": "Option B: Job with KES 70,000/month",
+          "description": "Monthly Earnings: KES 70,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Some chances to build skills or improve your future options",
+          "attributes": {
+            "earnings_per_month": 70000,
+            "physical_demand": "phys_light",
+            "social_interaction": "soc_customers",
+            "career_growth": "growth_med"
+          }
+        }
+      ],
+      "follow_up_questions": [],
+      "targeted_dimensions": [
+        "work_environment"
+      ],
+      "difficulty_level": "medium"
+    },
+    {
+      "vignette_id": "adaptive_018",
+      "category": "career_advancement",
+      "scenario_text": "Consider these two job opportunities with different growth potential:",
+      "options": [
+        {
+          "option_id": "A",
+          "title": "Option A: Job with KES 50,000/month",
+          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work closely with customers/clients | Career Growth: Some chances to build skills or improve your future options",
+          "attributes": {
+            "earnings_per_month": 50000,
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_customers",
+            "career_growth": "growth_med"
+          }
+        },
+        {
+          "option_id": "B",
+          "title": "Option B: Job with KES 50,000/month",
+          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work closely with customers/clients | Career Growth: Strong chances to learn skills and grow into better opportunities",
+          "attributes": {
+            "earnings_per_month": 50000,
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_customers",
+            "career_growth": "growth_high"
+          }
+        }
+      ],
+      "follow_up_questions": [],
+      "targeted_dimensions": [
+        "career_advancement"
+      ],
+      "difficulty_level": "medium"
+    },
+    {
+      "vignette_id": "adaptive_019",
+      "category": "work_environment",
+      "scenario_text": "Consider these two job opportunities with different work environments:",
+      "options": [
+        {
+          "option_id": "A",
+          "title": "Option A: Job with KES 15,000/month",
+          "description": "Monthly Earnings: KES 15,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work with coworkers (peers) | Career Growth: Few chances to learn new skills or move ahead",
+          "attributes": {
+            "earnings_per_month": 15000,
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_peers",
+            "career_growth": "growth_low"
+          }
+        },
+        {
+          "option_id": "B",
+          "title": "Option B: Job with KES 15,000/month",
+          "description": "Monthly Earnings: KES 15,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work closely with customers/clients | Career Growth: Few chances to learn new skills or move ahead",
+          "attributes": {
+            "earnings_per_month": 15000,
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_customers",
+            "career_growth": "growth_low"
+          }
+        }
+      ],
+      "follow_up_questions": [],
+      "targeted_dimensions": [
+        "work_environment"
+      ],
+      "difficulty_level": "medium"
+    },
+    {
+      "vignette_id": "adaptive_020",
+      "category": "work_environment",
+      "scenario_text": "Consider these two job opportunities with different work environments:",
+      "options": [
+        {
+          "option_id": "A",
+          "title": "Option A: Job with KES 50,000/month",
+          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Strong chances to learn skills and grow into better opportunities",
+          "attributes": {
+            "earnings_per_month": 50000,
+            "physical_demand": "phys_light",
+            "social_interaction": "soc_peers",
+            "career_growth": "growth_high"
+          }
+        },
+        {
+          "option_id": "B",
+          "title": "Option B: Job with KES 50,000/month",
+          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Strong chances to learn skills and grow into better opportunities",
+          "attributes": {
+            "earnings_per_month": 50000,
+            "physical_demand": "phys_light",
+            "social_interaction": "soc_customers",
+            "career_growth": "growth_high"
+          }
+        }
+      ],
+      "follow_up_questions": [],
+      "targeted_dimensions": [
+        "work_environment"
+      ],
+      "difficulty_level": "medium"
+    },
+    {
+      "vignette_id": "adaptive_021",
+      "category": "work_environment",
+      "scenario_text": "Consider these two job opportunities with different work environments:",
+      "options": [
+        {
+          "option_id": "A",
+          "title": "Option A: Job with KES 15,000/month",
+          "description": "Monthly Earnings: KES 15,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work with coworkers (peers) | Career Growth: Strong chances to learn skills and grow into better opportunities",
+          "attributes": {
+            "earnings_per_month": 15000,
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_peers",
+            "career_growth": "growth_high"
+          }
+        },
+        {
+          "option_id": "B",
+          "title": "Option B: Job with KES 15,000/month",
+          "description": "Monthly Earnings: KES 15,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work closely with customers/clients | Career Growth: Some chances to build skills or improve your future options",
+          "attributes": {
+            "earnings_per_month": 15000,
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_customers",
+            "career_growth": "growth_med"
+          }
+        }
+      ],
+      "follow_up_questions": [],
+      "targeted_dimensions": [
+        "work_environment"
+      ],
+      "difficulty_level": "medium"
+    },
+    {
+      "vignette_id": "adaptive_022",
+      "category": "career_advancement",
+      "scenario_text": "Consider these two job opportunities with different growth potential:",
+      "options": [
+        {
+          "option_id": "A",
+          "title": "Option A: Job with KES 30,000/month",
+          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work alone (independent) | Career Growth: Some chances to build skills or improve your future options",
+          "attributes": {
+            "earnings_per_month": 30000,
             "physical_demand": "phys_light",
             "social_interaction": "soc_alone",
             "career_growth": "growth_med"
@@ -905,13 +769,149 @@
         },
         {
           "option_id": "B",
-          "title": "Option B: Job with KES 15,000/month",
-          "description": "Monthly Earnings: KES 15,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Few chances to learn new skills or move ahead",
+          "title": "Option B: Job with KES 30,000/month",
+          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work alone (independent) | Career Growth: Strong chances to learn skills and grow into better opportunities",
           "attributes": {
-            "earnings_per_month": 15000,
+            "earnings_per_month": 30000,
+            "physical_demand": "phys_light",
+            "social_interaction": "soc_alone",
+            "career_growth": "growth_high"
+          }
+        }
+      ],
+      "follow_up_questions": [],
+      "targeted_dimensions": [
+        "career_advancement"
+      ],
+      "difficulty_level": "medium"
+    },
+    {
+      "vignette_id": "adaptive_023",
+      "category": "work_environment",
+      "scenario_text": "Consider these two job opportunities with different work environments:",
+      "options": [
+        {
+          "option_id": "A",
+          "title": "Option A: Job with KES 70,000/month",
+          "description": "Monthly Earnings: KES 70,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Strong chances to learn skills and grow into better opportunities",
+          "attributes": {
+            "earnings_per_month": 70000,
             "physical_demand": "phys_light",
             "social_interaction": "soc_peers",
-            "career_growth": "growth_low"
+            "career_growth": "growth_high"
+          }
+        },
+        {
+          "option_id": "B",
+          "title": "Option B: Job with KES 70,000/month",
+          "description": "Monthly Earnings: KES 70,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Some chances to build skills or improve your future options",
+          "attributes": {
+            "earnings_per_month": 70000,
+            "physical_demand": "phys_light",
+            "social_interaction": "soc_customers",
+            "career_growth": "growth_med"
+          }
+        }
+      ],
+      "follow_up_questions": [],
+      "targeted_dimensions": [
+        "work_environment"
+      ],
+      "difficulty_level": "medium"
+    },
+    {
+      "vignette_id": "adaptive_024",
+      "category": "work_environment",
+      "scenario_text": "Consider these two job opportunities with different work environments:",
+      "options": [
+        {
+          "option_id": "A",
+          "title": "Option A: Job with KES 50,000/month",
+          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Some chances to build skills or improve your future options",
+          "attributes": {
+            "earnings_per_month": 50000,
+            "physical_demand": "phys_light",
+            "social_interaction": "soc_peers",
+            "career_growth": "growth_med"
+          }
+        },
+        {
+          "option_id": "B",
+          "title": "Option B: Job with KES 50,000/month",
+          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Some chances to build skills or improve your future options",
+          "attributes": {
+            "earnings_per_month": 50000,
+            "physical_demand": "phys_light",
+            "social_interaction": "soc_customers",
+            "career_growth": "growth_med"
+          }
+        }
+      ],
+      "follow_up_questions": [],
+      "targeted_dimensions": [
+        "work_environment"
+      ],
+      "difficulty_level": "medium"
+    },
+    {
+      "vignette_id": "adaptive_025",
+      "category": "career_advancement",
+      "scenario_text": "Consider these two job opportunities with different growth potential:",
+      "options": [
+        {
+          "option_id": "A",
+          "title": "Option A: Job with KES 50,000/month",
+          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work with coworkers (peers) | Career Growth: Some chances to build skills or improve your future options",
+          "attributes": {
+            "earnings_per_month": 50000,
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_peers",
+            "career_growth": "growth_med"
+          }
+        },
+        {
+          "option_id": "B",
+          "title": "Option B: Job with KES 50,000/month",
+          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work with coworkers (peers) | Career Growth: Strong chances to learn skills and grow into better opportunities",
+          "attributes": {
+            "earnings_per_month": 50000,
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_peers",
+            "career_growth": "growth_high"
+          }
+        }
+      ],
+      "follow_up_questions": [],
+      "targeted_dimensions": [
+        "career_advancement"
+      ],
+      "difficulty_level": "medium"
+    },
+    {
+      "vignette_id": "adaptive_026",
+      "category": "work_environment",
+      "scenario_text": "Consider these two job opportunities with different work environments:",
+      "options": [
+        {
+          "option_id": "A",
+          "title": "Option A: Job with KES 30,000/month",
+          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Some chances to build skills or improve your future options",
+          "attributes": {
+            "earnings_per_month": 30000,
+            "physical_demand": "phys_light",
+            "social_interaction": "soc_peers",
+            "career_growth": "growth_med"
+          }
+        },
+        {
+          "option_id": "B",
+          "title": "Option B: Job with KES 30,000/month",
+          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Some chances to build skills or improve your future options",
+          "attributes": {
+            "earnings_per_month": 30000,
+            "physical_demand": "phys_light",
+            "social_interaction": "soc_customers",
+            "career_growth": "growth_med"
           }
         }
       ],
@@ -929,21 +929,21 @@
         {
           "option_id": "A",
           "title": "Option A: Job with KES 30,000/month",
-          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work alone (independent) | Career Growth: Strong chances to learn skills and grow into better opportunities",
+          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work with coworkers (peers) | Career Growth: Few chances to learn new skills or move ahead",
           "attributes": {
             "earnings_per_month": 30000,
             "physical_demand": "phys_heavy",
-            "social_interaction": "soc_alone",
-            "career_growth": "growth_high"
+            "social_interaction": "soc_peers",
+            "career_growth": "growth_low"
           }
         },
         {
           "option_id": "B",
-          "title": "Option B: Job with KES 50,000/month",
-          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Few chances to learn new skills or move ahead",
+          "title": "Option B: Job with KES 30,000/month",
+          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work closely with customers/clients | Career Growth: Few chances to learn new skills or move ahead",
           "attributes": {
-            "earnings_per_month": 50000,
-            "physical_demand": "phys_light",
+            "earnings_per_month": 30000,
+            "physical_demand": "phys_heavy",
             "social_interaction": "soc_customers",
             "career_growth": "growth_low"
           }
@@ -957,108 +957,40 @@
     },
     {
       "vignette_id": "adaptive_028",
-      "category": "work_environment",
-      "scenario_text": "Consider these two job opportunities with different work environments:",
+      "category": "career_advancement",
+      "scenario_text": "Consider these two job opportunities with different growth potential:",
       "options": [
         {
           "option_id": "A",
-          "title": "Option A: Job with KES 30,000/month",
-          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Strong chances to learn skills and grow into better opportunities",
+          "title": "Option A: Job with KES 15,000/month",
+          "description": "Monthly Earnings: KES 15,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work alone (independent) | Career Growth: Some chances to build skills or improve your future options",
           "attributes": {
-            "earnings_per_month": 30000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_customers",
-            "career_growth": "growth_high"
+            "earnings_per_month": 15000,
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_alone",
+            "career_growth": "growth_med"
           }
         },
         {
           "option_id": "B",
-          "title": "Option B: Job with KES 50,000/month",
-          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work alone (independent) | Career Growth: Few chances to learn new skills or move ahead",
+          "title": "Option B: Job with KES 15,000/month",
+          "description": "Monthly Earnings: KES 15,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work alone (independent) | Career Growth: Strong chances to learn skills and grow into better opportunities",
           "attributes": {
-            "earnings_per_month": 50000,
+            "earnings_per_month": 15000,
             "physical_demand": "phys_heavy",
             "social_interaction": "soc_alone",
-            "career_growth": "growth_low"
+            "career_growth": "growth_high"
           }
         }
       ],
       "follow_up_questions": [],
       "targeted_dimensions": [
-        "work_environment"
+        "career_advancement"
       ],
       "difficulty_level": "medium"
     },
     {
       "vignette_id": "adaptive_029",
-      "category": "work_environment",
-      "scenario_text": "Consider these two job opportunities with different work environments:",
-      "options": [
-        {
-          "option_id": "A",
-          "title": "Option A: Job with KES 30,000/month",
-          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Some chances to build skills or improve your future options",
-          "attributes": {
-            "earnings_per_month": 30000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_peers",
-            "career_growth": "growth_med"
-          }
-        },
-        {
-          "option_id": "B",
-          "title": "Option B: Job with KES 50,000/month",
-          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work alone (independent) | Career Growth: Few chances to learn new skills or move ahead",
-          "attributes": {
-            "earnings_per_month": 50000,
-            "physical_demand": "phys_heavy",
-            "social_interaction": "soc_alone",
-            "career_growth": "growth_low"
-          }
-        }
-      ],
-      "follow_up_questions": [],
-      "targeted_dimensions": [
-        "work_environment"
-      ],
-      "difficulty_level": "medium"
-    },
-    {
-      "vignette_id": "adaptive_030",
-      "category": "work_environment",
-      "scenario_text": "Consider these two job opportunities with different work environments:",
-      "options": [
-        {
-          "option_id": "A",
-          "title": "Option A: Job with KES 50,000/month",
-          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Strong chances to learn skills and grow into better opportunities",
-          "attributes": {
-            "earnings_per_month": 50000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_customers",
-            "career_growth": "growth_high"
-          }
-        },
-        {
-          "option_id": "B",
-          "title": "Option B: Job with KES 70,000/month",
-          "description": "Monthly Earnings: KES 70,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Some chances to build skills or improve your future options",
-          "attributes": {
-            "earnings_per_month": 70000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_peers",
-            "career_growth": "growth_med"
-          }
-        }
-      ],
-      "follow_up_questions": [],
-      "targeted_dimensions": [
-        "work_environment"
-      ],
-      "difficulty_level": "medium"
-    },
-    {
-      "vignette_id": "adaptive_031",
       "category": "work_environment",
       "scenario_text": "Consider these two job opportunities with different work environments:",
       "options": [
@@ -1075,13 +1007,13 @@
         },
         {
           "option_id": "B",
-          "title": "Option B: Job with KES 50,000/month",
-          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work alone (independent) | Career Growth: Few chances to learn new skills or move ahead",
+          "title": "Option B: Job with KES 30,000/month",
+          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Some chances to build skills or improve your future options",
           "attributes": {
-            "earnings_per_month": 50000,
+            "earnings_per_month": 30000,
             "physical_demand": "phys_light",
-            "social_interaction": "soc_alone",
-            "career_growth": "growth_low"
+            "social_interaction": "soc_customers",
+            "career_growth": "growth_med"
           }
         }
       ],
@@ -1092,36 +1024,104 @@
       "difficulty_level": "medium"
     },
     {
-      "vignette_id": "adaptive_032",
-      "category": "work_environment",
-      "scenario_text": "Consider these two job opportunities with different work environments:",
+      "vignette_id": "adaptive_030",
+      "category": "career_advancement",
+      "scenario_text": "Consider these two job opportunities with different growth potential:",
       "options": [
         {
           "option_id": "A",
           "title": "Option A: Job with KES 30,000/month",
-          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Few chances to learn new skills or move ahead",
+          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Some chances to build skills or improve your future options",
           "attributes": {
             "earnings_per_month": 30000,
             "physical_demand": "phys_light",
-            "social_interaction": "soc_customers",
-            "career_growth": "growth_low"
+            "social_interaction": "soc_peers",
+            "career_growth": "growth_med"
           }
         },
         {
           "option_id": "B",
-          "title": "Option B: Job with KES 50,000/month",
-          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work alone (independent) | Career Growth: Strong chances to learn skills and grow into better opportunities",
+          "title": "Option B: Job with KES 30,000/month",
+          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Strong chances to learn skills and grow into better opportunities",
           "attributes": {
-            "earnings_per_month": 50000,
+            "earnings_per_month": 30000,
             "physical_demand": "phys_light",
-            "social_interaction": "soc_alone",
+            "social_interaction": "soc_peers",
             "career_growth": "growth_high"
           }
         }
       ],
       "follow_up_questions": [],
       "targeted_dimensions": [
-        "work_environment"
+        "career_advancement"
+      ],
+      "difficulty_level": "medium"
+    },
+    {
+      "vignette_id": "adaptive_031",
+      "category": "career_advancement",
+      "scenario_text": "Consider these two job opportunities with different growth potential:",
+      "options": [
+        {
+          "option_id": "A",
+          "title": "Option A: Job with KES 70,000/month",
+          "description": "Monthly Earnings: KES 70,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Some chances to build skills or improve your future options",
+          "attributes": {
+            "earnings_per_month": 70000,
+            "physical_demand": "phys_light",
+            "social_interaction": "soc_peers",
+            "career_growth": "growth_med"
+          }
+        },
+        {
+          "option_id": "B",
+          "title": "Option B: Job with KES 70,000/month",
+          "description": "Monthly Earnings: KES 70,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Strong chances to learn skills and grow into better opportunities",
+          "attributes": {
+            "earnings_per_month": 70000,
+            "physical_demand": "phys_light",
+            "social_interaction": "soc_peers",
+            "career_growth": "growth_high"
+          }
+        }
+      ],
+      "follow_up_questions": [],
+      "targeted_dimensions": [
+        "career_advancement"
+      ],
+      "difficulty_level": "medium"
+    },
+    {
+      "vignette_id": "adaptive_032",
+      "category": "career_advancement",
+      "scenario_text": "Consider these two job opportunities with different growth potential:",
+      "options": [
+        {
+          "option_id": "A",
+          "title": "Option A: Job with KES 70,000/month",
+          "description": "Monthly Earnings: KES 70,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work closely with customers/clients | Career Growth: Some chances to build skills or improve your future options",
+          "attributes": {
+            "earnings_per_month": 70000,
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_customers",
+            "career_growth": "growth_med"
+          }
+        },
+        {
+          "option_id": "B",
+          "title": "Option B: Job with KES 70,000/month",
+          "description": "Monthly Earnings: KES 70,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work closely with customers/clients | Career Growth: Strong chances to learn skills and grow into better opportunities",
+          "attributes": {
+            "earnings_per_month": 70000,
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_customers",
+            "career_growth": "growth_high"
+          }
+        }
+      ],
+      "follow_up_questions": [],
+      "targeted_dimensions": [
+        "career_advancement"
       ],
       "difficulty_level": "medium"
     },
@@ -1132,23 +1132,23 @@
       "options": [
         {
           "option_id": "A",
-          "title": "Option A: Job with KES 30,000/month",
-          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Some chances to build skills or improve your future options",
+          "title": "Option A: Job with KES 50,000/month",
+          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Some chances to build skills or improve your future options",
           "attributes": {
-            "earnings_per_month": 30000,
+            "earnings_per_month": 50000,
             "physical_demand": "phys_light",
-            "social_interaction": "soc_customers",
+            "social_interaction": "soc_peers",
             "career_growth": "growth_med"
           }
         },
         {
           "option_id": "B",
-          "title": "Option B: Job with KES 30,000/month",
-          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work with coworkers (peers) | Career Growth: Strong chances to learn skills and grow into better opportunities",
+          "title": "Option B: Job with KES 50,000/month",
+          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Strong chances to learn skills and grow into better opportunities",
           "attributes": {
-            "earnings_per_month": 30000,
-            "physical_demand": "phys_heavy",
-            "social_interaction": "soc_peers",
+            "earnings_per_month": 50000,
+            "physical_demand": "phys_light",
+            "social_interaction": "soc_customers",
             "career_growth": "growth_high"
           }
         }
@@ -1166,24 +1166,24 @@
       "options": [
         {
           "option_id": "A",
-          "title": "Option A: Job with KES 30,000/month",
-          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Few chances to learn new skills or move ahead",
+          "title": "Option A: Job with KES 70,000/month",
+          "description": "Monthly Earnings: KES 70,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Few chances to learn new skills or move ahead",
           "attributes": {
-            "earnings_per_month": 30000,
+            "earnings_per_month": 70000,
             "physical_demand": "phys_light",
-            "social_interaction": "soc_customers",
+            "social_interaction": "soc_peers",
             "career_growth": "growth_low"
           }
         },
         {
           "option_id": "B",
-          "title": "Option B: Job with KES 50,000/month",
-          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work alone (independent) | Career Growth: Some chances to build skills or improve your future options",
+          "title": "Option B: Job with KES 70,000/month",
+          "description": "Monthly Earnings: KES 70,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Few chances to learn new skills or move ahead",
           "attributes": {
-            "earnings_per_month": 50000,
+            "earnings_per_month": 70000,
             "physical_demand": "phys_light",
-            "social_interaction": "soc_alone",
-            "career_growth": "growth_med"
+            "social_interaction": "soc_customers",
+            "career_growth": "growth_low"
           }
         }
       ],
@@ -1200,10 +1200,10 @@
       "options": [
         {
           "option_id": "A",
-          "title": "Option A: Job with KES 50,000/month",
-          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work with coworkers (peers) | Career Growth: Some chances to build skills or improve your future options",
+          "title": "Option A: Job with KES 15,000/month",
+          "description": "Monthly Earnings: KES 15,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work with coworkers (peers) | Career Growth: Some chances to build skills or improve your future options",
           "attributes": {
-            "earnings_per_month": 50000,
+            "earnings_per_month": 15000,
             "physical_demand": "phys_heavy",
             "social_interaction": "soc_peers",
             "career_growth": "growth_med"
@@ -1211,13 +1211,13 @@
         },
         {
           "option_id": "B",
-          "title": "Option B: Job with KES 70,000/month",
-          "description": "Monthly Earnings: KES 70,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Few chances to learn new skills or move ahead",
+          "title": "Option B: Job with KES 15,000/month",
+          "description": "Monthly Earnings: KES 15,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work closely with customers/clients | Career Growth: Strong chances to learn skills and grow into better opportunities",
           "attributes": {
-            "earnings_per_month": 70000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_peers",
-            "career_growth": "growth_low"
+            "earnings_per_month": 15000,
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_customers",
+            "career_growth": "growth_high"
           }
         }
       ],
@@ -1234,23 +1234,23 @@
       "options": [
         {
           "option_id": "A",
-          "title": "Option A: Job with KES 50,000/month",
-          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work alone (independent) | Career Growth: Few chances to learn new skills or move ahead",
+          "title": "Option A: Job with KES 30,000/month",
+          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Strong chances to learn skills and grow into better opportunities",
           "attributes": {
-            "earnings_per_month": 50000,
+            "earnings_per_month": 30000,
             "physical_demand": "phys_light",
-            "social_interaction": "soc_alone",
-            "career_growth": "growth_low"
+            "social_interaction": "soc_peers",
+            "career_growth": "growth_high"
           }
         },
         {
           "option_id": "B",
-          "title": "Option B: Job with KES 70,000/month",
-          "description": "Monthly Earnings: KES 70,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work alone (independent) | Career Growth: Strong chances to learn skills and grow into better opportunities",
+          "title": "Option B: Job with KES 30,000/month",
+          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Strong chances to learn skills and grow into better opportunities",
           "attributes": {
-            "earnings_per_month": 70000,
-            "physical_demand": "phys_heavy",
-            "social_interaction": "soc_alone",
+            "earnings_per_month": 30000,
+            "physical_demand": "phys_light",
+            "social_interaction": "soc_customers",
             "career_growth": "growth_high"
           }
         }
@@ -1263,18 +1263,18 @@
     },
     {
       "vignette_id": "adaptive_037",
-      "category": "work_environment",
-      "scenario_text": "Consider these two job opportunities with different work environments:",
+      "category": "career_advancement",
+      "scenario_text": "Consider these two job opportunities with different growth potential:",
       "options": [
         {
           "option_id": "A",
-          "title": "Option A: Job with KES 30,000/month",
-          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Few chances to learn new skills or move ahead",
+          "title": "Option A: Job with KES 50,000/month",
+          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work alone (independent) | Career Growth: Some chances to build skills or improve your future options",
           "attributes": {
-            "earnings_per_month": 30000,
+            "earnings_per_month": 50000,
             "physical_demand": "phys_light",
-            "social_interaction": "soc_peers",
-            "career_growth": "growth_low"
+            "social_interaction": "soc_alone",
+            "career_growth": "growth_med"
           }
         },
         {
@@ -1291,109 +1291,109 @@
       ],
       "follow_up_questions": [],
       "targeted_dimensions": [
-        "work_environment"
+        "career_advancement"
       ],
       "difficulty_level": "medium"
     },
     {
       "vignette_id": "adaptive_038",
-      "category": "work_environment",
-      "scenario_text": "Consider these two job opportunities with different work environments:",
+      "category": "career_advancement",
+      "scenario_text": "Consider these two job opportunities with different growth potential:",
       "options": [
         {
           "option_id": "A",
           "title": "Option A: Job with KES 50,000/month",
-          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work closely with customers/clients | Career Growth: Some chances to build skills or improve your future options",
+          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work alone (independent) | Career Growth: Some chances to build skills or improve your future options",
           "attributes": {
             "earnings_per_month": 50000,
             "physical_demand": "phys_heavy",
-            "social_interaction": "soc_customers",
+            "social_interaction": "soc_alone",
             "career_growth": "growth_med"
           }
         },
         {
           "option_id": "B",
-          "title": "Option B: Job with KES 70,000/month",
-          "description": "Monthly Earnings: KES 70,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Some chances to build skills or improve your future options",
+          "title": "Option B: Job with KES 50,000/month",
+          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work alone (independent) | Career Growth: Strong chances to learn skills and grow into better opportunities",
           "attributes": {
-            "earnings_per_month": 70000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_peers",
-            "career_growth": "growth_med"
+            "earnings_per_month": 50000,
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_alone",
+            "career_growth": "growth_high"
           }
         }
       ],
       "follow_up_questions": [],
       "targeted_dimensions": [
-        "work_environment"
+        "career_advancement"
       ],
       "difficulty_level": "medium"
     },
     {
       "vignette_id": "adaptive_039",
-      "category": "work_environment",
-      "scenario_text": "Consider these two job opportunities with different work environments:",
+      "category": "career_advancement",
+      "scenario_text": "Consider these two job opportunities with different growth potential:",
       "options": [
         {
           "option_id": "A",
-          "title": "Option A: Job with KES 50,000/month",
-          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work with coworkers (peers) | Career Growth: Few chances to learn new skills or move ahead",
+          "title": "Option A: Job with KES 30,000/month",
+          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work alone (independent) | Career Growth: Some chances to build skills or improve your future options",
           "attributes": {
-            "earnings_per_month": 50000,
+            "earnings_per_month": 30000,
             "physical_demand": "phys_heavy",
-            "social_interaction": "soc_peers",
-            "career_growth": "growth_low"
-          }
-        },
-        {
-          "option_id": "B",
-          "title": "Option B: Job with KES 70,000/month",
-          "description": "Monthly Earnings: KES 70,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Few chances to learn new skills or move ahead",
-          "attributes": {
-            "earnings_per_month": 70000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_customers",
-            "career_growth": "growth_low"
-          }
-        }
-      ],
-      "follow_up_questions": [],
-      "targeted_dimensions": [
-        "work_environment"
-      ],
-      "difficulty_level": "medium"
-    },
-    {
-      "vignette_id": "adaptive_040",
-      "category": "work_environment",
-      "scenario_text": "Consider these two job opportunities with different work environments:",
-      "options": [
-        {
-          "option_id": "A",
-          "title": "Option A: Job with KES 50,000/month",
-          "description": "Monthly Earnings: KES 50,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work with coworkers (peers) | Career Growth: Some chances to build skills or improve your future options",
-          "attributes": {
-            "earnings_per_month": 50000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_peers",
+            "social_interaction": "soc_alone",
             "career_growth": "growth_med"
           }
         },
         {
           "option_id": "B",
-          "title": "Option B: Job with KES 70,000/month",
-          "description": "Monthly Earnings: KES 70,000 | Physical Demand & Risk: Light physical work and generally safe | Social Interaction: Work closely with customers/clients | Career Growth: Few chances to learn new skills or move ahead",
+          "title": "Option B: Job with KES 30,000/month",
+          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work alone (independent) | Career Growth: Strong chances to learn skills and grow into better opportunities",
           "attributes": {
-            "earnings_per_month": 70000,
-            "physical_demand": "phys_light",
-            "social_interaction": "soc_customers",
-            "career_growth": "growth_low"
+            "earnings_per_month": 30000,
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_alone",
+            "career_growth": "growth_high"
           }
         }
       ],
       "follow_up_questions": [],
       "targeted_dimensions": [
-        "work_environment"
+        "career_advancement"
+      ],
+      "difficulty_level": "medium"
+    },
+    {
+      "vignette_id": "adaptive_040",
+      "category": "career_advancement",
+      "scenario_text": "Consider these two job opportunities with different growth potential:",
+      "options": [
+        {
+          "option_id": "A",
+          "title": "Option A: Job with KES 30,000/month",
+          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work closely with customers/clients | Career Growth: Some chances to build skills or improve your future options",
+          "attributes": {
+            "earnings_per_month": 30000,
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_customers",
+            "career_growth": "growth_med"
+          }
+        },
+        {
+          "option_id": "B",
+          "title": "Option B: Job with KES 30,000/month",
+          "description": "Monthly Earnings: KES 30,000 | Physical Demand & Risk: Heavy physical work or higher risk of injury | Social Interaction: Work closely with customers/clients | Career Growth: Strong chances to learn skills and grow into better opportunities",
+          "attributes": {
+            "earnings_per_month": 30000,
+            "physical_demand": "phys_heavy",
+            "social_interaction": "soc_customers",
+            "career_growth": "growth_high"
+          }
+        }
+      ],
+      "follow_up_questions": [],
+      "targeted_dimensions": [
+        "career_advancement"
       ],
       "difficulty_level": "medium"
     }
