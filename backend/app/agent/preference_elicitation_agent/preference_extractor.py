@@ -473,7 +473,11 @@ class PreferenceExtractor:
         if not hasattr(self, '_likelihood_calculator') or self._likelihood_calculator is None:
             from app.agent.preference_elicitation_agent.bayesian.likelihood_calculator import LikelihoodCalculator
             schema_loader = getattr(self, '_schema_loader', None)
-            self._likelihood_calculator = LikelihoodCalculator(schema_loader)
+            use_term_features = getattr(self, '_use_term_features', False)
+            self._likelihood_calculator = LikelihoodCalculator(
+                schema_loader,
+                use_term_features=use_term_features,
+            )
 
     async def extract_likelihood(
         self,

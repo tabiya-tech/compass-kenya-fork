@@ -56,6 +56,7 @@ try:
         PosteriorDistribution
     )
     from app.agent.preference_elicitation_agent.bayesian.schema_loader import SchemaLoader
+    from app.agent.preference_elicitation_agent.bayesian.prior_loader import PriorsLoader
     from app.agent.preference_elicitation_agent.information_theory.stopping_criterion import StoppingCriterion
     from app.agent.preference_elicitation_agent.config.adaptive_config import AdaptiveConfig
     ADAPTIVE_AVAILABLE = True
@@ -64,12 +65,13 @@ except ImportError:
     PosteriorManager = None
     PosteriorDistribution = None
     SchemaLoader = None
+    PriorsLoader = None
     StoppingCriterion = None
     AdaptiveConfig = None
 
 # Default schema path — can be overridden via ADAPTIVE_SCHEMA_PATH env var
 _DEFAULT_SCHEMA_PATH = (
-    Path(__file__).parent / "offline_optimization" / "preference_parameters.json"
+    Path(__file__).parent / "config" / "preference_parameters.json"
 )
 from app.agent.simple_llm_agent.prompt_response_template import get_json_response_instructions
 from app.conversation_memory.conversation_formatter import ConversationHistoryFormatter
@@ -275,6 +277,8 @@ class PreferenceElicitationAgent(Agent):
         self._adaptive_config: Optional[AdaptiveConfig] = None
         self._posterior_manager: Optional[PosteriorManager] = None
         self._stopping_criterion: Optional[StoppingCriterion] = None
+        self._use_term_features: bool = False
+        self._prior_fim_det: float = 0.0
         self._schema_loader = None  # Loaded alongside _posterior_manager
 
     def set_state(self, state: PreferenceElicitationAgentState) -> None:
@@ -325,13 +329,28 @@ class PreferenceElicitationAgent(Agent):
             schema_path = os.getenv("ADAPTIVE_SCHEMA_PATH", str(_DEFAULT_SCHEMA_PATH))
             schema_loader = SchemaLoader.from_file(schema_path)
 
-            # If prior_mean was not set in config (empty list), use schema default
-            prior_mean = self._adaptive_config.prior_mean or schema_loader.default_prior_mean
-            prior_variance = self._adaptive_config.prior_variance
-            dimensions = schema_loader.dimensions
-
-            prior_mean_array = np.array(prior_mean)
-            prior_cov_array = np.diag([prior_variance] * len(dimensions))
+            priors_path = self._adaptive_config.dynamic_priors_path
+            if priors_path:
+                # Term-level mode: load empirical priors from DCE JSON.
+                # prior_mean and prior_cov are per-term (6 terms for current schema).
+                # Ratio-mode stopping is enabled via the computed prior_fim_determinant.
+                priors = PriorsLoader.load(priors_path, schema_loader)
+                prior_mean_array = np.array(priors.mean)
+                prior_cov_array = np.diag(priors.variances)
+                dimensions = priors.term_names
+                prior_fim_det = priors.fim_determinant
+                self._use_term_features = True
+            else:
+                # Default: term-level mode with neutral priors (6 terms for current schema).
+                # Term-level encoding keeps individual attribute signals separate so that
+                # soc_peers and soc_clients produce different x_diff vectors, enabling
+                # the Bayesian criterion to route different personas to different vignettes.
+                prior_variance = self._adaptive_config.prior_variance
+                dimensions = schema_loader.term_names
+                prior_mean_array = np.array(schema_loader.default_term_prior_mean)
+                prior_cov_array = np.diag([prior_variance] * len(dimensions))
+                prior_fim_det = 0.0
+                self._use_term_features = True
 
             self._posterior_manager = PosteriorManager(
                 prior_mean=prior_mean_array,
@@ -340,23 +359,20 @@ class PreferenceElicitationAgent(Agent):
             )
             # Store schema loader for use by LikelihoodCalculator
             self._schema_loader = schema_loader
-            # Propagate schema_loader to vignette_engine and preference_extractor
+            # Propagate schema_loader and feature mode to vignette_engine and preference_extractor
             self._vignette_engine._schema_loader = schema_loader
             self._preference_extractor._schema_loader = schema_loader
+            self._preference_extractor._use_term_features = self._use_term_features
+            self._prior_fim_det = prior_fim_det
 
         if self._stopping_criterion is None:
-            # Use absolute FIM determinant threshold (prior_fim_determinant=0).
-            # Ratio mode (prior_fim_det = (1/0.5)^7 = 128) made the effective target
-            # det(FIM) >= threshold * 128, which is unreachable in ≤12 two-option
-            # vignettes across 7 dimensions — max_vignettes was the only thing firing.
-            # Absolute mode with threshold=1.0 fires around vignette 9-10 based on
-            # observed det growth: ~0.085 at v7, ~0.657 at v9, ~1.67 at v10.
+            prior_fim_det = getattr(self, "_prior_fim_det", 0.0)
             self._stopping_criterion = StoppingCriterion(
                 min_vignettes=self._adaptive_config.min_vignettes,
                 max_vignettes=self._adaptive_config.max_vignettes,
                 det_threshold=self._adaptive_config.fim_det_threshold,
                 max_variance_threshold=self._adaptive_config.max_variance_threshold,
-                prior_fim_determinant=0.0
+                prior_fim_determinant=prior_fim_det
             )
 
     async def _prewarm_next_vignette(self) -> None:
@@ -1898,10 +1914,13 @@ Vignettes Completed: {pv.n_vignettes_completed}
             from app.agent.preference_elicitation_agent.information_theory.fisher_information import FisherInformationCalculator
             from app.agent.preference_elicitation_agent.bayesian.likelihood_calculator import LikelihoodCalculator
 
-            likelihood_calc = LikelihoodCalculator(self._schema_loader)
+            likelihood_calc = LikelihoodCalculator(
+                self._schema_loader,
+                use_term_features=self._use_term_features,
+            )
             fisher_calculator = FisherInformationCalculator(likelihood_calc)
 
-            n_dims = self._schema_loader.n_dimensions
+            n_dims = len(self._state.posterior_mean)
             current_fim = np.array(self._state.fisher_information_matrix) if self._state.fisher_information_matrix else np.eye(n_dims) / self._adaptive_config.prior_variance
 
             # Compute FIM contribution from this vignette
@@ -1918,7 +1937,7 @@ Vignettes Completed: {pv.n_vignettes_completed}
                 uncertainty_dict[dim] = updated_posterior.get_variance(dim)
             self._state.uncertainty_per_dimension = uncertainty_dict
 
-            prior_fim_det = (1.0 / self._adaptive_config.prior_variance) ** 7
+            prior_fim_det = (1.0 / self._adaptive_config.prior_variance) ** n_dims
             det_ratio = self._state.fim_determinant / prior_fim_det if prior_fim_det > 0 else 0
             self.logger.info(
                 f"Updated Bayesian posterior: FIM det = {self._state.fim_determinant:.2e}, "
