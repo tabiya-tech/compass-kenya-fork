@@ -136,7 +136,7 @@ class TestFIMStoppingRegression:
     def _setup_math_components(self):
         """Set up the Bayesian/FIM math components with production defaults."""
         schema_loader = SchemaLoader.from_file(
-            Path(__file__).parent / "offline_optimization" / "preference_parameters.json"
+            Path(__file__).parent / "config" / "preference_parameters.json"
         )
         n_dim = schema_loader.n_dimensions
         dimensions = schema_loader.dimensions
@@ -268,7 +268,7 @@ class TestFIMStoppingRegression:
         Fixed by raising threshold to 30.0.
         """
         schema_loader = SchemaLoader.from_file(
-            Path(__file__).parent / "offline_optimization" / "preference_parameters.json"
+            Path(__file__).parent / "config" / "preference_parameters.json"
         )
         n_dim = schema_loader.n_dimensions
         prior_variance = 0.5
@@ -348,7 +348,7 @@ class TestFIMStoppingRegression:
         _, _, _, _, stopping, current_fim, prior_fim_det = self._setup_math_components()
 
         schema_loader = SchemaLoader.from_file(
-            Path(__file__).parent / "offline_optimization" / "preference_parameters.json"
+            Path(__file__).parent / "config" / "preference_parameters.json"
         )
         n_dim = schema_loader.n_dimensions
         posterior = PosteriorDistribution(
@@ -393,7 +393,7 @@ async def test_agent_adaptive_phase_not_skipped():
 
     # Configure prior
     schema_loader = SchemaLoader.from_file(
-        Path(__file__).parent / "offline_optimization" / "preference_parameters.json"
+        Path(__file__).parent / "config" / "preference_parameters.json"
     )
     n_dim = schema_loader.n_dimensions
     config = AdaptiveConfig.from_env()

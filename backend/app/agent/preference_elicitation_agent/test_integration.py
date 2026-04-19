@@ -26,7 +26,7 @@ from app.agent.preference_elicitation_agent.adaptive_selection.d_optimal_selecto
 
 
 # Schema path — always in sync with offline optimization output
-_SCHEMA_PATH = Path(__file__).parent / "offline_optimization" / "preference_parameters.json"
+_SCHEMA_PATH = Path(__file__).parent / "config" / "preference_parameters.json"
 
 
 # Fixtures for integration tests
