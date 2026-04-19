@@ -1,0 +1,86 @@
+{
+  "earnings_k": {
+    "type": "continuous",
+    "term": "earnings_k",
+    "prior_mean": 0.0062,
+    "prior_sd": 0.05,
+    "prior_se": 0.0013,
+    "estimated_from_data": true
+  },
+  "physical_demand_risk": {
+    "type": "categorical_treatment",
+    "reference_level": "risky",
+    "reference_prior": {
+      "level": "risky",
+      "prior_mean": 0,
+      "prior_sd": 0,
+      "fixed": true
+    },
+    "levels": [
+      {
+        "level": "safe",
+        "term": "physical_demand_risksafe",
+        "prior_mean": 0.7817,
+        "prior_sd": 0.05,
+        "prior_se": 0.0414,
+        "estimated_from_data": true
+      }
+    ]
+  },
+  "social_interaction": {
+    "type": "categorical_treatment",
+    "reference_level": "alone",
+    "reference_prior": {
+      "level": "alone",
+      "prior_mean": 0,
+      "prior_sd": 0,
+      "fixed": true
+    },
+    "levels": [
+      {
+        "level": "peers",
+        "term": "social_interactionpeers",
+        "prior_mean": 0.3553,
+        "prior_sd": 0.0539,
+        "prior_se": 0.0539,
+        "estimated_from_data": true
+      },
+      {
+        "level": "clients",
+        "term": "social_interactionclients",
+        "prior_mean": 0.0769,
+        "prior_sd": 0.0619,
+        "prior_se": 0.0619,
+        "estimated_from_data": true
+      }
+    ]
+  },
+  "career_growth": {
+    "type": "categorical_treatment",
+    "reference_level": "few",
+    "reference_prior": {
+      "level": "few",
+      "prior_mean": 0,
+      "prior_sd": 0,
+      "fixed": true
+    },
+    "levels": [
+      {
+        "level": "some",
+        "term": "career_growthsome",
+        "prior_mean": 0.4596,
+        "prior_sd": 0.0581,
+        "prior_se": 0.0581,
+        "estimated_from_data": true
+      },
+      {
+        "level": "strong",
+        "term": "career_growthstrong",
+        "prior_mean": 0.739,
+        "prior_sd": 0.0662,
+        "prior_se": 0.0662,
+        "estimated_from_data": true
+      }
+    ]
+  }
+}

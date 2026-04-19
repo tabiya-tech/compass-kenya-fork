@@ -1,0 +1,62 @@
+{
+  "metadata": {
+    "description": "Reduced job attribute schema for discrete choice experiment",
+    "version": "1.1.0",
+    "last_updated": "2026-03",
+    "previous_version_backup": "preference_parameters_v1_backup.json"
+  },
+  "attributes": [
+    {
+      "name": "earnings_per_month",
+      "label": "Monthly Earnings",
+      "group": "Financial",
+      "type": "ordered",
+      "coding": "linear",
+      "levels": [
+        { "id": "earn_15k", "label": "KES 15,000", "value": 15000 },
+        { "id": "earn_30k", "label": "KES 30,000", "value": 30000 },
+        { "id": "earn_50k", "label": "KES 50,000", "value": 50000 },
+        { "id": "earn_70k", "label": "KES 70,000", "value": 70000 }
+      ]
+    },
+    {
+      "name": "physical_demand",
+      "label": "Physical Demand & Risk",
+      "group": "Work Environment",
+      "type": "categorical",
+      "coding": "dummy",
+      "base_level_id": "phys_light",
+      "direction": "negative",
+      "levels": [
+        { "id": "phys_light", "label": "Light physical work and generally safe" },
+        { "id": "phys_heavy", "label": "Heavy physical work or higher risk of injury" }
+      ]
+    },
+    {
+      "name": "social_interaction",
+      "label": "Social Interaction",
+      "group": "Work Environment",
+      "type": "categorical",
+      "coding": "dummy",
+      "base_level_id": "soc_alone",
+      "levels": [
+        { "id": "soc_alone",     "label": "Work alone (independent)" },
+        { "id": "soc_peers",     "label": "Work with coworkers (peers)" },
+        { "id": "soc_customers", "label": "Work closely with customers/clients" }
+      ]
+    },
+    {
+      "name": "career_growth",
+      "label": "Career Growth",
+      "group": "Future Prospects",
+      "type": "ordered",
+      "coding": "dummy",
+      "base_level_id": "growth_low",
+      "levels": [
+        { "id": "growth_low",  "label": "Few chances to learn new skills or move ahead" },
+        { "id": "growth_med",  "label": "Some chances to build skills or improve your future options" },
+        { "id": "growth_high", "label": "Strong chances to learn skills and grow into better opportunities" }
+      ]
+    }
+  ]
+}

@@ -19,6 +19,15 @@ class AdaptiveConfig(BaseModel):
         description="Enable adaptive D-efficiency mode"
     )
 
+    # Path to empirical DCE priors JSON (dce_dynamic_priors_batch*.json format).
+    # When set, overrides prior_mean and prior_variance with term-level estimates.
+    # Set via ADAPTIVE_PRIORS_PATH env var. Leave unset for neutral 0.5 priors.
+    dynamic_priors_path: Optional[str] = Field(
+        default=None,
+        description="Path to DCE priors JSON file. If set, loads term-level priors "
+                    "and overrides prior_mean/prior_variance."
+    )
+
     # Prior distribution (population defaults).
     # Length is determined by the loaded schema, not hardcoded.
     prior_mean: List[float] = Field(
@@ -118,6 +127,7 @@ class AdaptiveConfig(BaseModel):
         """
         return cls(
             enabled=os.getenv("ADAPTIVE_D_EFFICIENCY_ENABLED", "false").lower() == "true",
+            dynamic_priors_path=os.getenv("ADAPTIVE_PRIORS_PATH") or None,
             min_vignettes=int(os.getenv("ADAPTIVE_MIN_VIGNETTES", "4")),
             max_vignettes=int(os.getenv("ADAPTIVE_MAX_VIGNETTES", "12")),
             fim_det_threshold=float(os.getenv("ADAPTIVE_FIM_THRESHOLD", "30.0")),
