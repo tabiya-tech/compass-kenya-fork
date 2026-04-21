@@ -128,7 +128,7 @@ async def _create_user_preferences(
 
         # Create the user preferences
         # Store invitation_code as provided (will be None if bypass was used without providing a code)
-        newly_created = await repository.insert_user_preference(preferences.user_id, UserPreferences(
+        user_preferences_kwargs = dict(
             language=preferences.language,
             invitation_code=preferences.invitation_code,
             client_id=preferences.client_id,
@@ -136,8 +136,16 @@ async def _create_user_preferences(
             sessions=sessions,
             city=preferences.city,
             province=preferences.province,
-            discuss_recommendations=preferences.discuss_recommendations,
-        ))
+        )
+        # Only forward discuss_recommendations when the client supplied one; otherwise let the
+        # UserPreferences default (True) apply. Passing None would fail bool validation.
+        if preferences.discuss_recommendations is not None:
+            user_preferences_kwargs["discuss_recommendations"] = preferences.discuss_recommendations
+
+        newly_created = await repository.insert_user_preference(
+            preferences.user_id,
+            UserPreferences(**user_preferences_kwargs),
+        )
 
         # Record user account creation metric
         await metrics_service.record_event(UserAccountCreatedEvent(
