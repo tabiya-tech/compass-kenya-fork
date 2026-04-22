@@ -312,11 +312,17 @@ class CollectExperiencesAgent(Agent):
         conversation_llm_output.llm_stats = data_extraction_llm_stats + conversation_llm_output.llm_stats + transition_llm_stats
         reasoning_text = transition_reasoning.reasoning if transition_reasoning else "No reasoning provided"
 
-        # Handle education phase transitions
-        if is_education_phase and transition_decision in (TransitionDecision.END_WORKTYPE, TransitionDecision.END_CONVERSATION):
+        # Handle education phase transitions.
+        # TransitionDecisionTool evaluates against the first unexplored WORK type
+        # (FORMAL_SECTOR_WAGED_EMPLOYMENT) and is unaware of the education phase, so its
+        # END_WORKTYPE / END_CONVERSATION verdicts are unreliable here and can fire on a
+        # single partial education entry. The conversation LLM is prompted to emit
+        # <END_OF_WORKTYPE> (surfaced as exploring_type_finished) only when the user
+        # confirms they have no more education entries, so trust that signal exclusively.
+        if is_education_phase and conversation_llm_output.exploring_type_finished:
             self._state.education_phase_done = True
             self.logger.info(
-                "Education phase complete (%s). Collected %d education entries. Transitioning to work type loop.",
+                "Education phase complete (transition=%s). Collected %d education entries. Transitioning to work type loop.",
                 transition_decision.value,
                 len([e for e in collected_data if e.source == "education"])
             )
