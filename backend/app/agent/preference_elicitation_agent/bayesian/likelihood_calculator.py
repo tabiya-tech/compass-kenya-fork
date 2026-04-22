@@ -15,7 +15,12 @@ from .schema_loader import SchemaLoader
 class LikelihoodCalculator:
     """Compute likelihood of observed choices under preference model."""
 
-    def __init__(self, schema_loader: SchemaLoader, temperature: float = 1.0):
+    def __init__(
+        self,
+        schema_loader: SchemaLoader,
+        temperature: float = 1.0,
+        use_term_features: bool = False,
+    ):
         """
         Initialize likelihood calculator.
 
@@ -25,9 +30,13 @@ class LikelihoodCalculator:
                 - temperature=1.0: standard MNL
                 - temperature>1.0: more random
                 - temperature<1.0: more deterministic
+            use_term_features: If True, extract one feature per MNL term (6 for current
+                schema) instead of per dimension (3). Required when using term-level priors
+                loaded via PriorsLoader.
         """
         self._schema = schema_loader
         self.temperature = temperature
+        self._use_term_features = use_term_features
 
     def compute_choice_likelihood(
         self,
@@ -89,11 +98,14 @@ class LikelihoodCalculator:
         """
         Extract feature vector from a vignette option using the schema.
 
-        Returns:
-            Feature vector of length schema_loader.n_dimensions
+        Returns dimension-level features (length n_dimensions) by default,
+        or term-level features (length n_terms) when use_term_features=True.
         """
         attrs = option.attributes if option.attributes else {}
-        features = self._schema.extract_features(attrs)
+        if self._use_term_features:
+            features = self._schema.extract_term_features(attrs)
+        else:
+            features = self._schema.extract_features(attrs)
         return np.array(features, dtype=float)
 
     def create_likelihood_function(

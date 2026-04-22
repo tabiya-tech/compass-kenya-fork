@@ -12,7 +12,7 @@ from app.agent.preference_elicitation_agent.offline_optimization.d_efficiency_op
 @pytest.fixture
 def profile_generator():
     """Create profile generator with real config."""
-    config_path = Path(__file__).parent / "preference_parameters.json"
+    config_path = Path(__file__).parent.parent / "config" / "preference_parameters.json"
     if not config_path.exists():
         pytest.skip("Config file not found")
     return ProfileGenerator(config_path=str(config_path))
@@ -33,8 +33,8 @@ def small_profile_set(profile_generator):
 
 @pytest.fixture
 def prior_mean(profile_generator):
-    """Prior mean matching schema dimensions."""
-    return np.zeros(profile_generator.schema_loader.n_dimensions)
+    """Prior mean matching schema terms (term-level encoding)."""
+    return np.zeros(profile_generator.schema_loader.n_terms)
 
 
 class TestDEfficiencyOptimizer:
@@ -323,7 +323,8 @@ class TestDEfficiencyOptimizer:
         all_vignettes = beginning + end
         stats = optimizer.get_optimization_statistics(all_vignettes, prior_mean)
 
-        # D-efficiency = det(FIM)^(1/k) where k=7
-        expected_d_efficiency = stats["fim_determinant"] ** (1/7)
+        # D-efficiency = det(FIM)^(1/k) where k = number of terms
+        k = len(prior_mean)
+        expected_d_efficiency = stats["fim_determinant"] ** (1/k)
 
         assert np.isclose(stats["d_efficiency"], expected_d_efficiency, rtol=1e-5)

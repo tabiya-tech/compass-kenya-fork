@@ -522,17 +522,18 @@ class VignetteEngine:
         """
         n_shown = len(state.completed_vignettes)
 
-        # Phase 1: Static beginning vignettes (first 4)
-        if n_shown < 4:
+        # Phase 1: Static beginning vignettes
+        n_beginning = len(self._static_beginning_vignettes)
+        if n_shown < n_beginning:
             vignette = self._static_beginning_vignettes[n_shown]
             self._logger.info(
-                f"📍 Phase 1 (Static Beginning): Showing vignette {n_shown + 1}/4: {vignette.vignette_id}"
+                f"📍 Phase 1 (Static Beginning): Showing vignette {n_shown + 1}/{n_beginning}: {vignette.vignette_id}"
             )
             return vignette
 
         # Check if we should transition to end phase
         # This happens when:
-        # - We've shown at least 4 beginning vignettes AND
+        # - We've shown all beginning vignettes AND
         # - State indicates we should stop adaptive selection
         if hasattr(state, 'adaptive_phase_complete') and state.adaptive_phase_complete:
             # Phase 3: Static end vignettes (last 2)
@@ -563,8 +564,9 @@ class VignetteEngine:
         )
 
         # Reconstruct Fisher Information Matrix
+        n_dims = len(state.posterior_mean)
         if state.fisher_information_matrix is None:
-            current_fim = np.zeros((7, 7))
+            current_fim = np.zeros((n_dims, n_dims))
         else:
             current_fim = np.array(state.fisher_information_matrix)
 
@@ -649,10 +651,11 @@ class VignetteEngine:
         selected_vignette = None
         phase_name = ""
 
-        # Phase 1: Static beginning vignettes (first 4)
-        if n_shown < 4:
+        # Phase 1: Static beginning vignettes
+        n_beginning = len(self._static_beginning_vignettes)
+        if n_shown < n_beginning:
             selected_vignette = self._static_beginning_vignettes[n_shown]
-            phase_name = f"Static Beginning {n_shown + 1}/4"
+            phase_name = f"Static Beginning {n_shown + 1}/{n_beginning}"
 
         # Check if we should transition to end phase
         elif hasattr(state, 'adaptive_phase_complete') and state.adaptive_phase_complete:
@@ -684,7 +687,7 @@ class VignetteEngine:
             )
 
             # Reconstruct FIM
-            n_dims = self._schema_loader.n_dimensions if self._schema_loader else len(state.posterior_mean)
+            n_dims = len(state.posterior_mean)
             if state.fisher_information_matrix is None:
                 current_fim = np.zeros((n_dims, n_dims))
             else:

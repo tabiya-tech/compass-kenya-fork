@@ -12,7 +12,7 @@ from app.agent.preference_elicitation_agent.offline_optimization.adaptive_librar
 @pytest.fixture
 def profile_generator():
     """Create profile generator with real config."""
-    config_path = Path(__file__).parent / "preference_parameters.json"
+    config_path = Path(__file__).parent.parent / "config" / "preference_parameters.json"
     if not config_path.exists():
         pytest.skip("Config file not found")
     return ProfileGenerator(config_path=str(config_path))
@@ -32,9 +32,9 @@ def small_profile_set(profile_generator):
 
 @pytest.fixture
 def prior_mean(profile_generator):
-    """Prior mean matching schema dimensions."""
-    n_dims = profile_generator.schema_loader.n_dimensions
-    return np.zeros(n_dims)
+    """Prior mean matching schema terms (term-level encoding)."""
+    n_terms = profile_generator.schema_loader.n_terms
+    return np.zeros(n_terms)
 
 
 @pytest.fixture
@@ -173,8 +173,8 @@ class TestAdaptiveLibraryBuilder:
         vignette1 = (small_profile_set[0], small_profile_set[1])
         vignette2 = (small_profile_set[0], small_profile_set[2])  # Similar to vignette1
 
-        x1_a = np.array(builder.profile_generator.encode_profile(vignette1[0]))
-        x1_b = np.array(builder.profile_generator.encode_profile(vignette1[1]))
+        x1_a = np.array(builder.profile_generator.encode_profile_terms(vignette1[0]))
+        x1_b = np.array(builder.profile_generator.encode_profile_terms(vignette1[1]))
         x1_diff = x1_a - x1_b
 
         diversity = builder._compute_diversity(vignette2, [x1_diff])
@@ -325,8 +325,8 @@ class TestAdaptiveLibraryBuilder:
         vignette2 = (small_profile_set[2], small_profile_set[3])
 
         # Create feature vectors
-        x1_a = np.array(builder.profile_generator.encode_profile(vignette1[0]))
-        x1_b = np.array(builder.profile_generator.encode_profile(vignette1[1]))
+        x1_a = np.array(builder.profile_generator.encode_profile_terms(vignette1[0]))
+        x1_b = np.array(builder.profile_generator.encode_profile_terms(vignette1[1]))
         x1_diff = x1_a - x1_b
 
         # Normalize for cosine distance

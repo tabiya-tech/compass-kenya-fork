@@ -230,6 +230,87 @@ class SchemaLoader:
         return features
 
     # ------------------------------------------------------------------
+    # Term-level interface (one element per MNL regression term)
+    # ------------------------------------------------------------------
+
+    @property
+    def term_names(self) -> list[str]:
+        """
+        Ordered list of MNL term names — one per regression coefficient.
+
+        For linear attributes: one term named after the attribute (e.g. "earnings_k").
+        For dummy attributes: one term per non-base level, named
+            "<attribute_name>_<level_id>" (snake_cased).
+
+        This matches the structure of the dce_dynamic_priors JSON files so that
+        prior values can be mapped 1:1 without any aggregation.
+        """
+        names: list[str] = []
+        for spec in self._specs:
+            if spec.coding == "linear":
+                names.append(spec.name)
+            else:
+                for lv in spec.levels:
+                    if lv["id"] != spec.base_level_id:
+                        names.append(f"{spec.name}_{lv['id']}")
+        return names
+
+    @property
+    def n_terms(self) -> int:
+        """Number of MNL terms."""
+        return len(self.term_names)
+
+    @property
+    def default_term_prior_mean(self) -> list[float]:
+        """Neutral prior: 0.5 for every term."""
+        return [0.5] * self.n_terms
+
+    def extract_term_features(self, attributes: dict[str, Any]) -> list[float]:
+        """
+        Convert a vignette option's attributes dict into a term-level feature vector
+        aligned with self.term_names.
+
+        For linear attributes: normalized value in [0, 1].
+        For dummy attributes: 1.0 if that level is present, 0.0 otherwise
+            (direction applied: negative attributes are flipped).
+
+        Args:
+            attributes: dict mapping attribute name -> level_id (str) or raw numeric.
+
+        Returns:
+            Feature vector of length self.n_terms.
+        """
+        features: list[float] = []
+        for spec in self._specs:
+            raw = attributes.get(spec.name)
+            if spec.coding == "linear":
+                if raw is None:
+                    features.append(0.0)
+                elif isinstance(raw, str):
+                    features.append(spec.encode(raw))
+                else:
+                    all_vals = list(spec._level_values.values())
+                    if all_vals:
+                        lo, hi = min(all_vals), max(all_vals)
+                        val = (float(raw) - lo) / (hi - lo) if hi > lo else 0.5
+                    else:
+                        val = float(raw)
+                    if spec.direction == "negative":
+                        val = 1.0 - val
+                    features.append(val)
+            else:
+                # dummy: one feature per non-base level
+                level_id = str(raw) if raw is not None else spec.base_level_id
+                for lv in spec.levels:
+                    if lv["id"] == spec.base_level_id:
+                        continue
+                    val = 1.0 if level_id == lv["id"] else 0.0
+                    if spec.direction == "negative":
+                        val = 1.0 - val
+                    features.append(val)
+        return features
+
+    # ------------------------------------------------------------------
     # Introspection helpers
     # ------------------------------------------------------------------
 

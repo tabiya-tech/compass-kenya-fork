@@ -8,6 +8,7 @@ import logging
 import numpy as np
 from typing import Dict, List, Any, Tuple, Set
 from itertools import combinations
+from collections import defaultdict
 import random
 
 
@@ -23,8 +24,8 @@ class AdaptiveLibraryBuilder:
         """
         self.logger = logging.getLogger(self.__class__.__name__)
         self.profile_generator = profile_generator
-        # Derive dimension count from schema via SchemaLoader
-        self.n_params = profile_generator.schema_loader.n_dimensions
+        # Use term-level count so individual attribute signals are kept separate.
+        self.n_params = profile_generator.schema_loader.n_terms
 
     def build_adaptive_library(
         self,
@@ -33,14 +34,19 @@ class AdaptiveLibraryBuilder:
         excluded_vignettes: List[Tuple[Dict, Dict]] = None,
         prior_mean: np.ndarray = None,
         diversity_weight: float = 0.3,
-        sample_size: int = 10000
+        sample_size: int = 10000,
+        n_focused_per_attr: int = 3,
+        n_dim_targeted_per_dim: int = 3
     ) -> List[Tuple[Dict, Dict]]:
         """
         Build adaptive library using diversity-aware selection with sampling.
 
-        Selects vignettes that are:
-        1. Informative (high FIM contribution)
-        2. Diverse (cover different regions of preference space)
+        Phase 1: Focused vignettes — pairs where only one attribute differs.
+        These enable true adaptivity: the Bayesian trace(FIM @ Cov) criterion
+        gives focused vignettes a high score when the persona is uncertain in
+        exactly that dimension, and a low score otherwise.
+
+        Phase 2: Greedy D-optimal + diversity for remaining slots.
 
         Args:
             profiles: List of non-dominated job profiles
@@ -49,6 +55,7 @@ class AdaptiveLibraryBuilder:
             prior_mean: Prior mean for preference weights
             diversity_weight: Weight for diversity term (0-1, default: 0.3)
             sample_size: Number of candidates to sample per round (default: 10,000)
+            n_focused_per_attr: Focused vignettes to reserve per attribute (default: 3)
 
         Returns:
             List of vignette pairs for adaptive library
@@ -58,7 +65,7 @@ class AdaptiveLibraryBuilder:
         )
 
         if prior_mean is None:
-            prior_mean = np.ones(self.n_params) * 0.5
+            prior_mean = np.ones(self.n_params) * 0.5  # neutral prior for all terms
 
         if excluded_vignettes is None:
             excluded_vignettes = []
@@ -73,17 +80,156 @@ class AdaptiveLibraryBuilder:
         total_possible_pairs = len(profiles) * (len(profiles) - 1) // 2
         self.logger.info(f"Total possible vignette pairs: {total_possible_pairs:,}")
 
-        # We'll use sampling instead of generating all pairs upfront
-        # Keep track of selected hashes to avoid duplicates
         selected_hashes = set()
-
-        # Greedy selection with diversity
         selected_vignettes = []
         selected_feature_vectors = []
 
-        for round_idx in range(num_library):
+        # =====================================================================
+        # Phase 1: Focused vignettes — one attribute differs, all others equal.
+        # These are critical for true adaptivity: the Bayesian criterion
+        # trace(FIM @ Cov) selects them when a persona's posterior has high
+        # variance in exactly that attribute's direction.
+        # =====================================================================
+        attr_names = [attr["name"] for attr in self.profile_generator.attributes]
+        self.logger.info(
+            f"Phase 1: Building focused vignettes ({n_focused_per_attr} per attribute × "
+            f"{len(attr_names)} attributes = up to {n_focused_per_attr * len(attr_names)} focused)"
+        )
+
+        for attr_name in attr_names:
+            if len(selected_vignettes) >= num_library:
+                break
+            focused_candidates = self._find_focused_pairs_for_attr(profiles, attr_name)
+            count_added = 0
+
+            for pair in focused_candidates:
+                if count_added >= n_focused_per_attr:
+                    break
+                if len(selected_vignettes) >= num_library:
+                    break
+
+                pair_hash = (self._profile_hash(pair[0]), self._profile_hash(pair[1]))
+                if pair_hash in excluded_set or pair_hash in selected_hashes:
+                    continue
+                if self._has_pairwise_dominance(pair[0], pair[1]):
+                    continue
+                if self._has_excessive_wage_gap(pair[0], pair[1]):
+                    continue
+                if self._has_attribute_cancellation(pair[0], pair[1]):
+                    continue
+
+                selected_vignettes.append(pair)
+                selected_hashes.add(pair_hash)
+                x_a = np.array(self.profile_generator.encode_profile_terms(pair[0]))
+                x_b = np.array(self.profile_generator.encode_profile_terms(pair[1]))
+                selected_feature_vectors.append(x_a - x_b)
+                count_added += 1
+
+            self.logger.info(
+                f"  Attribute '{attr_name}': added {count_added} focused vignettes "
+                f"(from {len(focused_candidates)} candidates)"
+            )
+
+        self.logger.info(
+            f"Phase 1 complete: {len(selected_vignettes)} focused vignettes added"
+        )
+
+        # =====================================================================
+        # Phase 1.5: Dimension-targeted trade-off vignettes.
+        # For monotone attributes (earnings, physical demand), focused pairs
+        # are always dominated (higher earnings is universally preferred).
+        # Instead, we find genuine trade-off pairs where ONE dimension accounts
+        # for ≥50% of the variance in ||x_diff||² — these isolate a dimension
+        # signal without being dominated.
+        # Example: (30k+heavy+alone) vs (50k+light+peers) has conflicting
+        # earnings/work-env trade-off; if earnings² > work_env² + career²,
+        # this vignette is classified as "earnings-dominant".
+        # =====================================================================
+        schema_loader = self.profile_generator.schema_loader
+        n_schema_terms = schema_loader.n_terms
+        term_names = schema_loader.term_names  # e.g. ['earnings_per_month', 'physical_demand_phys_safe', ...]
+
+        self.logger.info(
+            f"Phase 1.5: Building term-targeted vignettes "
+            f"({n_dim_targeted_per_dim} per term × {n_schema_terms} terms = "
+            f"up to {n_dim_targeted_per_dim * n_schema_terms} targeted)"
+        )
+
+        # Enumerate all valid pairs once (72 profiles → 2556 pairs at most)
+        all_pairs_for_targeting = list(combinations(profiles, 2))
+
+        for dim_idx in range(n_schema_terms):
+            if len(selected_vignettes) >= num_library:
+                break
+            dim_name = term_names[dim_idx] if dim_idx < len(term_names) else f"term_{dim_idx}"
+
+            # Score each pair by how much this dimension dominates x_diff
+            scored_pairs = []
+            for pair in all_pairs_for_targeting:
+                pair_hash = (self._profile_hash(pair[0]), self._profile_hash(pair[1]))
+                if pair_hash in excluded_set or pair_hash in selected_hashes:
+                    continue
+                if self._has_pairwise_dominance(pair[0], pair[1]):
+                    continue
+                if self._has_excessive_wage_gap(pair[0], pair[1]):
+                    continue
+                if self._has_attribute_cancellation(pair[0], pair[1]):
+                    continue
+
+                x_a = np.array(self.profile_generator.encode_profile_terms(pair[0]))
+                x_b = np.array(self.profile_generator.encode_profile_terms(pair[1]))
+                x_diff = x_a - x_b
+
+                total_sq = np.dot(x_diff, x_diff)
+                if total_sq < 1e-8:
+                    continue
+
+                dim_sq = x_diff[dim_idx] ** 2
+                dominance_ratio = dim_sq / total_sq  # fraction of variance in target dim
+
+                if dominance_ratio >= 0.5:  # this dim accounts for ≥50% of signal
+                    scored_pairs.append((dominance_ratio, pair))
+
+            # Sort by dominance ratio descending (most dimension-specific first)
+            scored_pairs.sort(key=lambda t: -t[0])
+
+            count_added = 0
+            for _, pair in scored_pairs:
+                if count_added >= n_dim_targeted_per_dim:
+                    break
+                if len(selected_vignettes) >= num_library:
+                    break
+                pair_hash = (self._profile_hash(pair[0]), self._profile_hash(pair[1]))
+                if pair_hash in selected_hashes:
+                    continue
+
+                selected_vignettes.append(pair)
+                selected_hashes.add(pair_hash)
+                x_a = np.array(self.profile_generator.encode_profile_terms(pair[0]))
+                x_b = np.array(self.profile_generator.encode_profile_terms(pair[1]))
+                selected_feature_vectors.append(x_a - x_b)
+                count_added += 1
+
+            self.logger.info(
+                f"  Term '{dim_name}' (idx={dim_idx}): added {count_added} targeted vignettes "
+                f"(from {len(scored_pairs)} candidates with dominance_ratio ≥ 0.5)"
+            )
+
+        self.logger.info(
+            f"Phase 1.5 complete: {len(selected_vignettes)} total vignettes so far "
+            f"(focused + term-targeted)"
+        )
+
+        # =====================================================================
+        # Phase 2: Greedy D-optimal + diversity for remaining slots
+        # =====================================================================
+        remaining_slots = num_library - len(selected_vignettes)
+        self.logger.info(f"Phase 2: Filling {remaining_slots} remaining slots with greedy diversity selection")
+
+        for round_idx in range(remaining_slots):
+            total_so_far = len(selected_vignettes) + 1
             if round_idx % 10 == 0:
-                self.logger.info(f"Selecting vignette {round_idx + 1}/{num_library}...")
+                self.logger.info(f"Selecting greedy vignette {round_idx + 1}/{remaining_slots} (total {total_so_far}/{num_library})...")
 
             best_vignette = None
             best_score = -np.inf
@@ -183,8 +329,8 @@ class AdaptiveLibraryBuilder:
             selected_hashes.add(best_hash)
 
             # Track feature representation for diversity
-            x_a = np.array(self.profile_generator.encode_profile(best_vignette[0]))
-            x_b = np.array(self.profile_generator.encode_profile(best_vignette[1]))
+            x_a = np.array(self.profile_generator.encode_profile_terms(best_vignette[0]))
+            x_b = np.array(self.profile_generator.encode_profile_terms(best_vignette[1]))
             x_diff = x_a - x_b
             selected_feature_vectors.append(x_diff)
 
@@ -216,8 +362,8 @@ class AdaptiveLibraryBuilder:
             Informativeness score (FIM determinant)
         """
         # Encode profiles
-        x_a = np.array(self.profile_generator.encode_profile(profile_a))
-        x_b = np.array(self.profile_generator.encode_profile(profile_b))
+        x_a = np.array(self.profile_generator.encode_profile_terms(profile_a))
+        x_b = np.array(self.profile_generator.encode_profile_terms(profile_b))
 
         # Compute utilities
         u_a = np.dot(x_a, preference_weights) / temperature
@@ -235,7 +381,7 @@ class AdaptiveLibraryBuilder:
         fim = p_a * p_b * np.outer(x_diff, x_diff)
 
         # Determinant as informativeness
-        det = np.linalg.det(fim + np.eye(self.n_params) * 1e-8)  # Add small regularization
+        det = np.linalg.det(fim + np.eye(self.n_params) * 1e-8)
 
         return float(det)
 
@@ -260,8 +406,8 @@ class AdaptiveLibraryBuilder:
             return 1.0  # First vignette is maximally diverse
 
         # Get feature representation
-        x_a = np.array(self.profile_generator.encode_profile(vignette_pair[0]))
-        x_b = np.array(self.profile_generator.encode_profile(vignette_pair[1]))
+        x_a = np.array(self.profile_generator.encode_profile_terms(vignette_pair[0]))
+        x_b = np.array(self.profile_generator.encode_profile_terms(vignette_pair[1]))
         x_diff = x_a - x_b
 
         # Compute minimum distance to selected vignettes
@@ -275,6 +421,39 @@ class AdaptiveLibraryBuilder:
             min_distance = min(min_distance, distance)
 
         return min_distance
+
+    def _find_focused_pairs_for_attr(
+        self,
+        profiles: List[Dict[str, Any]],
+        attr_name: str
+    ) -> List[Tuple[Dict, Dict]]:
+        """
+        Find all profile pairs that differ ONLY in attr_name.
+
+        Groups profiles by all-other-attribute values; any two profiles in the
+        same group differ in exactly attr_name and nothing else.
+
+        Args:
+            profiles: Full profile list
+            attr_name: The single attribute that may differ
+
+        Returns:
+            List of (profile_a, profile_b) pairs, unfiltered
+        """
+        groups: Dict[tuple, List[Dict]] = defaultdict(list)
+        for profile in profiles:
+            key = tuple(sorted(
+                (k, v) for k, v in profile.items() if k != attr_name
+            ))
+            groups[key].append(profile)
+
+        focused_pairs = []
+        for group_profiles in groups.values():
+            if len(group_profiles) >= 2:
+                for p_a, p_b in combinations(group_profiles, 2):
+                    focused_pairs.append((p_a, p_b))
+
+        return focused_pairs
 
     def _has_attribute_cancellation(
         self,
@@ -359,8 +538,8 @@ class AdaptiveLibraryBuilder:
         # Extract feature vectors
         feature_vectors = []
         for profile_a, profile_b in library:
-            x_a = np.array(self.profile_generator.encode_profile(profile_a))
-            x_b = np.array(self.profile_generator.encode_profile(profile_b))
+            x_a = np.array(self.profile_generator.encode_profile_terms(profile_a))
+            x_b = np.array(self.profile_generator.encode_profile_terms(profile_b))
             x_diff = x_a - x_b
             feature_vectors.append(x_diff)
 
@@ -457,27 +636,27 @@ class AdaptiveLibraryBuilder:
         self,
         profile_a: Dict[str, Any],
         profile_b: Dict[str, Any],
-        quasi_dominance_threshold: int = 5
+        quasi_dominance_threshold: int = 4
     ) -> bool:
         """
         Check if one profile dominates the other in this vignette pair.
 
-        Checks for both strict dominance and quasi-dominance in the 7-dimensional
+        Checks for both strict dominance and quasi-dominance in the term-level
         encoded preference space.
 
         Args:
             profile_a: First profile in vignette
             profile_b: Second profile in vignette
-            quasi_dominance_threshold: Minimum dimensions where one option must be better
-                                       to be considered quasi-dominant (default: 5)
+            quasi_dominance_threshold: Minimum terms where one option must be better
+                                       to be considered quasi-dominant (default: 4/6 = 67%)
 
         Returns:
             True if either profile dominates or quasi-dominates the other
             False if neither dominates (good vignette - has meaningful trade-offs)
         """
-        # Encode profiles to 7-dimensional preference space
-        features_a = np.array(self.profile_generator.encode_profile(profile_a))
-        features_b = np.array(self.profile_generator.encode_profile(profile_b))
+        # Encode profiles to term-level preference space
+        features_a = np.array(self.profile_generator.encode_profile_terms(profile_a))
+        features_b = np.array(self.profile_generator.encode_profile_terms(profile_b))
 
         # Check strict dominance
         a_dominates_b = self._features_dominate(features_a, features_b)
