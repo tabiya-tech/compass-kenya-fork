@@ -34,7 +34,8 @@ class DEfficiencyOptimizer:
         num_beginning: int = 4,
         prior_mean: np.ndarray = None,
         prior_variance: float = 0.5,
-        sample_size: int = 100000
+        sample_size: int = 100000,
+        max_wage_varying: int = 2
     ) -> Tuple[List[Tuple[Dict, Dict]], List[Tuple[Dict, Dict]]]:
         """
         Select static vignettes using D-efficiency optimization with sampling.
@@ -49,6 +50,9 @@ class DEfficiencyOptimizer:
             prior_mean: Prior mean for preference weights (7D vector)
             prior_variance: Prior variance (scalar)
             sample_size: Number of vignette pairs to sample per round (default: 100,000)
+            max_wage_varying: Maximum number of vignettes allowed to differ on earnings.
+                Remaining slots are forced to have identical wages so the set
+                contains genuine trade-offs on non-monetary attributes.
 
         Returns:
             Tuple of (beginning_vignettes, end_vignettes)
@@ -70,6 +74,10 @@ class DEfficiencyOptimizer:
         # Greedy selection
         selected_vignettes = []
         current_fim = np.eye(self.n_params) / prior_variance  # Prior FIM
+        wage_varying_count = 0
+        same_wage_levels_used: set = set()
+        all_wage_levels = {p.get('earnings_per_month') for p in profiles}
+        all_wage_levels.discard(None)
 
         for round_idx in range(num_static):
             self.logger.info(f"Selecting vignette {round_idx + 1}/{num_static}...")
@@ -123,6 +131,19 @@ class DEfficiencyOptimizer:
                 if self._has_excessive_wage_gap(vignette_pair[0], vignette_pair[1]):
                     continue
 
+                # Enforce wage-diversity quota: once max_wage_varying slots are
+                # filled, only accept pairs with identical earnings so the remaining
+                # vignettes isolate non-monetary trade-offs.
+                same_wage = not self._has_earnings_difference(vignette_pair[0], vignette_pair[1])
+                if wage_varying_count >= max_wage_varying and not same_wage:
+                    continue
+
+                # Spread same-wage vignettes across wage levels: skip pairs at a
+                # wage level already used until every level has been represented.
+                if same_wage and same_wage_levels_used != all_wage_levels:
+                    if vignette_pair[0].get('earnings_per_month') in same_wage_levels_used:
+                        continue
+
                 # Compute FIM contribution
                 vignette_fim = self._compute_vignette_fim(
                     vignette_pair[0],
@@ -153,8 +174,17 @@ class DEfficiencyOptimizer:
             selected_vignettes.append(best_vignette)
             current_fim += best_fim
 
+            if self._has_earnings_difference(best_vignette[0], best_vignette[1]):
+                wage_varying_count += 1
+            else:
+                same_wage_levels_used.add(best_vignette[0].get('earnings_per_month'))
+
+            wage_a = best_vignette[0].get('earnings_per_month', '?')
+            wage_b = best_vignette[1].get('earnings_per_month', '?')
             self.logger.info(
                 f"  Round {round_idx + 1}: Selected vignette with det increase = {best_det_increase:.2e}"
+                f" | earnings: {wage_a} vs {wage_b}"
+                f" | wage-varying: {wage_varying_count}/{max_wage_varying}"
             )
             self.logger.info(
                 f"  Current FIM determinant: {np.linalg.det(current_fim):.2e}"
@@ -294,11 +324,19 @@ class DEfficiencyOptimizer:
             "max_eigenvalue": float(np.max(eigenvalues))
         }
 
+    def _has_earnings_difference(
+        self,
+        profile_a: Dict[str, Any],
+        profile_b: Dict[str, Any]
+    ) -> bool:
+        """Return True if the two profiles have different earnings_per_month values."""
+        return profile_a.get('earnings_per_month') != profile_b.get('earnings_per_month')
+
     def _has_excessive_wage_gap(
         self,
         profile_a: Dict[str, Any],
         profile_b: Dict[str, Any],
-        max_ratio: float = 1.67
+        max_ratio: float = 1.5
     ) -> bool:
         """
         Check if wage gap between profiles is too large (psychological anchoring issue).

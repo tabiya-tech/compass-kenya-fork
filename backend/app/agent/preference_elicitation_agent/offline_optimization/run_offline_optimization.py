@@ -27,6 +27,54 @@ from adaptive_library_builder import AdaptiveLibraryBuilder
 from vignette_converter import VignetteConverter
 
 
+def _load_prior_mean(profile_generator: ProfileGenerator, priors_path: Path) -> np.ndarray:
+    """
+    Build a prior_mean vector from dce_dynamic_priors JSON.
+
+    The priors file uses different naming conventions and units than the
+    MNL term vector, so this function handles two non-obvious mappings:
+
+    1. Earnings unit conversion: priors store beta per KES 1k; the schema
+       normalises earnings linearly over [15k, 70k] (55k range), so:
+           beta_normalised = beta_per_k * 55
+
+    2. Physical demand sign: priors store utility of "safe" (positive).
+       The schema encodes physical_demand with direction="negative", flipping
+       the dummy so 0=heavy, 1=light. The beta sign stays positive — a higher
+       feature value (lighter work) correctly increases utility.
+    """
+    with open(priors_path) as f:
+        priors = json.load(f)
+
+    # Map from schema term_name -> prior_mean value
+    EARNINGS_RANGE_K = 55  # (70k - 15k) / 1k
+
+    term_to_prior = {
+        "earnings_per_month": priors["earnings_k"]["prior_mean"] * EARNINGS_RANGE_K,
+        "physical_demand_phys_heavy": priors["physical_demand_risk"]["levels"][0]["prior_mean"],
+        "social_interaction_soc_peers": next(
+            lv["prior_mean"] for lv in priors["social_interaction"]["levels"]
+            if lv["level"] == "peers"
+        ),
+        "social_interaction_soc_customers": next(
+            lv["prior_mean"] for lv in priors["social_interaction"]["levels"]
+            if lv["level"] == "clients"
+        ),
+        "career_growth_growth_med": next(
+            lv["prior_mean"] for lv in priors["career_growth"]["levels"]
+            if lv["level"] == "some"
+        ),
+        "career_growth_growth_high": next(
+            lv["prior_mean"] for lv in priors["career_growth"]["levels"]
+            if lv["level"] == "strong"
+        ),
+    }
+
+    term_names = profile_generator.schema_loader.term_names
+    prior_mean = np.array([term_to_prior[t] for t in term_names])
+    return prior_mean
+
+
 def setup_logging(log_file: Path = None):
     """Setup logging configuration."""
     handlers = [logging.StreamHandler(sys.stdout)]
@@ -107,10 +155,28 @@ def main():
         help="Number of adaptive library vignettes (default: 40)"
     )
     parser.add_argument(
+        "--max-wage-varying",
+        type=int,
+        default=2,
+        help="Max number of static vignettes allowed to differ on earnings (default: 2). "
+             "Remaining slots are filled with same-earnings pairs to isolate non-monetary trade-offs."
+    )
+    parser.add_argument(
         "--diversity-weight",
         type=float,
         default=0.3,
         help="Weight for diversity in adaptive library (0-1, default: 0.3)"
+    )
+    parser.add_argument(
+        "--priors-file",
+        type=str,
+        default=None,
+        help="Path to dce_dynamic_priors JSON file (default: auto-detected from config dir)"
+    )
+    parser.add_argument(
+        "--ignore-priors",
+        action="store_true",
+        help="Use zero prior_mean instead of loading from priors file (reverts to pure D-optimal)"
     )
     parser.add_argument(
         "--log-file",
@@ -219,16 +285,30 @@ def main():
 
     optimizer = DEfficiencyOptimizer(profile_generator)
 
-    # Prior mean — neutral (0.0) for all MNL terms
-    n_terms = profile_generator.schema_loader.n_terms
-    prior_mean = np.zeros(n_terms)
+    # Prior mean from data-estimated priors, unless --ignore-priors is set
+    if args.ignore_priors:
+        prior_mean = np.zeros(profile_generator.schema_loader.n_terms)
+        logger.info("Using zero prior_mean (--ignore-priors flag set)")
+    else:
+        config_dir = Path(args.config).parent
+        priors_path = Path(args.priors_file) if args.priors_file else (
+            config_dir / "dce_dynamic_priors_batch1_short.json"
+        )
+        prior_mean = _load_prior_mean(profile_generator, priors_path)
+        logger.info(f"Loaded prior_mean from: {priors_path}")
+
+    term_names = profile_generator.schema_loader.term_names
+    for name, val in zip(term_names, prior_mean):
+        logger.info(f"  {name}: {val:.4f}")
+    logger.info("")
 
     beginning_vignettes, end_vignettes = optimizer.select_static_vignettes(
         profiles=non_dominated_profiles,
         num_static=args.num_static,
         num_beginning=args.num_beginning,
         prior_mean=prior_mean,
-        sample_size=args.sample_size
+        sample_size=args.sample_size,
+        max_wage_varying=args.max_wage_varying
     )
 
     all_static_vignettes = beginning_vignettes + end_vignettes
