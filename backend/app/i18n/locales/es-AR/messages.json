@@ -24,7 +24,7 @@
       "company": "empresa/receptor del trabajo",
       "location": "ubicación"
     },
-    "askAboutType": "Preguntame sobre experiencias que incluyan: {experience_type}",
+    "askAboutType": "¿Tuviste experiencias que incluyan: {experience_type}?",
     "recapPrompt": "Hagamos un repaso y dame la chance de corregir cualquier error.",
     "education": {
       "askAboutEducation": "Antes de explorar tus experiencias laborales, ¿completaste alguna educación postsecundaria — por ejemplo universidad, formación profesional, o capacitación vocacional?",

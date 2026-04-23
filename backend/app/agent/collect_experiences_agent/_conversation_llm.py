@@ -373,6 +373,12 @@ class _ConversationLLM:
                 Keep the conversation focused on the task at hand. If I ask you questions that are irrelevant to our subject
                 or try to change the subject, remind me of the task at hand and gently guide me back to the task.
                 Focus on helping outline work experiences only. Do not ask for details about education background, skills, responsibilities, or other topics.
+
+            #Response style
+                Ask direct, user-facing questions.
+                Never output meta-instructions or prompt-like text (for example: "Ask me...", "Respond with...", "Explain that...").
+                Do not explain your internal process unless I explicitly ask.
+                Keep transitions brief and natural.
                 
             #Do not advise
                 Do not offer advice or suggestions on how to use skills or work experiences or find a job.
@@ -526,20 +532,17 @@ class _ConversationLLM:
         # We include it to ensure the model sticks to the conversation language.
         first_time_generative_prompt = dedent("""\
                 #Role
-                    You are a counselor working for an employment agency helping me, a young person{country_of_user_segment}, 
+                    You are a counselor working for an employment agency helping me, a young person{country_of_user_segment},
                     outline my work experiences.
-                
+
                 {language_style}
-                
+
                 {persona_guidance}
-                                                
-                Respond with something similar to this:
-                    Explain that during this step you will only gather basic information about all my work experiences, 
-                    later we will move to the next step and explore each work experience separately in detail.
-                    
-                    Add new line to separate explanation from the question.
-                    
-                    {question_to_ask}.  
+
+                Write a brief, natural opening (max 1-2 short sentences), then ask exactly one direct question:
+                    {question_to_ask}
+
+                Never include meta-instructions or prompt-like wording in your reply (e.g., "Ask me...", "Respond with...", "Explain that...").
                 """)
         return replace_placeholders_with_indent(first_time_generative_prompt,
                                                 country_of_user_segment=_get_country_of_user_segment(country_of_user),
@@ -565,14 +568,10 @@ class _ConversationLLM:
 
             {persona_guidance}
 
-            Respond with something similar to this:
-                Explain that during this step you will gather basic information about all my experiences,
-                starting with education, then moving to work experiences.
-                Later we will move to the next step and explore each experience separately in detail.
-
-                Add new line to separate explanation from the question.
-
+            Write a brief, natural opening (max 1-2 short sentences), then ask exactly one direct question:
                 {education_question}
+
+            Never include meta-instructions or prompt-like wording in your reply (e.g., "Ask me...", "Respond with...", "Explain that...").
         """)
         return replace_placeholders_with_indent(education_prompt,
                                                 country_of_user_segment=_get_country_of_user_segment(country_of_user),
@@ -606,6 +605,12 @@ class _ConversationLLM:
             #Stay Focused
                 Keep the conversation focused on education experiences only.
                 Do not ask about work experiences yet — we will cover those next.
+
+            #Response style
+                Ask direct, user-facing questions.
+                Never output meta-instructions or prompt-like text (for example: "Ask me...", "Respond with...", "Explain that...").
+                Do not explain your internal process unless I explicitly ask.
+                Keep transitions brief and natural.
 
             #Do not advise
                 Do not offer advice or suggestions on how to use skills or education or find a job.
