@@ -24,7 +24,7 @@
       "company": "kampuni/mpokeaji wa kazi",
       "location": "mahali"
     },
-    "askAboutType": "Niulize kuhusu uzoefu unaojumuisha: {experience_type}",
+    "askAboutType": "Umewahi kuwa na uzoefu unaojumuisha: {experience_type}?",
     "recapPrompt": "Tuangalie tena, na unipe nafasi ya kusahihisha makosa yoyote.",
     "education": {
       "askAboutEducation": "Kabla ya kuchunguza uzoefu wako wa kazi, je, umekamilisha elimu yoyote ya baada ya sekondari — kwa mfano chuo kikuu, TVET, chuo, au mafunzo ya ufundi?",

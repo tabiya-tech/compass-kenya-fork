@@ -287,6 +287,7 @@ Answer two boolean questions:
 - Use semantic understanding, not keyword matching
 - When the user clearly indicates no more experiences of this type (e.g. "no", "nope"), return continue_current_type=false
 - If unexplored_types is not empty, done_with_collection must be false
+- This is for collecting experience data excluding tasks, skills and responsibilties. If noticed return continue_current_type=false
 
 #Collected Experience Data
 {collected_data}
@@ -323,6 +324,8 @@ Answer both questions:
 Reasoning: Brief 1-2 sentence explanation.
 
 Limit the output to 50 words (a single short JSON object).
+If depending on the conversation history you notice that the conversation is trying to collect tasks and responsibilities, 
+anywhere return with continue_current_type as false and done_with_colection as true
 
 #Output
 Return complete valid JSON with all three fields. Start with {{:

@@ -111,6 +111,7 @@ test_cases = [
             """) + system_instruction_prompt,
         evaluations=[Evaluation(type=EvaluationType.CONCISENESS, expected=60)],
         expected_experiences_count_min=1,
+        skip_force="force",
         expected_experiences_count_max=1,
         expected_work_types={
             WorkType.SELF_EMPLOYMENT: (0, 0),

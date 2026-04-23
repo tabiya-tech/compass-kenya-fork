@@ -296,6 +296,28 @@ class CollectExperiencesAgent(Agent):
         """
         self._state = state
 
+    @staticmethod
+    def _has_incomplete_required_fields_for_type(
+        *,
+        collected_data: list[CollectedData],
+        exploring_type: WorkType | None,
+    ) -> bool:
+        """
+        Required fields for transitioning a work type are title and work_type.
+        If any experience of the current exploring type is missing these,
+        we must keep collecting.
+        """
+        if exploring_type is None:
+            return False
+        key = exploring_type.name
+        for exp in collected_data:
+            if exp.work_type and exp.work_type.strip() == key:
+                if not (exp.experience_title and exp.experience_title.strip()):
+                    return True
+                if not (exp.work_type and exp.work_type.strip()):
+                    return True
+        return False
+
     async def execute(self, user_input: AgentInput,
                       context: ConversationContext) -> AgentOutput:
 
@@ -408,6 +430,22 @@ class CollectExperiencesAgent(Agent):
             return conversation_llm_output
 
         # Normal work type loop handling (existing logic)
+        if (
+            not is_education_phase
+            and transition_decision == TransitionDecision.CONTINUE
+            and conversation_llm_output.exploring_type_finished
+            and not self._has_incomplete_required_fields_for_type(
+                collected_data=collected_data,
+                exploring_type=exploring_type,
+            )
+        ):
+            self.logger.info(
+                "Conversation LLM signaled END_OF_WORKTYPE while transition tool returned CONTINUE; "
+                "overriding decision to END_WORKTYPE for exploring_type=%s.",
+                exploring_type.name if exploring_type else "None",
+            )
+            transition_decision = TransitionDecision.END_WORKTYPE
+
         if transition_decision == TransitionDecision.END_WORKTYPE:
             did_update = False
             # if decision is to end the exploration of the current work type, we update null fields to ""
@@ -448,6 +486,14 @@ class CollectExperiencesAgent(Agent):
             conversation_llm_output.message_for_user = (
                 f"{conversation_llm_output.message_for_user}\n\n{transition_text}"
             )
+
+            # If we just closed the last remaining type, finish collection now so
+            # the director can transition to the dive-in phase next turn.
+            if not self._state.unexplored_types:
+                conversation_llm_output.finished = True
+                self.logger.info(
+                    "All work types explored after END_WORKTYPE; finishing collect phase."
+                )
 
         elif transition_decision == TransitionDecision.END_CONVERSATION:
             conversation_llm_output.finished = True
