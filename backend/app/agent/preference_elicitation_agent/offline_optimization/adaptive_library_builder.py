@@ -604,7 +604,7 @@ class AdaptiveLibraryBuilder:
         self,
         profile_a: Dict[str, Any],
         profile_b: Dict[str, Any],
-        max_ratio: float = 1.67
+        max_ratio: float = 1.5
     ) -> bool:
         """
         Check if wage gap between profiles is too large (psychological anchoring issue).

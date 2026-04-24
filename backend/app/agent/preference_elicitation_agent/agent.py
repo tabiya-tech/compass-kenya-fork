@@ -1991,15 +1991,23 @@ Vignettes Completed: {pv.n_vignettes_completed}
             # "future_prospects_importance" (from schema group "Future Prospects")
             # maps onto career_advancement_importance as the closest semantic match.
             _dim_to_pv_field = {
-                "financial_importance":        "financial_importance",
-                "work_environment_importance": "work_environment_importance",
-                "future_prospects_importance": "career_advancement_importance",
-                "career_growth_importance":    "career_advancement_importance",
-                "work_life_balance_importance": "work_life_balance_importance",
-                "job_security_importance":     "job_security_importance",
-                "task_preference_importance":  "task_preference_importance",
-                "values_culture_importance":   "social_impact_importance",
-                "social_impact_importance":    "social_impact_importance",
+                # 6-term MNL names (current schema, PR #27+)
+                "earnings_per_month":               "financial_importance",
+                "physical_demand_phys_heavy":       "work_environment_importance",
+                "social_interaction_soc_peers":     "task_preference_importance",
+                "social_interaction_soc_customers": "social_impact_importance",
+                "career_growth_growth_med":         "career_advancement_importance",
+                "career_growth_growth_high":        "career_advancement_importance",
+                # Legacy 3D dimension names (pre-PR #27, kept for backwards compatibility)
+                "financial_importance":             "financial_importance",
+                "work_environment_importance":      "work_environment_importance",
+                "future_prospects_importance":      "career_advancement_importance",
+                "career_growth_importance":         "career_advancement_importance",
+                "work_life_balance_importance":     "work_life_balance_importance",
+                "job_security_importance":          "job_security_importance",
+                "task_preference_importance":       "task_preference_importance",
+                "values_culture_importance":        "social_impact_importance",
+                "social_impact_importance":         "social_impact_importance",
             }
 
             variances = np.diag(posterior_cov)

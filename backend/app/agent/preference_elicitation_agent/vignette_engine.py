@@ -560,7 +560,8 @@ class VignetteEngine:
         # Reconstruct posterior distribution
         posterior = PosteriorDistribution(
             mean=state.posterior_mean,
-            covariance=state.posterior_covariance
+            covariance=state.posterior_covariance,
+            dimensions=self._schema_loader.term_names,
         )
 
         # Reconstruct Fisher Information Matrix
@@ -905,7 +906,7 @@ class VignetteEngine:
             if self._schema_loader is None:
                 self._logger.warning("schema_loader not set — skipping adaptive component init")
                 return
-            self._likelihood_calculator = LikelihoodCalculator(self._schema_loader)
+            self._likelihood_calculator = LikelihoodCalculator(self._schema_loader, use_term_features=True)
             self._fisher_calculator = FisherInformationCalculator(self._likelihood_calculator)
             self._d_optimal_selector = DOptimalSelector(self._fisher_calculator)
             self._logger.info("Initialized adaptive D-efficiency components")
