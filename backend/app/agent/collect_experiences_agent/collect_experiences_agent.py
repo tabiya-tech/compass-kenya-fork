@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, field_serializer, field_validator
 from app.agent.agent import Agent
 from app.agent.agent_types import AgentInput, AgentOutput
 from app.agent.agent_types import AgentType
+from app.agent.collect_experiences_agent._bridge_llm import generate_bridge_to_work_type
 from app.agent.collect_experiences_agent._conversation_llm import _ConversationLLM, ConversationLLMAgentOutput, \
     _get_experience_type, fill_incomplete_fields_as_declined
 from app.agent.persona_detector import PersonaType
@@ -181,6 +182,8 @@ class CollectExperiencesAgent(Agent):
     This agent converses with user and collects basic information about their work experiences.
     """
 
+    _MAX_NORMALIZATION_ATTEMPTS = 2
+
     def __init__(self,
                  *,
                  search_services: SearchServices | None = None,
@@ -191,8 +194,18 @@ class CollectExperiencesAgent(Agent):
         self._state: Optional[CollectExperiencesAgentState] = None
         self._search_services = search_services
         self._experience_pipeline_config = experience_pipeline_config
+        # Per-experience attempt counter for occupation normalization. Kept as an
+        # instance attribute (not on CollectExperiencesAgentState) so it never gets
+        # serialized into LLM prompts via `model_dump_json()` or persisted to MongoDB.
+        # Reset on `set_state()` so it does not leak across sessions.
+        self._normalization_attempts: dict[str, int] = {}
 
-    async def _normalize_experience_titles(self, *, collected_data: list[CollectedData]):
+    async def _normalize_experience_titles(
+        self,
+        *,
+        collected_data: list[CollectedData],
+        target_uuids: Optional[set[str]] = None,
+    ):
         if not self._search_services or self._state is None:
             return
 
@@ -207,6 +220,11 @@ class CollectExperiencesAgent(Agent):
         for elem in collected_data:
             if not elem.experience_title or elem.normalized_experience_title:
                 continue
+            if target_uuids is not None and elem.uuid not in target_uuids:
+                continue
+            if self._normalization_attempts.get(elem.uuid, 0) >= self._MAX_NORMALIZATION_ATTEMPTS:
+                continue
+            self._normalization_attempts[elem.uuid] = self._normalization_attempts.get(elem.uuid, 0) + 1
             targets.append(elem)
             tasks.append(infer_tool.execute(
                 experience_title=elem.experience_title,
@@ -295,6 +313,9 @@ class CollectExperiencesAgent(Agent):
         This method should be called before the agent's execute() method is called.
         """
         self._state = state
+        # Reset the per-experience normalization attempt counter so it does not
+        # leak across sessions when the agent instance is reused by the director.
+        self._normalization_attempts = {}
 
     @staticmethod
     def _has_incomplete_required_fields_for_type(
@@ -327,6 +348,7 @@ class CollectExperiencesAgent(Agent):
         collected_data = self._state.collected_data
         last_referenced_experience_index = -1
         data_extraction_llm_stats = []
+        newly_titled_uuids: list[str] = []
 
         # Determine if we are in the education phase
         is_education_phase = not self._state.education_phase_done
@@ -339,9 +361,13 @@ class CollectExperiencesAgent(Agent):
             # The data extraction LLM is responsible for extracting the experience data from the conversation
             data_extraction_llm = _DataExtractionLLM(self.logger)
             # TODO: the LLM can and will fail with an exception or even return None, we need to handle this
-            last_referenced_experience_index, data_extraction_llm_stats = await data_extraction_llm.execute(user_input=user_input,
-                                                                                                            context=context,
-                                                                                                            collected_experience_data_so_far=collected_data)
+            (
+                last_referenced_experience_index,
+                data_extraction_llm_stats,
+                newly_titled_uuids,
+            ) = await data_extraction_llm.execute(user_input=user_input,
+                                                   context=context,
+                                                   collected_experience_data_so_far=collected_data)
             # Tag education-phase entries with source="education"
             if is_education_phase:
                 for elem in collected_data:
@@ -361,7 +387,14 @@ class CollectExperiencesAgent(Agent):
         )
         collected_data = self._state.collected_data
 
-        await self._normalize_experience_titles(collected_data=collected_data)
+        # Only normalize experiences whose title was newly set this turn. Skips the
+        # (≈2 LLM calls per experience) InferOccupationTool entirely on confirmation
+        # turns ("yes", "ok") where data extraction did not change any title.
+        if newly_titled_uuids:
+            await self._normalize_experience_titles(
+                collected_data=collected_data,
+                target_uuids=set(newly_titled_uuids),
+            )
         # TODO: Keep track of the last_referenced_experience_index and if it has changed it means that the user has
         #   provided a new experience, we need to handle this as
         #   a) if the user has not finished with the previous one we should ask them to complete it first
@@ -418,16 +451,41 @@ class CollectExperiencesAgent(Agent):
             transition_text = t("messages", "collectExperiences.education.transitionToWork")
             next_exploring_type = self._state.unexplored_types[0] if self._state.unexplored_types else None
             if next_exploring_type is not None:
-                work_type_text = t(
-                    'messages', 'collectExperiences.askAboutType',
-                    experience_type=_get_experience_type(next_exploring_type)
+                next_type_description = _get_experience_type(next_exploring_type)
+                work_type_text = await generate_bridge_to_work_type(
+                    next_work_type_description=next_type_description,
+                    last_agent_message=conversation_llm_output.message_for_user,
+                    logger=self.logger,
                 )
+                if not work_type_text:
+                    work_type_text = t(
+                        'messages', 'collectExperiences.askAboutType',
+                        experience_type=next_type_description,
+                    )
                 transition_text = f"{transition_text}\n\n{work_type_text}"
             conversation_llm_output.message_for_user = (
                 f"{conversation_llm_output.message_for_user}\n\n{transition_text}"
             )
             conversation_llm_output.finished = False  # Don't end conversation, move to work types
             return conversation_llm_output
+
+        # During the education phase the transition tool's verdicts are unreliable
+        # (see comment above at lines 435-441) — only the conversation LLM's
+        # <END_OF_WORKTYPE> signal can advance us out of education. If line 442
+        # didn't fire we are still in education; coerce any END_WORKTYPE /
+        # END_CONVERSATION verdict from the transition tool to CONTINUE so we
+        # don't accidentally append a work-type bridge while the user is still
+        # giving education entries.
+        if is_education_phase and transition_decision in (
+            TransitionDecision.END_WORKTYPE,
+            TransitionDecision.END_CONVERSATION,
+        ):
+            self.logger.info(
+                "Ignoring transition tool verdict %s during education phase; "
+                "conversation LLM did not signal <END_OF_WORKTYPE>. Treating as CONTINUE.",
+                transition_decision.value,
+            )
+            transition_decision = TransitionDecision.CONTINUE
 
         # Normal work type loop handling (existing logic)
         if (
@@ -476,10 +534,17 @@ class CollectExperiencesAgent(Agent):
 
             next_exploring_type = self._state.unexplored_types[0] if self._state.unexplored_types else None
             if next_exploring_type is not None:
-                transition_text = t(
-                    'messages', 'collectExperiences.askAboutType',
-                    experience_type=_get_experience_type(next_exploring_type)
+                next_type_description = _get_experience_type(next_exploring_type)
+                transition_text = await generate_bridge_to_work_type(
+                    next_work_type_description=next_type_description,
+                    last_agent_message=conversation_llm_output.message_for_user,
+                    logger=self.logger,
                 )
+                if not transition_text:
+                    transition_text = t(
+                        'messages', 'collectExperiences.askAboutType',
+                        experience_type=next_type_description,
+                    )
             else:
                 transition_text = t('messages', 'collectExperiences.recapPrompt')
 

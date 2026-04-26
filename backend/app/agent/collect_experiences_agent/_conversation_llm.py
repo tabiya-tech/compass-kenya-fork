@@ -18,8 +18,10 @@ from app.countries import Country
 from app.i18n.locale_date_format import get_locale_date_format, format_date_value_for_locale
 from app.i18n.translation_service import t
 from common_libs.llm.generative_models import GeminiGenerativeLLM
-from common_libs.llm.models_utils import LLMConfig, LLMResponse, get_config_variation, LLMInput
+from common_libs.llm.models_utils import LLMConfig, LLMResponse, get_config_variation, LLMInput, JSON_GENERATION_CONFIG
+from common_libs.llm.schema_builder import with_response_schema
 from common_libs.retry import Retry
+from app.agent.collect_experiences_agent._conversation_response import ConversationLLMResponse
 from app.agent.persona_detector import PersonaType, get_persona_prompt_section
 
 _NO_EXPERIENCE_COLLECTED = "No experience data has been collected yet"
@@ -212,10 +214,21 @@ class _ConversationLLM:
         llm_response: LLMResponse
         llm_input: LLMInput | str
         system_instructions: list[str] | str | None = None
+        # Structured response schema + output cap. Forces the LLM to emit a typed
+        # envelope so it cannot leak system-prompt fragments into the user-visible
+        # message, and prevents mid-sentence truncation that previously triggered
+        # instruction-template echoing.
+        structured_generation_config = (
+            temperature_config
+            | JSON_GENERATION_CONFIG
+            | with_response_schema(ConversationLLMResponse)
+            | {"max_output_tokens": 2000}
+        )
+
         if first_time_visit and is_education_phase:
             # Education phase: first visit — ask about post-secondary education
             llm = GeminiGenerativeLLM(config=LLMConfig(
-                generation_config=temperature_config
+                generation_config=structured_generation_config
             ))
             llm_input = _ConversationLLM._get_education_phase_prompt(
                 country_of_user=country_of_user,
@@ -232,7 +245,7 @@ class _ConversationLLM:
                 system_instructions=system_instructions,
                 config=LLMConfig(
                     language_model_name=AgentsConfig.deep_reasoning_model,
-                    generation_config=temperature_config
+                    generation_config=structured_generation_config
                 ))
             filtered_history = [turn for turn in context.history.turns if turn.output.agent_type == AgentType.COLLECT_EXPERIENCES_AGENT]
             filtered_context = ConversationContext(all_history=ConversationHistory(turns=filtered_history),
@@ -246,7 +259,7 @@ class _ConversationLLM:
         elif first_time_visit:
             # Work type loop: first visit (existing behavior)
             llm = GeminiGenerativeLLM(config=LLMConfig(
-                generation_config=temperature_config
+                generation_config=structured_generation_config
             ))
             llm_input = _ConversationLLM._get_first_time_generative_prompt(
                 country_of_user=country_of_user,
@@ -266,7 +279,7 @@ class _ConversationLLM:
                 system_instructions=system_instructions,
                 config=LLMConfig(
                     language_model_name=AgentsConfig.deep_reasoning_model,
-                    generation_config=temperature_config
+                    generation_config=structured_generation_config
                 ))
             # Drop the first message from the conversation history, which is the welcome message from the welcome agent.
             # This message is treated as an instruction and causes the conversation to go off track.
@@ -290,6 +303,21 @@ class _ConversationLLM:
                              response_time_in_sec=round(llm_end_time - llm_start_time, 2))
 
         llm_response.text = llm_response.text.strip()
+
+        # Parse the structured envelope. The LLM is constrained to JSON via
+        # response_schema, so this should always succeed; the fallback only
+        # exists for defensiveness against schema drift.
+        if llm_response.text:
+            try:
+                parsed = ConversationLLMResponse.model_validate_json(llm_response.text)
+                llm_response.text = parsed.message_for_user.strip()
+            except Exception as parse_err:
+                logger.warning(
+                    "Conversation LLM response did not match ConversationLLMResponse schema (%s). "
+                    "Falling back to raw text. Raw: %s",
+                    parse_err, llm_response.text[:200],
+                )
+
         if llm_response.text == "":
             logger.warning(
                 "LLM response is empty. "
@@ -422,9 +450,12 @@ class _ConversationLLM:
                 
                 Do not ask me questions that are not related to the experience data fields listed above.
                 
-                Ask for exactly one missing field at a time. Do not combine multiple questions in one response.
+                Ask for exactly one missing field at a time, with one exception: if BOTH start_date and
+                end_date are missing for the experience under discussion, ask for them together in a
+                single question (e.g. "When did you start, and when did you finish?"). Do not combine any
+                other field types.
                 If I say "I already shared the information" or similar, do not ask me to repeat it; use what you already have.
-                
+
                 Once you have gathered all the information for a work experience, continue collecting more experiences of the same type.
                 Do NOT ask me to confirm or review each individual experience. Simply move on to asking if I have more experiences of the current type.
                 
@@ -457,6 +488,10 @@ class _ConversationLLM:
                         - refer to dates that cannot be represented in the Gregorian calendar
                         - end_date is after the start_date
                         If they are inconsistent point it out and ask me for clarifications.
+                    ###Asking for dates together
+                        When both start_date and end_date are missing, request them in one question to
+                        keep the conversation natural. Accept partial answers — if I provide only one,
+                        store it and ask for the other on the next turn following the rules above.
                 ##'company' instructions
                     The receiver of work. Can be an organization, a company, a household or a family etc.
                     If I have not provided the receiver, or what it does, ask me for it.
@@ -624,7 +659,10 @@ class _ConversationLLM:
                 - 'company': The name of the institution (university, college, TVET center)
                 - 'location': Where the institution is located
 
-                Ask for exactly one missing field at a time. Do not combine multiple questions in one response.
+                Ask for exactly one missing field at a time, with one exception: if BOTH start_date and
+                end_date are missing for the experience under discussion, ask for them together in a
+                single question (e.g. "When did you start, and when did you finish?"). Do not combine any
+                other field types.
                 If I say "I already shared the information" or similar, do not ask me to repeat it; use what you already have.
 
                 Once you have gathered all the information for an education experience, ask me:
@@ -643,6 +681,10 @@ class _ConversationLLM:
                     - Full date: {date_format_full}
                     - Month and year: {date_format_month_year}
                     - Year only: {date_format_year}
+                ###Asking for dates together
+                    When both start_date and end_date are missing, request them in one question to
+                    keep the conversation natural. Accept partial answers — if I provide only one,
+                    store it and ask for the other on the next turn following the rules above.
 
             #Collected Experience Data
                 All the education experiences you have collected so far:
@@ -829,15 +871,14 @@ def _get_explore_experiences_instructions(*,
         experiences_summary = _get_summary_of_experiences(collected_data)
 
         instructions_template = dedent("""\
-        Currently we are exploring work experiences that include:
-            '{experiences_in_type}'.
-        
+        We are now collecting work experiences of type: {experiences_in_type}.
+
         Here is a typical question to ask me when exploring work experiences of the above type:
             {questions_to_ask}
-        
+
         Do not assume whether or not I have these kinds of work experiences.
-        
-        Gather as many work experiences as possible that include '{experiences_in_type}', or until I explicitly state that I have no more to share.
+
+        Gather as many work experiences as possible of this type, or until I explicitly state that I have no more to share.
         
         If I provide multiple work experiences in a single input, acknowledge that you received them.
         Do not ask me to repeat the list. Instead, use the collected data and confirm each experience in order,
@@ -873,9 +914,9 @@ def _get_explore_experiences_instructions(*,
     else:
         return replace_placeholders_with_indent(dedent("""\
             We have finished exploring all types of experiences.
-            
-            We have explored experiences that include:
-                {explored_types}  
+
+            Work types we have already covered:
+                {explored_types}
             
             NOW you should provide a recap of all the work experiences we have collected.
             This is the ONLY time you should ask for a recap - after ALL work types have been explored.

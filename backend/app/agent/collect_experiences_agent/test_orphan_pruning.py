@@ -105,7 +105,7 @@ def patched_llms():
         "app.agent.collect_experiences_agent.collect_experiences_agent.TransitionDecisionTool"
     ) as trans_mock:
         data_instance = MagicMock()
-        data_instance.execute = AsyncMock(return_value=(-1, []))
+        data_instance.execute = AsyncMock(return_value=(-1, [], []))
         data_mock.return_value = data_instance
 
         conv_instance = MagicMock()
@@ -197,7 +197,7 @@ async def test_pruning_preserves_last_referenced_experience_index(patched_llms):
 
     # Data extraction says the last referenced one was the titled entry (index 1).
     data_mock, conv_mock, _ = patched_llms
-    data_mock.return_value.execute = AsyncMock(return_value=(1, []))
+    data_mock.return_value.execute = AsyncMock(return_value=(1, [], []))
 
     agent = CollectExperiencesAgent()
     agent.set_state(_state_with([orphan, titled]))
