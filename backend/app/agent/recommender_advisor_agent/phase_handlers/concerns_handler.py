@@ -51,6 +51,7 @@ class ConcernsPhaseHandler(BasePhaseHandler):
         resistance_caller: LLMCaller[ResistanceClassification],
         intent_classifier=None,
         action_handler: 'ActionPhaseHandler' = None,
+        recommendation_interface=None,
         **kwargs
     ):
         """
@@ -60,11 +61,13 @@ class ConcernsPhaseHandler(BasePhaseHandler):
             resistance_caller: LLM caller for resistance classification
             intent_classifier: Optional intent classifier for detecting non-concern intents
             action_handler: Optional action handler for immediate delegation
+            recommendation_interface: Optional interface for re-fetching recommendations
         """
         super().__init__(conversation_llm, conversation_caller, **kwargs)
         self._resistance_caller = resistance_caller
         self._intent_classifier = intent_classifier
         self._action_handler = action_handler
+        self._recommendation_interface = recommendation_interface
 
     async def handle(
         self,
@@ -127,6 +130,10 @@ class ConcernsPhaseHandler(BasePhaseHandler):
                             message=f"Okay, let's explore the {target_occ.occupation} option instead.",
                             finished=False
                         ), all_llm_stats
+
+                # Handle blanket rejection of all recommendations
+                if intent.intent == "reject":
+                    return await self._handle_blanket_rejection(state)
 
                 # If user accepted/agreed, move to action planning
                 if intent.intent == "accept":
@@ -323,6 +330,59 @@ Always return a valid JSON object matching this exact schema.
             ),
             logger=self.logger
         )
+
+    async def _handle_blanket_rejection(
+        self,
+        state: RecommenderAdvisorAgentState,
+    ) -> tuple[ConversationResponse, list[LLMStats]]:
+        """
+        Handle blanket rejection of all recommendations.
+
+        Re-calls the matching engine, filters out already-seen occupations,
+        and either presents fresh results or stays open with a graceful message.
+        The conversation never terminates here — finished is always False.
+        """
+        rejected_uuids: set[str] = set(state._filter_rejected_by_type("occupation"))
+        rejected_uuids |= set(state.presented_occupations)
+
+        new_occs = []
+        if self._recommendation_interface:
+            try:
+                fresh = await self._recommendation_interface.generate_recommendations(
+                    youth_id=state.youth_id,
+                    city=state.city,
+                    province=state.province,
+                    preference_vector=state.preference_vector,
+                    skills_vector=state.skills_vector,
+                    bws_scores=state.bws_scores,
+                )
+                new_occs = [
+                    occ for occ in fresh.occupation_recommendations
+                    if occ.uuid not in rejected_uuids
+                ]
+                if new_occs:
+                    state.recommendations.occupation_recommendations = new_occs
+            except Exception:
+                self.logger.exception("Failed to refresh recommendations on blanket rejection")
+
+        if new_occs:
+            state.conversation_phase = ConversationPhase.PRESENT_RECOMMENDATIONS
+            names = ", ".join(o.occupation for o in new_occs[:3])
+            message = (
+                f"I've searched again and found some new options that might suit you better: "
+                f"{names}. Let me walk you through them."
+            )
+        else:
+            message = (
+                "I've searched again but don't have any new matches for you right now. "
+                "The job database refreshes daily — come back tomorrow and I'll have a fresh set for you."
+            )
+
+        return ConversationResponse(
+            reasoning="Blanket rejection: re-called matching engine and filtered seen occupations.",
+            message=message,
+            finished=False,
+        ), []
 
     def _extract_skills_list(self, state: RecommenderAdvisorAgentState) -> list[str]:
         """Extract list of skills from state.skills_vector."""

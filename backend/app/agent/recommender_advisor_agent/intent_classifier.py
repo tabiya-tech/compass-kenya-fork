@@ -387,6 +387,11 @@ Possible intents:
 - "ask_question": They have a clarifying question about current occupation
   Examples: "how long does that take?", "what's the salary?", "where would I work?"
 
+- "reject": They are rejecting ALL recommendations at once, not just one specific job
+  Examples: "I don't like any of them", "None of these work for me", "I don't want any of these jobs", "none of them suit me"
+  Key: Blanket dismissal of the entire recommendation set — NOT a concern about one specific job
+  IMPORTANT: "that sounds hard" is EXPRESS_CONCERN. "I don't like any of them" is REJECT.
+
 - "other": Unclear
 
 CRITICAL DISTINCTION:
@@ -394,11 +399,12 @@ CRITICAL DISTINCTION:
 - "I want to be a DJ" (DJ not in list) = REQUEST_OUTSIDE_RECOMMENDATIONS
 - "that sounds hard" = EXPRESS_CONCERN (return null to let resistance classifier handle)
 - "okay I understand" = ACCEPT
+- "I don't like any of them" = REJECT
 
 Your response must be a JSON object with the following schema:
 {{
     "reasoning": "A step by step explanation of why you classified this intent",
-    "intent": "One of: express_concern, explore_occupation, request_outside_recommendations, accept, ask_question, other",
+    "intent": "One of: express_concern, explore_occupation, request_outside_recommendations, accept, ask_question, reject, other",
     "target_recommendation_id": "The UUID of a different occupation if mentioned, or null",
     "target_occupation_index": "The 1-based index of a different occupation if mentioned, or null",
     "requested_occupation_name": "The occupation name if they requested something outside recommendations, or null"
