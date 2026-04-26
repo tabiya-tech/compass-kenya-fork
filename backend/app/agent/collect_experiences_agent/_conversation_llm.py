@@ -225,6 +225,29 @@ class _ConversationLLM:
             | {"max_output_tokens": 2000}
         )
 
+        # Build the follow-up LLM input once. Both follow-up paths (education and
+        # work-type) need the same filtered conversation history — keep only turns
+        # from the COLLECT_EXPERIENCES_AGENT so other agents' messages (e.g. the
+        # welcome agent) are not misinterpreted as instructions. Computing this
+        # once instead of per-branch avoids a duplicate O(n) filter + format pass
+        # on every turn.
+        followup_llm_input: LLMInput | str | None = None
+        if not first_time_visit:
+            filtered_history = [
+                turn for turn in context.history.turns
+                if turn.output.agent_type == AgentType.COLLECT_EXPERIENCES_AGENT
+            ]
+            filtered_context = ConversationContext(
+                all_history=ConversationHistory(turns=filtered_history),
+                history=ConversationHistory(turns=filtered_history),
+                summary=context.summary,
+            )
+            followup_llm_input = ConversationHistoryFormatter.format_for_agent_generative_prompt(
+                model_response_instructions=None,
+                context=filtered_context,
+                user_input=msg,
+            )
+
         if first_time_visit and is_education_phase:
             # Education phase: first visit — ask about post-secondary education
             llm = GeminiGenerativeLLM(config=LLMConfig(
@@ -247,14 +270,7 @@ class _ConversationLLM:
                     language_model_name=AgentsConfig.deep_reasoning_model,
                     generation_config=structured_generation_config
                 ))
-            filtered_history = [turn for turn in context.history.turns if turn.output.agent_type == AgentType.COLLECT_EXPERIENCES_AGENT]
-            filtered_context = ConversationContext(all_history=ConversationHistory(turns=filtered_history),
-                                                   history=ConversationHistory(turns=filtered_history),
-                                                   summary=context.summary)
-            llm_input = ConversationHistoryFormatter.format_for_agent_generative_prompt(
-                model_response_instructions=None,
-                context=filtered_context,
-                user_input=msg)
+            llm_input = followup_llm_input
             llm_response = await llm.generate_content(llm_input=llm_input)
         elif first_time_visit:
             # Work type loop: first visit (existing behavior)
@@ -281,17 +297,7 @@ class _ConversationLLM:
                     language_model_name=AgentsConfig.deep_reasoning_model,
                     generation_config=structured_generation_config
                 ))
-            # Drop the first message from the conversation history, which is the welcome message from the welcome agent.
-            # This message is treated as an instruction and causes the conversation to go off track.
-            filtered_history = [turn for turn in context.history.turns if turn.output.agent_type == AgentType.COLLECT_EXPERIENCES_AGENT]
-            filtered_context = ConversationContext(all_history=ConversationHistory(turns=filtered_history),
-                                                   history=ConversationHistory(turns=filtered_history),
-                                                   summary=context.summary)
-            # Filter all turns that are not from this agent
-            llm_input = ConversationHistoryFormatter.format_for_agent_generative_prompt(
-                model_response_instructions=None,
-                context=filtered_context,
-                user_input=msg)
+            llm_input = followup_llm_input
             llm_response = await llm.generate_content(llm_input=llm_input)
 
         llm_output_empty_penalty_level = 1

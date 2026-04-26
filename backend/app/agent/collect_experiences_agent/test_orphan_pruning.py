@@ -202,8 +202,10 @@ async def test_pruning_preserves_last_referenced_experience_index(patched_llms):
     agent = CollectExperiencesAgent()
     agent.set_state(_state_with([orphan, titled]))
 
+    # Use a non-confirmation input so the data-extraction fast-path is not
+    # triggered — this test exercises the full extraction → pruning path.
     await agent.execute(
-        user_input=AgentInput(message="ok"),
+        user_input=AgentInput(message="i sold mangoes at the market"),
         context=_context_with_turn_count(50),
     )
 

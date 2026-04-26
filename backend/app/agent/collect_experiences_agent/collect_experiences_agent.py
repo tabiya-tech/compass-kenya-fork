@@ -1,4 +1,5 @@
 import asyncio
+import string
 from typing import Optional, Mapping, Any
 
 from pydantic import BaseModel, Field, field_serializer, field_validator
@@ -23,6 +24,39 @@ from app.countries import Country
 from app.i18n.translation_service import t
 from app.vector_search.esco_entities import OccupationSkillEntity
 from app.vector_search.vector_search_dependencies import SearchServices
+
+
+# Confirmation tokens that — when sent on their own — trigger the data-extraction
+# fast-path. Skipping data extraction on these saves ~750ms (IntentAnalyzer +
+# any per-operation entity/temporal calls) on the most common turn type.
+#
+# Trade-off: a yes/no answer to a data question (e.g. "Was this paid work?") will
+# be missed and the agent will re-ask the question on a future turn. The agent
+# asks open-ended questions for most fields (title, dates, company, location), so
+# the only field exposed to this regression is `paid_work`. Acceptable for the
+# latency win on every other confirmation turn.
+#
+# Keep this list small. Expand carefully — every new entry expands the surface
+# area where data signals can be lost.
+_CONFIRMATION_TOKENS: frozenset[str] = frozenset({
+    # English
+    "yes", "yeah", "yep", "y",
+    "no", "nope", "n",
+    "ok", "okay", "k",
+    "sure",
+    # Swahili
+    "ndio", "ndiyo",
+    "hapana",
+    "sawa",
+})
+
+
+def _is_simple_confirmation(message: str) -> bool:
+    """True if the user's input is a bare confirmation token (yes/no/ok variants)."""
+    if not message:
+        return False
+    normalized = message.strip().lower().rstrip(string.punctuation).strip()
+    return normalized in _CONFIRMATION_TOKENS
 
 
 def _deserialize_work_types(value: list[str] | list[WorkType]) -> list[WorkType]:
@@ -199,6 +233,10 @@ class CollectExperiencesAgent(Agent):
         # serialized into LLM prompts via `model_dump_json()` or persisted to MongoDB.
         # Reset on `set_state()` so it does not leak across sessions.
         self._normalization_attempts: dict[str, int] = {}
+        # Last referenced experience index, preserved across the confirmation
+        # fast-path so the conversation LLM keeps context on simple yes/no/ok
+        # turns where data extraction is skipped. Reset on set_state().
+        self._last_referenced_experience_index: int = -1
 
     async def _normalize_experience_titles(
         self,
@@ -316,6 +354,7 @@ class CollectExperiencesAgent(Agent):
         # Reset the per-experience normalization attempt counter so it does not
         # leak across sessions when the agent instance is reused by the director.
         self._normalization_attempts = {}
+        self._last_referenced_experience_index = -1
 
     @staticmethod
     def _has_incomplete_required_fields_for_type(
@@ -346,7 +385,10 @@ class CollectExperiencesAgent(Agent):
             raise ValueError("CollectExperiencesAgent: execute() called before state was initialized")
 
         collected_data = self._state.collected_data
-        last_referenced_experience_index = -1
+        # Preserve the last referenced experience across confirmation turns where
+        # data extraction is skipped. On full extraction this is overwritten by
+        # the returned value below.
+        last_referenced_experience_index = self._last_referenced_experience_index
         data_extraction_llm_stats = []
         newly_titled_uuids: list[str] = []
 
@@ -357,6 +399,17 @@ class CollectExperiencesAgent(Agent):
             # If the user input is empty, set it to "(silence)"
             # This is to avoid the agent failing to respond to an empty input
             user_input.message = "(silence)"
+        elif _is_simple_confirmation(user_input.message):
+            # Fast-path: skip data extraction entirely on bare confirmations
+            # ("yes", "no", "ok", "sawa", etc.). Saves ~750ms on the most common
+            # turn type. The conversation LLM and transition tool still run, so
+            # phase transitions and follow-up questions are unaffected. Trade-off:
+            # a yes/no answer to a `paid_work` question is missed and the agent
+            # will re-ask on a future turn. See _CONFIRMATION_TOKENS for details.
+            self.logger.debug(
+                "Confirmation fast-path: skipping data extraction for input %r",
+                user_input.message,
+            )
         else:
             # The data extraction LLM is responsible for extracting the experience data from the conversation
             data_extraction_llm = _DataExtractionLLM(self.logger)
@@ -368,6 +421,7 @@ class CollectExperiencesAgent(Agent):
             ) = await data_extraction_llm.execute(user_input=user_input,
                                                    context=context,
                                                    collected_experience_data_so_far=collected_data)
+            self._last_referenced_experience_index = last_referenced_experience_index
             # Tag education-phase entries with source="education"
             if is_education_phase:
                 for elem in collected_data:
@@ -385,16 +439,9 @@ class CollectExperiencesAgent(Agent):
             last_referenced_experience_index=last_referenced_experience_index,
             current_turn_count=len(context.all_history.turns),
         )
+        self._last_referenced_experience_index = last_referenced_experience_index
         collected_data = self._state.collected_data
 
-        # Only normalize experiences whose title was newly set this turn. Skips the
-        # (≈2 LLM calls per experience) InferOccupationTool entirely on confirmation
-        # turns ("yes", "ok") where data extraction did not change any title.
-        if newly_titled_uuids:
-            await self._normalize_experience_titles(
-                collected_data=collected_data,
-                target_uuids=set(newly_titled_uuids),
-            )
         # TODO: Keep track of the last_referenced_experience_index and if it has changed it means that the user has
         #   provided a new experience, we need to handle this as
         #   a) if the user has not finished with the previous one we should ask them to complete it first
@@ -404,8 +451,28 @@ class CollectExperiencesAgent(Agent):
 
         transition_decision_tool = TransitionDecisionTool(self.logger)
 
-        # Both are pure readers of collected_data/context/user_input -- safe to parallelize
-        conversation_llm_output, (transition_decision, transition_reasoning, transition_llm_stats) = await asyncio.gather(
+        # Run normalization concurrently with the conversation+transition pair.
+        # Normalization (~2.3s on expensive turns) only mutates `normalized_experience_title`
+        # on the experience records; the conversation and transition LLMs build their
+        # prompts synchronously before awaiting, so they see a stable snapshot of the
+        # data. Downstream readers of `normalized_experience_title` use the
+        # `normalized_experience_title or experience_title` pattern (None-tolerant),
+        # so a write that lands mid-turn cannot corrupt their output.
+        async def _maybe_normalize_titles():
+            if newly_titled_uuids:
+                await self._normalize_experience_titles(
+                    collected_data=collected_data,
+                    target_uuids=set(newly_titled_uuids),
+                )
+
+        # Conversation, transition, and normalization are all pure readers of
+        # collected_data/context/user_input (or, in normalization's case, only
+        # mutate fields the others tolerate as None) -- safe to parallelize.
+        (
+            conversation_llm_output,
+            (transition_decision, transition_reasoning, transition_llm_stats),
+            _normalization_done,
+        ) = await asyncio.gather(
             conversation_llm.execute(
                 first_time_visit=self._state.first_time_visit,
                 is_education_phase=is_education_phase,
@@ -425,7 +492,8 @@ class CollectExperiencesAgent(Agent):
                 unexplored_types=self._state.unexplored_types,
                 explored_types=self._state.explored_types,
                 conversation_context=context,
-                user_input=user_input)
+                user_input=user_input),
+            _maybe_normalize_titles(),
         )
 
         self._state.first_time_visit = False
