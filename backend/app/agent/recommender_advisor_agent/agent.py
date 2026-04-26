@@ -173,6 +173,7 @@ class RecommenderAdvisorAgent(Agent):
             resistance_caller=self._resistance_caller,
             intent_classifier=self._intent_classifier,
             action_handler=self._action_handler,
+            recommendation_interface=self._recommendation_interface,
             occupation_search_service=self._occupation_search_service,
             logger=self.logger
         )
@@ -350,7 +351,11 @@ class RecommenderAdvisorAgent(Agent):
         except Exception as e:
             self.logger.exception("Error in recommender advisor agent: %s", str(e))
             return self._create_error_response(agent_start_time)
-        
+
+        # Only trust finished=True from the COMPLETE phase — all other phases must not terminate
+        if response.finished and self._state.conversation_phase != ConversationPhase.COMPLETE:
+            response.finished = False
+
         # Create output
         return AgentOutputWithReasoning(
             message_for_user=response.message.strip('"'),
@@ -416,8 +421,37 @@ class RecommenderAdvisorAgent(Agent):
         (title + description + application URL) in a clear, friendly format.
         Marks the session as finished after a single message.
         """
-        # Fetch recommendations if not already loaded (mirrors IntroPhaseHandler logic)
-        if self._state.recommendations is None:
+        # On re-engagement (already presented once): refresh with unseen recommendations
+        if self._state.presented_occupations:
+            seen_uuids: set[str] = set(self._state.presented_occupations)
+            fresh = await self._recommendation_interface.generate_recommendations(
+                youth_id=self._state.youth_id,
+                city=self._state.city,
+                province=self._state.province,
+                preference_vector=self._state.preference_vector,
+                skills_vector=self._state.skills_vector,
+                bws_scores=self._state.bws_scores,
+            )
+            new_occs = [o for o in fresh.occupation_recommendations if o.uuid not in seen_uuids]
+            new_jobs = [j for j in fresh.opportunity_recommendations if j.uuid not in seen_uuids]
+            if not new_occs and not new_jobs:
+                return AgentOutputWithReasoning(
+                    message_for_user=(
+                        "I've searched again but don't have new matches for you right now. "
+                        "The job database refreshes daily — check back tomorrow."
+                    ),
+                    finished=False,
+                    reasoning="Simple flow refresh: no new recommendations after filtering seen items.",
+                    agent_type=self.agent_type,
+                    agent_response_time_in_sec=round(time.time() - agent_start_time, 2),
+                    llm_stats=[],
+                )
+            fresh.occupation_recommendations = new_occs
+            fresh.opportunity_recommendations = new_jobs
+            self._state.recommendations = fresh
+
+        # First call: fetch recommendations if not yet loaded
+        elif self._state.recommendations is None:
             self._state.recommendations = await self._recommendation_interface.generate_recommendations(
                 youth_id=self._state.youth_id,
                 city=self._state.city,
@@ -458,13 +492,17 @@ class RecommenderAdvisorAgent(Agent):
             if job.posting_url:
                 job_lines.append(f"   Apply here: {job.posting_url}")
 
+        # Record presented occupation UUIDs so re-engagement can filter them out
+        for occ in recs.occupation_recommendations:
+            if occ.uuid not in self._state.presented_occupations:
+                self._state.presented_occupations.append(occ.uuid)
+
         careers_block = "\n".join(career_lines) if career_lines else "No career recommendations available."
         jobs_block = "\n".join(job_lines) if job_lines else "No job opportunities available."
 
         prompt = f"""You are a career advisor presenting personalised recommendations to a job seeker.
 Present the following career and job recommendations clearly and encouragingly.
 Do NOT add any extra recommendations, scores, or information beyond what is provided.
-Do NOT invite further discussion — this is a one-time display.
 
 CAREER OPPORTUNITIES (show title and description only):
 {careers_block}
@@ -482,7 +520,7 @@ Respond in JSON with this exact shape:
 {{
   "reasoning": "<brief note on how you presented the data>",
   "message": "<the full formatted message for the user>",
-  "finished": true
+  "finished": false
 }}"""
 
         response, llm_stats = await self._conversation_caller.call_llm(
@@ -497,7 +535,7 @@ Respond in JSON with this exact shape:
             plain = f"Here are your personalised recommendations:\n\n**Career Opportunities**\n{careers_block}\n\n**Job Opportunities**\n{jobs_block}"
             return AgentOutputWithReasoning(
                 message_for_user=plain,
-                finished=True,
+                finished=False,
                 reasoning="Simple flow: LLM unavailable, returned plain text fallback.",
                 agent_type=self.agent_type,
                 agent_response_time_in_sec=round(time.time() - agent_start_time, 2),
@@ -506,7 +544,7 @@ Respond in JSON with this exact shape:
 
         return AgentOutputWithReasoning(
             message_for_user=response.message.strip('"'),
-            finished=True,
+            finished=False,
             reasoning="Simple flow: LLM presented career and job recommendations without multi-phase discussion.",
             agent_type=self.agent_type,
             agent_response_time_in_sec=round(time.time() - agent_start_time, 2),
