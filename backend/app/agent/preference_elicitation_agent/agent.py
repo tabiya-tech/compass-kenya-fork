@@ -868,6 +868,14 @@ class PreferenceElicitationAgent(Agent):
                 )
                 exp_summaries.append(summary)
 
+            # Prefer the ESCO-normalized title (set by InferOccupationTool during collection);
+            # fall back to the raw title the user gave. This avoids "working as cooking school"
+            # when the experience agent stored a place name instead of a job title.
+            display_titles = [
+                exp.normalized_experience_title or exp.experience_title
+                for exp in experiences[:3]
+            ]
+
             previous_question_context = f"""
                 When constructing the question, keep in mind the previous question asked and DO NOT repeat it.
                 <previous_experience_question>
@@ -892,9 +900,16 @@ class PreferenceElicitationAgent(Agent):
                 - Ask them a REFLECTIVE question about what they ENJOYED or DISLIKED about these specific experiences.
                 - Focus on understanding their PREFERENCES, not their responsibilities.
                 {previous_question_context}
+                # IMPORTANT — experience title vs. place of work
+                The experience title below may sometimes be a place or organisation name (e.g. "cooking school",
+                "Safaricom") rather than a job role. If it looks like a place or organisation, use
+                "working at [place]" instead of "working as [place]", or anchor the question to the
+                company name from the experience summary above. Never produce phrasing like
+                "working as cooking school".
+
                 Examples:
-                - "You mentioned working as {experiences[0].experience_title}. What aspects of that work did you find most satisfying?"
-                - "What frustrated you most about the {experiences[0].experience_title} role?"
+                - "You mentioned working as {display_titles[0]}. What aspects of that work did you find most satisfying?"
+                - "What frustrated you most about the {display_titles[0]} role?"
                 - "Comparing your work at {experiences[0].company} and {experiences[1].company if len(experiences) > 1 else 'your other experiences'}, which did you prefer and why?"
 
                 Keep it conversational and natural. One question at a time."""
@@ -942,11 +957,20 @@ class PreferenceElicitationAgent(Agent):
             if not previous_experience_question:
                 intro_text = "Now I'd like to understand what matters most to you in a job - things like salary, work-life balance, job security, and career growth.\n\n"
 
-            fallback_msg = intro_text + (
-                "Tell me about a work task you really enjoyed - what made it satisfying?"
-                if not experiences
-                else f"You mentioned working as {experiences[0].experience_title}. What did you enjoy most about that work?"
-            )
+            if not experiences:
+                fallback_msg = intro_text + "Tell me about a work task you really enjoyed - what made it satisfying?"
+            else:
+                exp0 = experiences[0]
+                # Anchor to company ("working at X") when available — always grammatically safe.
+                # Use normalized title ("working as X") when company is absent but normalization succeeded.
+                # If neither is available the raw experience_title may be a place name, so avoid
+                # committing to "working as X" and use a generic prompt instead.
+                if exp0.company:
+                    fallback_msg = intro_text + f"You mentioned working at {exp0.company}. What did you enjoy most about that work?"
+                elif exp0.normalized_experience_title:
+                    fallback_msg = intro_text + f"You mentioned working as {exp0.normalized_experience_title}. What did you enjoy most about that work?"
+                else:
+                    fallback_msg = intro_text + "Tell me about your most recent work experience. What did you enjoy most about it?"
             response = ConversationResponse(
                 reasoning="Failed to get LLM response, using fallback",
                 message=fallback_msg,
