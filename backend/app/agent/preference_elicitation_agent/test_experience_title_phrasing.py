@@ -5,11 +5,12 @@ Verifies that when experience_title is a place name (e.g. "cooking school")
 the agent does NOT produce "working as cooking school" in either the
 deterministic fallback (turn 1) or the LLM-generated question (turn 2).
 
-Deterministic tests (A–C): no LLM calls, run in CI.
-LLM integration test (D): marked llm_integration, skipped in CI.
+Deterministic tests (A–E): LLM calls mocked out, safe for CI.
+LLM integration test (F): marked llm_integration, skipped in CI.
 """
 
 import pytest
+from unittest.mock import AsyncMock, patch
 
 from app.agent.agent_types import AgentInput
 from app.agent.experience import WorkType, Timeline
@@ -23,6 +24,12 @@ from app.conversation_memory.conversation_memory_types import (
 )
 
 BAD_PHRASE = "working as cooking school"
+
+# Patch target for the two LLM-touching methods that fire on every turn-1 call.
+# _extract_user_context  — awaited directly in execute() before phase dispatch.
+# _prewarm_next_vignette — spawned via asyncio.create_task in _handle_intro_phase.
+_EXTRACT_CTX = "app.agent.preference_elicitation_agent.agent.PreferenceElicitationAgent._extract_user_context"
+_PREWARM     = "app.agent.preference_elicitation_agent.agent.PreferenceElicitationAgent._prewarm_next_vignette"
 
 
 def _make_agent(experiences: list[ExperienceEntity]) -> tuple[PreferenceElicitationAgent, PreferenceElicitationAgentState]:
@@ -89,11 +96,13 @@ def _proper_job_title() -> list[ExperienceEntity]:
 
 
 # ---------------------------------------------------------------------------
-# Deterministic tests — no LLM calls, safe for CI
+# Deterministic tests — LLM mocked, safe for CI
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_fallback_uses_company_when_title_is_place():
+@patch(_PREWARM, new_callable=AsyncMock)
+@patch(_EXTRACT_CTX, new_callable=AsyncMock)
+async def test_fallback_uses_company_when_title_is_place(mock_extract, mock_prewarm):
     """Fallback anchors to company name, avoiding 'working as cooking school'."""
     agent, _ = _make_agent(_cooking_school_with_company())
     out = await agent.execute(
@@ -105,7 +114,9 @@ async def test_fallback_uses_company_when_title_is_place():
 
 
 @pytest.mark.asyncio
-async def test_fallback_uses_normalized_title_when_no_company():
+@patch(_PREWARM, new_callable=AsyncMock)
+@patch(_EXTRACT_CTX, new_callable=AsyncMock)
+async def test_fallback_uses_normalized_title_when_no_company(mock_extract, mock_prewarm):
     """Fallback uses normalized (ESCO) title when company is absent."""
     agent, _ = _make_agent(_cooking_school_with_normalized_title())
     out = await agent.execute(
@@ -117,19 +128,9 @@ async def test_fallback_uses_normalized_title_when_no_company():
 
 
 @pytest.mark.asyncio
-async def test_fallback_unchanged_for_proper_job_title():
-    """Regression: proper job title with company still produces a valid message."""
-    agent, _ = _make_agent(_proper_job_title())
-    out = await agent.execute(
-        AgentInput(message="", is_artificial=True),
-        _make_context(ConversationHistory()),
-    )
-    assert BAD_PHRASE not in out.message_for_user.lower()
-    assert "Alliance High School" in out.message_for_user
-
-
-@pytest.mark.asyncio
-async def test_fallback_generic_when_no_company_and_no_normalized_title():
+@patch(_PREWARM, new_callable=AsyncMock)
+@patch(_EXTRACT_CTX, new_callable=AsyncMock)
+async def test_fallback_generic_when_no_company_and_no_normalized_title(mock_extract, mock_prewarm):
     """Degenerate case: no company, no normalized title — must not produce 'working as cooking school'."""
     agent, _ = _make_agent(_cooking_school_no_company_no_normalized())
     out = await agent.execute(
@@ -138,6 +139,20 @@ async def test_fallback_generic_when_no_company_and_no_normalized_title():
     )
     assert BAD_PHRASE not in out.message_for_user.lower()
     assert "cooking school" not in out.message_for_user.lower()
+
+
+@pytest.mark.asyncio
+@patch(_PREWARM, new_callable=AsyncMock)
+@patch(_EXTRACT_CTX, new_callable=AsyncMock)
+async def test_fallback_unchanged_for_proper_job_title(mock_extract, mock_prewarm):
+    """Regression: proper job title with company still produces a valid message."""
+    agent, _ = _make_agent(_proper_job_title())
+    out = await agent.execute(
+        AgentInput(message="", is_artificial=True),
+        _make_context(ConversationHistory()),
+    )
+    assert BAD_PHRASE not in out.message_for_user.lower()
+    assert "Alliance High School" in out.message_for_user
 
 
 # ---------------------------------------------------------------------------
