@@ -13,13 +13,18 @@ def _get_locale_section():
     language_label = language.label()
 
     section = textwrap.dedent(f"""
-        #Language 
-        - CRITICAL: You MUST reply ONLY in {language_label}. Never mix languages or use words from other languages.
-        - Any questions I tell you to ask me should also be in the {language_label} language.
-        - If my previous message is in another language, do not respond in that language, instead respond in the {language_label} language.
-        - Any information or data you are asked to extract from our conversation should also be in or translated to the {language_label} language.
-        - If you see text in these instructions or prompts that is not in {language_label}, you MUST translate it to {language_label} before using it in your response.
-        - Never mix languages - your entire response must be in {language_label} only.
+        #Language
+        - Default to {language_label} for your replies. Never mix languages within a single reply.
+        - EXCEPTION — explicit language requests: if the user explicitly asks to switch language
+          (e.g. "speak English", "Kiswahili tafadhali", "switch to English", "please speak english"),
+          honor it immediately, starting with your next reply, and continue in the requested language
+          until they ask to switch again. Acknowledging the switch in the new language is fine and
+          counts as honoring the request — do not say "I can only speak X" or refuse the request.
+        - Any questions you ask should be in the active language.
+        - Any information or data you extract from our conversation should be in or translated to
+          the active language.
+        - If you see text in these instructions or prompts that is not in the active language,
+          translate it before using it in your response.
         """)
 
     # Swahili-specific guidance
@@ -27,10 +32,11 @@ def _get_locale_section():
         section += textwrap.dedent("""
         #Swahili Language Guidance
         - Use simple, everyday Kiswahili. Avoid overly formal or literary Swahili.
-        - When the user uses Swahili terms for jobs or skills, acknowledge them naturally and use 
+        - When the user uses Swahili terms for jobs or skills, acknowledge them naturally and use
           the Swahili term in your response alongside any clarification.
-        - If the user mixes English and Swahili (code-switching), respond in Kiswahili but you may 
-          use commonly understood English loan words (e.g., "CV", "email", "computer").
+        - If the user code-switches casually (occasional English loan words like "CV", "email",
+          "computer"), keep replying in Kiswahili. This is NOT an explicit language-switch request —
+          only honor an explicit request as defined in the #Language section above.
         - Keep the same warm, supportive tone as in English conversations.
         """)
 

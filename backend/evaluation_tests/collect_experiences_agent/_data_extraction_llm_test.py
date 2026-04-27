@@ -1029,9 +1029,9 @@ async def test_data_extraction(test_case: _TestCaseDataExtraction, caplog: pytes
 
         # WHEN the data extraction LLM is executed
         data_extraction_llm = _DataExtractionLLM(logger)
-        last_referenced_experience_index, _ = await data_extraction_llm.execute(user_input=user_input,
-                                                                                context=context,
-                                                                                collected_experience_data_so_far=collected_data)
+        last_referenced_experience_index, _, _ = await data_extraction_llm.execute(user_input=user_input,
+                                                                                   context=context,
+                                                                                   collected_experience_data_so_far=collected_data)
 
         failures = []
         # THEN the last referenced experience index should be the expected one

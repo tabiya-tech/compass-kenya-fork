@@ -94,7 +94,7 @@ class _DataExtractionLLM:
                       user_input: AgentInput,
                       context: ConversationContext,
                       collected_experience_data_so_far: list[CollectedData]
-                      ) -> tuple[int, list[LLMStats]]:
+                      ) -> tuple[int, list[LLMStats], list[str]]:
         """
         Given the last user input, a conversation history and the experience data collected so far.
         Extracts the experience data from the user input and conversation history and
@@ -103,8 +103,15 @@ class _DataExtractionLLM:
         :param user_input:  The user's last input
         :param context: The conversation context with the conversation history
         :param collected_experience_data_so_far: The collected experience data so far
-        :return: Tuple of the last referenced experience index and the LLM stats
+        :return: Tuple of (last referenced experience index, LLM stats, UUIDs of experiences whose
+                 experience_title was newly set or changed by this call). Callers can use the third
+                 element to skip work like occupation normalization on confirmation turns where no
+                 title actually changed.
         """
+        titles_before: dict[str, str] = {
+            exp.uuid: (exp.experience_title or "").strip()
+            for exp in collected_experience_data_so_far
+        }
 
         # 1. Get the list of operations from the user's input
         commands, llm_stats = await self._intent_analyzer_tool.execute(
@@ -181,4 +188,12 @@ class _DataExtractionLLM:
             collected_data.index = index_counter
             index_counter += 1
 
-        return last_referenced_index, llm_stats
+        newly_titled_uuids: list[str] = []
+        for exp in collected_experience_data_so_far:
+            new_title = (exp.experience_title or "").strip()
+            if not new_title:
+                continue
+            if titles_before.get(exp.uuid, "") != new_title:
+                newly_titled_uuids.append(exp.uuid)
+
+        return last_referenced_index, llm_stats, newly_titled_uuids

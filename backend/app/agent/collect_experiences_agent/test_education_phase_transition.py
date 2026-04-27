@@ -69,7 +69,7 @@ def patched_llms():
         "app.agent.collect_experiences_agent.collect_experiences_agent.TransitionDecisionTool"
     ) as trans_mock:
         data_instance = MagicMock()
-        data_instance.execute = AsyncMock(return_value=(-1, []))
+        data_instance.execute = AsyncMock(return_value=(-1, [], []))
         data_mock.return_value = data_instance
         yield conv_mock, trans_mock
 
