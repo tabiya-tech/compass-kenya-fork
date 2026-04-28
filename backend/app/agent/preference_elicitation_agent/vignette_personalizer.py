@@ -128,7 +128,7 @@ Salary Balance Rules:
 Kenyan Context Guidelines:
 - Use realistic Kenyan companies or job types (Safaricom, Equity Bank, local startups)
 - Salary ranges should be realistic for Kenya (50K-180K KES/month)
-- Include local context (Nairobi traffic commute, M-PESA, NHIF/NSSF benefits)
+- Include local Kenyan context (M-PESA, NHIF/NSSF benefits) — do NOT mention specific locations or cities
 - Make jobs feel relevant to THEIR background, not generic
 - Keep descriptions clear and concise (3-5 sentences each)
 
@@ -150,7 +150,7 @@ Example Output:
 {
   "scenario_intro": "You're weighing two paths in software development with very different risk profiles.",
   "option_a_title": "Senior Developer at Safaricom",
-  "option_a_description": "You'd work as a Senior Backend Developer at Safaricom's headquarters in Nairobi. The salary is KES 110,000 per month with full benefits including NHIF, NSSF, and pension. The role offers excellent job security, predictable career progression, and great work-life balance. However, the work is often routine, innovation is slow, and you'd spend 2 hours daily commuting through Nairobi traffic.",
+  "option_a_description": "You'd work as a Senior Backend Developer at Safaricom. The salary is KES 110,000 per month with full benefits including NHIF, NSSF, and pension. The role offers excellent job security, predictable career progression, and great work-life balance. However, the work is often routine, innovation is slow, and commuting to a corporate office daily can be draining.",
   "option_b_title": "Tech Lead at Early-Stage Fintech Startup",
   "option_b_description": "You'd be the founding engineer at a 5-person fintech startup targeting mobile money users. Base salary is KES 70,000 per month (a 36% cut from corporate) but includes 3% equity that could be worth millions if the company succeeds. The role offers rapid learning, significant autonomy, and remote work flexibility. However, the startup might fail, there are no benefits, and you'd often work 50+ hour weeks during critical launches.",
   "reasoning": "Personalized for senior developer background. Creates real dilemma: guaranteed 110K comfort vs 70K + equity upside. Neither is obviously better - depends on risk tolerance and life stage."
@@ -395,20 +395,10 @@ Generate a personalized vignette that:
             for bg in context.all_backgrounds:
                 parts.append(f"  - {bg}")
             parts.append("")
-
-            if previous_vignettes:
-                parts.append(
-                    "The previous vignette scenarios shown to the user (listed below under "
-                    "'Previously Shown Scenarios') already used specific job backgrounds. "
-                    "MANDATORY: Pick a background from the list above that has NOT been "
-                    "represented in those previous scenarios. "
-                    "Vary the industry, role type, and sector across vignettes."
-                )
-            else:
-                parts.append(
-                    "MANDATORY: Pick ONE background from the list above and base BOTH job "
-                    "scenarios in this vignette on that background. Do not mix backgrounds."
-                )
+            parts.append(
+                "Use any of these backgrounds to create relevant job scenarios. "
+                "Scenarios should feel realistic for someone with this overall professional experience."
+            )
 
         return "\n".join(parts)
 
