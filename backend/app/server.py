@@ -205,7 +205,7 @@ _disable_registration_code = os.getenv("GLOBAL_DISABLE_REGISTRATION_CODE", "").l
 
 # set global application configuration
 _global_product_name = os.getenv("GLOBAL_PRODUCT_NAME")
-if _global_product_name is None:
+if not _global_product_name:
     logger.warning("GLOBAL_PRODUCT_NAME environment variable is not set! Defaulting to 'Compass'")
     _global_product_name = "Compass"
 
