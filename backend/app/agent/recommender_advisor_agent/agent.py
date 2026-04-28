@@ -514,7 +514,7 @@ Write a warm, clear message that:
 1. Opens with a brief one-sentence introduction
 2. Lists each career opportunity with its title and description
 3. Lists each job opportunity showing all available fields (employer, location, salary, why it matches you, closing date, and the application link labelled "Apply here:")
-4. Closes with one encouraging sentence
+4. Closes with two sentences: one encouraging sentence, then a second sentence letting the user know they can come back any day to ask for new job opportunities as the listings refresh regularly
 
 Respond in JSON with this exact shape:
 {{
