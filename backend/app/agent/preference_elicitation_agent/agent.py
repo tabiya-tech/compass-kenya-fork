@@ -1704,6 +1704,18 @@ Keep it short (1-3 sentences), conversational, and easy to answer.
         # Format the preference vector for the LLM
         pv_formatted = self._format_preference_vector_for_summary(pv)
 
+        # Include BWS top work activities if the phase completed
+        bws_section = ""
+        if self._state.bws_phase_complete and self._state.top_10_bws:
+            wa_labels = bws_utils.load_wa_labels()
+            top_labels = [wa_labels.get(wa_id, wa_id) for wa_id in self._state.top_10_bws[:5]]
+            bws_section = f"""
+**Top Work Activities (from task-ranking exercise):**
+{chr(10).join(f'- {label}' for label in top_labels)}
+
+Include one bullet point summarising what types of work tasks they enjoy most, based on these rankings.
+"""
+
         prompt = f"""
 The user has completed a preference elicitation conversation. Below is their preference vector with scores and values.
 
@@ -1717,10 +1729,11 @@ Your task: Generate 3-5 natural, conversational bullet points summarizing what m
 5. Use conversational language, not technical jargon
 6. Prioritize the top 3-5 most distinctive preferences
 7. Be specific - reference actual values when they tell a story
+8. If top work activities are provided below, always include a bullet about preferred work tasks
 
 **Preference Vector:**
 {pv_formatted}
-
+{bws_section}
 **Examples of good summaries:**
 - "Job security and stable income are very important to you - you strongly prefer permanent roles"
 - "You thrive on analytical and problem-solving work, especially tasks that require deep thinking"
