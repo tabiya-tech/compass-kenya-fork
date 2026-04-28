@@ -10,7 +10,7 @@ LLM integration test (F): marked llm_integration, skipped in CI.
 """
 
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.agent.agent_types import AgentInput
 from app.agent.experience import WorkType, Timeline
@@ -24,6 +24,22 @@ from app.conversation_memory.conversation_memory_types import (
 )
 
 BAD_PHRASE = "working as cooking school"
+
+
+@pytest.fixture(autouse=True)
+def _block_gcp_auth(request):
+    """Prevent GeminiGenerativeLLM from attempting GCP auth in unit tests.
+
+    GeminiGenerativeLLM instantiates a vertexai GenerativeModel in __init__,
+    which triggers GCP project lookup before any method-level mocks apply.
+    This fixture short-circuits that at the GenerativeModel level for all tests
+    in this module except those marked llm_integration (which need real credentials).
+    """
+    if request.node.get_closest_marker("llm_integration"):
+        yield
+        return
+    with patch("common_libs.llm.generative_models.GenerativeModel", return_value=MagicMock()):
+        yield
 
 # Patch target for the two LLM-touching methods that fire on every turn-1 call.
 # _extract_user_context  — awaited directly in execute() before phase dispatch.
