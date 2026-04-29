@@ -546,7 +546,7 @@ class RecommendationInterface:
                     essential_skills=["Basic wiring", "Problem-solving", "Presentable appearance"],
                     employer="Serena Beach Hotel",
                     salary_range="KES 18,000-25,000/month",
-                    contract_type="permanent",
+                    contract_type="full_time",
                     related_occupation_id="occ_001_uuid"
                 ),
                 OpportunityRecommendation(
@@ -586,7 +586,7 @@ class RecommendationInterface:
                     essential_skills=["Physical fitness", "Attention to detail", "Safety-conscious"],
                     employer="Kenya Ports Authority",
                     salary_range="KES 28,000-40,000/month after certification",
-                    contract_type="permanent",
+                    contract_type="full_time",
                     related_occupation_id="occ_003_uuid"
                 ),
                 OpportunityRecommendation(
@@ -599,7 +599,7 @@ class RecommendationInterface:
                     essential_skills=["Basic mechanics", "Willingness to learn hands-on"],
                     employer="Self-employed fundi (apprenticeship arrangement)",
                     salary_range="KES 300-600/day (apprentice rate) + tips",
-                    contract_type="casual",
+                    contract_type="part_time",
                     related_occupation_id="occ_004_uuid"
                 ),
                 OpportunityRecommendation(
@@ -625,7 +625,7 @@ class RecommendationInterface:
                     essential_skills=["Customer service", "Basic math", "M-Pesa handling"],
                     employer="Self-employed (stall rental)",
                     salary_range="KES 400-1,200/day profit (depending on stock and hustle)",
-                    contract_type="self_employed",
+                    contract_type="freelance",
                     related_occupation_id="occ_005_uuid"
                 ),
             ],
