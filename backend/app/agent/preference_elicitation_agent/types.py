@@ -433,8 +433,8 @@ class VignetteResponse(BaseModel):
     vignette_id: str
     """ID of the vignette responded to"""
 
-    chosen_option_id: str
-    """ID of the option chosen (e.g., "A", "B")"""
+    chosen_option_id: Optional[str]
+    """ID of the option chosen (e.g., "A", "B"), or None if no choice was made"""
 
     user_reasoning: str
     """User's explanation of their choice"""
