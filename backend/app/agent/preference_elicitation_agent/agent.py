@@ -1673,9 +1673,12 @@ Keep it short (1-3 sentences), conversational, and easy to answer.
         # Build message
         message_parts = [vignette.scenario_text, ""]
 
-        # Add each option
-        for option in vignette.options:
-            message_parts.append(f"**{option.title}**")
+        # Add each option with neutral A/B labels. Titles are intentionally
+        # omitted to avoid anchoring users on a role/company name (and to
+        # eliminate cross-vignette title repetition).
+        for i, option in enumerate(vignette.options):
+            label = chr(65 + i)  # "A", "B", ...
+            message_parts.append(f"**Option {label}**")
             message_parts.append(option.description)
             message_parts.append("")
 

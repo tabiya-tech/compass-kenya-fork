@@ -32,23 +32,15 @@ class GeneratedVignetteContent(BaseModel):
     """LLM response model for generated vignette content."""
 
     scenario_intro: str = Field(
-        description="Brief introduction to the scenario (1-2 sentences)"
-    )
-
-    option_a_title: str = Field(
-        description="Short job title for option A (e.g., 'Senior Developer at Safaricom')"
+        description="Brief framing for the choice (1-2 sentences). Neutral — does not hint at which option is 'better'."
     )
 
     option_a_description: str = Field(
-        description="Detailed description of option A (3-5 sentences)"
-    )
-
-    option_b_title: str = Field(
-        description="Short job title for option B (e.g., 'Freelance Software Engineer')"
+        description="Lived-experience narrative for option A (2-4 sentences). No job titles, no company names."
     )
 
     option_b_description: str = Field(
-        description="Detailed description of option B (3-5 sentences)"
+        description="Lived-experience narrative for option B (2-4 sentences). No job titles, no company names."
     )
 
     reasoning: str = Field(
@@ -84,76 +76,103 @@ class VignettePersonalizer:
         from common_libs.llm.generative_models import GeminiGenerativeLLM
 
         system_instructions = """
-You are helping personalize career preference questions for Kenyan youth.
+You are helping write career preference questions for Kenyan youth.
 
-Your task: Generate TWO realistic job scenario options that:
-1. Are relevant to the user's background (same or adjacent industry/role)
-2. Match the user's experience level
-3. Maintain the exact trade-offs specified in the template
-4. Feel personalized and realistic for this specific person
-5. Use Kenyan context (companies, salary ranges in KES, local considerations)
-6. Are DIFFERENT from previously shown scenarios
-7. CREATE A MEANINGFUL DILEMMA - both options should be attractive in different ways
+Your task: Generate TWO short job-scenario descriptions (Option A and Option B) that:
+1. Test the trade-off specified in the template
+2. Feel grounded in everyday Kenyan working life
+3. Read as lived experience, not as job ads
+4. Create a real dilemma — neither option is obviously better
 
-CRITICAL: Enforce Real Trade-offs
-================================
-DO NOT make one option objectively better than the other. Each option should have:
-- Clear ADVANTAGES that make it attractive
-- Clear SACRIFICES that make it challenging
+CRITICAL — DO NOT NAME THE JOB
+==============================
+Never write a job title, role name, or occupation (no "Sales Manager",
+"Developer", "Teacher", "Driver", etc.).
+Never name a specific company (no "Safaricom", "Equity Bank", "M-PESA",
+no startup names).
+Never label the option with the trade-off it represents (no "The Stable
+Path", "The Risky Bet", "The Flexible Option"). The label is just A or B
+in the rendered UI — your job is to describe what the day-to-day
+actually feels like and let the user infer the trade-off themselves.
 
-The user should feel CONFLICTED about which to choose.
+WRITE LIVED EXPERIENCE
+======================
+Describe what the person's week looks like — concretely. Anchor on:
+- Money: monthly take-home in KES, how predictable it is, whether
+  benefits (NHIF, NSSF, leave) are part of the deal
+- Time: hours per week, when they happen, whether weekends are off
+- Place: office, field, home, mixed; commute reality
+- Autonomy: who tells them what to do, how much is theirs to decide
+- Pace and pressure: steady vs spiky, who carries the risk when things
+  go wrong
+- Growth: what gets better over a year of doing this
 
-Bad Example (Option B is obviously better):
-❌ Option A: Office job, 60K/month, benefits
-❌ Option B: Remote job, 80K/month, benefits, flexible hours
-   → Option B wins on ALL dimensions. No trade-off!
+Use second person ("you'd...") consistently across both options. Keep
+it to 2-4 sentences.
 
-Good Example (Real dilemma):
-✅ Option A: Office job, 100K/month guaranteed, full benefits, job security
-✅ Option B: Startup, 60K/month base (40% cut!), potential 150K+ with equity, high risk
-   → Now user must choose: Security vs Growth potential
+SHOW, DON'T TELL
+================
+Anchor the description in concrete moments, not abstract job traits.
+Pick one or two specific images per option — what does Tuesday morning
+actually look like? What does the person see, hear, or do?
 
-Trade-off Guidelines:
---------------------
-- If Option A has STABILITY → it should pay MORE on average (30-50% premium)
-- If Option B has FLEXIBILITY/UPSIDE → it should start LOWER but have higher ceiling
-- If Option A has BENEFITS → Option B should lack them but compensate elsewhere
-- If Option B requires SACRIFICE (commute, long hours) → it should pay meaningfully more
+Weak (abstract): "Your days involve interacting with many different
+people, often explaining technical details clearly."
+Strong (concrete): "Most mornings start with someone at your desk
+looking confused — you talk them through it until their face clears."
 
-Salary Balance Rules:
-- Stable job average should be 20-40% higher than risky job average
-- Risky job ceiling should be 50-100% higher than stable job ceiling
-- Never make the "exciting" option ALSO pay more guaranteed - that's unrealistic
+Weak: "It's physically demanding, often requiring you to be on your
+feet and handle heavy tasks."
+Strong: "By midday your shirt is sticking to your back; your hands
+know the weight of the work without you thinking about it."
 
-Kenyan Context Guidelines:
-- Use realistic Kenyan companies or job types (Safaricom, Equity Bank, local startups)
-- Salary ranges should be realistic for Kenya (50K-180K KES/month)
-- Include local Kenyan context (M-PESA, NHIF/NSSF benefits) — do NOT mention specific locations or cities
-- Make jobs feel relevant to THEIR background, not generic
-- Keep descriptions clear and concise (3-5 sentences each)
+Keep it tight — one or two images, then back to the trade-off. Do not
+over-write or get poetic; the goal is to put the reader inside the
+moment, not to perform.
 
-Examples of good personalization:
-- Software Developer → "Backend Engineer at Safaricom" vs "Tech Lead at 2-person startup"
-- Teacher → "Public school teacher (secure, lower pay)" vs "Private tutoring (variable, higher ceiling)"
-- Sales → "Corporate sales rep (stable, structured)" vs "Commission-only broker (risky, unlimited upside)"
+HARD RULE: At least ONE sentence per option must be a specific scene
+— a moment in time, an action in progress, something the person sees
+or does. The other sentences can summarize. A description with zero
+scenes (only patterns and traits) is a failure, regardless of how
+accurate it is.
 
-Output Schema:
-You must return a JSON object with exactly these fields:
-- scenario_intro (string): Brief introduction to the scenario (1-2 sentences)
-- option_a_title (string): Short job title for option A
-- option_a_description (string): Detailed description including salary, benefits, and trade-offs (3-5 sentences)
-- option_b_title (string): Short job title for option B
-- option_b_description (string): Detailed description including salary, benefits, and trade-offs (3-5 sentences)
-- reasoning (string): Brief explanation of how this was personalized
+ENFORCE A REAL TRADE-OFF
+========================
+Each option must have clear advantages AND clear sacrifices. The user
+should feel conflicted.
 
-Example Output:
+Salary balance rules:
+- The more stable option should pay 20-40% more on average than the
+  less stable one
+- The riskier option should have a meaningfully higher ceiling
+  (50-100% above the stable ceiling) to compensate for the downside
+- Never make the "exciting" option also pay more guaranteed — that's
+  unrealistic
+
+KENYAN CONTEXT
+==============
+- Salaries in KES per month, realistic ranges (15K-180K depending on
+  level)
+- Local texture where it fits naturally: matatu commutes, NHIF/NSSF,
+  M-PESA payments, upcountry travel — but only if it serves the
+  description, not as decoration. Do NOT mention specific cities or
+  locations.
+
+OUTPUT SCHEMA
+=============
+Return a JSON object with exactly these fields:
+- scenario_intro (string): 1-2 sentence neutral framing
+- option_a_description (string): 2-4 sentence lived-experience narrative
+- option_b_description (string): 2-4 sentence lived-experience narrative
+- reasoning (string): brief note on how this was personalized
+
+EXAMPLE OUTPUT
+==============
 {
-  "scenario_intro": "You're weighing two paths in software development with very different risk profiles.",
-  "option_a_title": "Senior Developer at Safaricom",
-  "option_a_description": "You'd work as a Senior Backend Developer at Safaricom. The salary is KES 110,000 per month with full benefits including NHIF, NSSF, and pension. The role offers excellent job security, predictable career progression, and great work-life balance. However, the work is often routine, innovation is slow, and commuting to a corporate office daily can be draining.",
-  "option_b_title": "Tech Lead at Early-Stage Fintech Startup",
-  "option_b_description": "You'd be the founding engineer at a 5-person fintech startup targeting mobile money users. Base salary is KES 70,000 per month (a 36% cut from corporate) but includes 3% equity that could be worth millions if the company succeeds. The role offers rapid learning, significant autonomy, and remote work flexibility. However, the startup might fail, there are no benefits, and you'd often work 50+ hour weeks during critical launches.",
-  "reasoning": "Personalized for senior developer background. Creates real dilemma: guaranteed 110K comfort vs 70K + equity upside. Neither is obviously better - depends on risk tolerance and life stage."
+  "scenario_intro": "Two paths are open to you, with very different rhythms.",
+  "option_a_description": "Your salary is KES 95,000 every month, on the same day, with NHIF, NSSF, and pension deductions already handled. You're in an office from 8 to 5, Monday to Friday — the commute eats two hours of your day. The work is steady and the people above you decide most of what you'll do; you'll get a small raise next year and a slightly bigger one the year after.",
+  "option_b_description": "Some months you clear KES 140,000, other months KES 45,000 — it depends on what you bring in. You set your own schedule and work from wherever; nobody asks where you were on Tuesday. There are no benefits, no safety net, and the slow stretches are quietly stressful. But when something works, the upside is yours.",
+  "reasoning": "Personalized for a mid-level professional. Neither option names a role; the trade-off (predictability vs upside) emerges from the texture, not from a label."
 }
 """
 
@@ -257,17 +276,18 @@ Example Output:
             previous_vignettes=previous_vignettes or []
         )
 
-        # Build VignetteOption objects
+        # Build VignetteOption objects (titles are no longer rendered;
+        # neutral A/B labels are applied at presentation time)
         option_a = VignetteOption(
             option_id="A",
-            title=generated.option_a_title,
+            title="Option A",
             description=generated.option_a_description,
             attributes=template.option_a  # Use template attributes
         )
 
         option_b = VignetteOption(
             option_id="B",
-            title=generated.option_b_title,
+            title="Option B",
             description=generated.option_b_description,
             attributes=template.option_b  # Use template attributes
         )
@@ -460,9 +480,7 @@ Generate a personalized vignette that:
         # Store original values for logging
         original_data = {
             "scenario_text": vignette.scenario_text,
-            "option_a_title": vignette.options[0].title,
             "option_a_description": vignette.options[0].description,
-            "option_b_title": vignette.options[1].title,
             "option_b_description": vignette.options[1].description
         }
 
@@ -479,30 +497,27 @@ Generate a personalized vignette that:
 Option A: {self._format_attributes(vignette.options[0].attributes)}
 Option B: {self._format_attributes(vignette.options[1].attributes)}
 
-**Trade-Off Being Tested:**
+**Trade-Off Being Tested (for your reference only — DO NOT name it in the output):**
 {trade_off_desc}
 
 **Your Task:**
-Generate personalized job titles and descriptions that:
-1. Match the user's background (industry, role, experience level)
-2. Feel realistic and relevant to THIS specific person
-3. Use Kenyan companies, job types, and context
-4. Maintain the EXACT trade-off shown in the attributes above
-5. Make both options attractive in different ways (create real dilemma)
+Write two short lived-experience descriptions that:
+1. Feel grounded in the user's working life
+2. Maintain the EXACT trade-off shown in the attributes above
+3. Make both options feel like real, attractive choices (real dilemma)
+4. Do NOT name a job title, occupation, or company
+5. Do NOT label the option with the trade-off it represents
 
 **CRITICAL:**
 - DO NOT invent different attribute values
 - The descriptions must MATCH the attributes exactly
-- Only personalize job titles, company names, and descriptive language
-- If wage=25000 in attributes, description must say "KES 25,000/month"
-- If physical_demand=1, description must mention high physical demands
-- If flexibility=0, description must mention fixed schedules
+- If wage=25000 in attributes, the description must surface "KES 25,000/month"
+- If physical_demand=1, the description must convey high physical demands
+- If flexibility=0, the description must convey fixed schedules
 
 **Example of Good Personalization:**
-User: Software Developer
 Attributes: wage=30000, flexibility=1, remote_work=1
-✓ Title: "Remote Full-Stack Developer at Kenyan Startup"
-✓ Description: "Work remotely for a growing fintech startup building M-PESA integrations. Monthly salary of KES 30,000 with flexible hours..."
+✓ Description: "You set your own hours and work from wherever — some days a café, some days from bed. KES 30,000 lands in your account at the end of each month, but there are no benefits and no one above you to catch you when work dries up."
 
 **Example of Bad Personalization (inventing different values):**
 ❌ Description: "Earn KES 50,000/month..." (wage was 30000!)
@@ -541,15 +556,18 @@ Generate personalized content now:
             personalization_log.attributes_preserved = True  # No changes made
             return vignette, personalization_log
 
-        # Create personalized vignette with new text but same attributes
+        # Create personalized vignette with new text but same attributes.
+        # Titles are preserved from the original (offline) vignette since they
+        # are no longer rendered to users; neutral A/B labels are applied at
+        # presentation time.
         personalized_options = []
-        for i, (original_opt, new_title, new_desc) in enumerate([
-            (vignette.options[0], response.option_a_title, response.option_a_description),
-            (vignette.options[1], response.option_b_title, response.option_b_description)
-        ]):
+        for original_opt, new_desc in [
+            (vignette.options[0], response.option_a_description),
+            (vignette.options[1], response.option_b_description)
+        ]:
             personalized_opt = VignetteOption(
                 option_id=original_opt.option_id,
-                title=new_title,
+                title=original_opt.title,
                 description=new_desc,
                 attributes=original_opt.attributes.copy()  # Preserve exact attributes
             )
@@ -584,9 +602,7 @@ Generate personalized content now:
         # Log successful personalization
         personalization_log.personalized = {
             "scenario_text": response.scenario_intro,
-            "option_a_title": response.option_a_title,
             "option_a_description": response.option_a_description,
-            "option_b_title": response.option_b_title,
             "option_b_description": response.option_b_description,
             "reasoning": response.reasoning
         }

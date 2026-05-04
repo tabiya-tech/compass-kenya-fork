@@ -40,7 +40,7 @@ async def test_hybrid_mode_vignette_progression():
     mock_llm = MagicMock()
     # Mock the call method to return valid JSON
     mock_llm.call = AsyncMock(return_value=MagicMock(
-        response='{"scenario_text": "Mock scenario", "option_a_title": "Mock A", "option_a_description": "Mock A desc", "option_b_title": "Mock B", "option_b_description": "Mock B desc", "reasoning": "Mock reasoning"}',
+        response='{"scenario_intro": "Mock scenario", "option_a_description": "Mock A desc", "option_b_description": "Mock B desc", "reasoning": "Mock reasoning"}',
         prompt_token_count=100,
         response_token_count=50
     ))
