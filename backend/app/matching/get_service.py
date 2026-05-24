@@ -9,8 +9,9 @@ from app.app_config import get_application_config
 from app.matching.client import MatchingServiceClient
 from app.matching.service import MatchingService
 
-from app.matching.service_v1 import MatchingServiceV1
-from app.matching.service_v2 import MatchingServiceV2
+# from app.matching.service_v1 import MatchingServiceV1
+# from app.matching.service_v2 import MatchingServiceV2
+from app.matching.service_v3 import MatchingServiceV3
 
 _matching_service: MatchingService | None = None
 
@@ -18,8 +19,8 @@ _matching_service: MatchingService | None = None
 def get_matching_service() -> MatchingService:
     """Return the lazily-initialized matching service singleton.
 
-    To switch the application to v2, swap `MatchingServiceV1` for `MatchingServiceV2`
-    below.
+    To switch the application's matching algorithm, swap the concrete service
+    (`MatchingServiceV1` / `MatchingServiceV2` / `MatchingServiceV3`) below.
     """
     global _matching_service
 
@@ -29,6 +30,6 @@ def get_matching_service() -> MatchingService:
             base_url=_app_config.matching_service_url,
             api_key=_app_config.matching_service_api_key,
         )
-        _matching_service = MatchingServiceV2(matching_service_client)
+        _matching_service = MatchingServiceV3(matching_service_client)
 
     return _matching_service

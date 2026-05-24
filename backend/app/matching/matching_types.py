@@ -13,7 +13,7 @@ from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
-MatchingAlgorithmVersion = Literal["v1", "v2"]
+MatchingAlgorithmVersion = Literal["v1", "v2", "v3"]
 
 
 class Skill(BaseModel):
