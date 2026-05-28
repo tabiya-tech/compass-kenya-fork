@@ -4,7 +4,9 @@ Provides endpoints to list and manage users.
 """
 
 import logging
+import os
 from typing import Optional
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Query, HTTPException, status, Depends
 from firebase_admin.auth import EmailAlreadyExistsError
@@ -18,6 +20,7 @@ from app.admin.users._types import (
     DeleteUserResponse,
     UpdateProfileRequest,
     UpdateProfileResponse,
+    PasswordResetLinkResponse,
 )
 from app.admin.users.service import UsersService, get_users_service
 from app.app_config import get_application_config
@@ -210,6 +213,59 @@ def get_admin_users_routes(auth: Authentication) -> APIRouter:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to update user role",
+            ) from e
+
+    @router.post(
+        "/{user_id}/password-reset-link",
+        response_model=PasswordResetLinkResponse,
+        summary="Generate a password reset link",
+        description="Generate a Firebase password reset link for the given user to share via any channel. Super admin only.",
+        dependencies=[Depends(require_super_admin)],
+    )
+    async def get_password_reset_link(
+            user_id: str,
+            users_service: UsersService = Depends(get_users_service),
+    ) -> PasswordResetLinkResponse:
+        """
+        Generate a password reset link for a user.
+
+        Returns a one-time password reset URL that the super admin can share
+        with the user via any channel (email, Slack, etc.).
+
+        - **user_id**: The user ID to generate the reset link for
+        """
+        try:
+            config = get_application_config()
+            tenant_id = config.admin_firebase_tenant_id
+            # With handle_code_in_app=True, the generated link points directly to
+            # continue_url (with oobCode params appended) instead of going through
+            # Firebase's hosted action page. This ensures the oobCode is consumed by
+            # the admin frontend's tenant-aware Firebase auth instance, not the
+            # end-user frontend's.
+            # Admin frontend URL is admin.<frontend_url> (e.g. https://admin.njila.ai).
+            frontend_url = os.getenv("FRONTEND_URL", "").rstrip("/")
+            if frontend_url:
+                parsed = urlparse(frontend_url)
+                admin_frontend_url = f"{parsed.scheme}://admin.{parsed.netloc}"
+                continue_url = f"{admin_frontend_url}/#/auth-handler"
+            else:
+                continue_url = None
+            return await users_service.get_password_reset_link(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                continue_url=continue_url,
+            )
+        except ValueError as e:
+            logger.error("Invalid request: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(e),
+            ) from e
+        except Exception as e:
+            logger.error("Failed to generate password reset link: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to generate password reset link",
             ) from e
 
     @router.patch(

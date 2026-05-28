@@ -177,6 +177,36 @@ class FirebaseService:
         self._logger.info("Updated Firebase user with UID: %s", user.uid)
         return user
 
+    def generate_password_reset_link(self, tenant_id: str, email: str, continue_url: Optional[str] = None) -> str:
+        """
+        Generate a password reset link for the given user email.
+
+        :param tenant_id: The Firebase tenant ID.
+        :param email: The user's email address.
+        :param continue_url: The URL of the admin frontend's auth-handler page
+            (e.g. https://admin.njila.ai/#/auth-handler). When provided with
+            handle_code_in_app=True, Firebase generates a link that points directly to
+            this URL (appending mode=, oobCode=, apiKey=, tenantId= as query params)
+            instead of going through Firebase's hosted action handler page.
+            This is required so the oobCode is consumed by the admin frontend's own
+            tenant-aware Firebase auth instance rather than the end-user frontend.
+        :return: The password reset link URL.
+        """
+        auth_client = self._auth_clients.get_auth_client(tenant_id)
+        if continue_url:
+            # handle_code_in_app=True makes Firebase point the link directly at
+            # continue_url with oobCode params appended, bypassing Firebase's hosted
+            # action page entirely.
+            action_code_settings = auth.ActionCodeSettings(
+                url=continue_url,
+                handle_code_in_app=True,
+            )
+        else:
+            action_code_settings = None
+        link = auth_client.generate_password_reset_link(email, action_code_settings=action_code_settings)
+        self._logger.info("Generated password reset link for email: %s", email)
+        return link
+
     def set_custom_claims(
         self,
         tenant_id: str,
