@@ -43,6 +43,7 @@ from app.agent.preference_elicitation_agent.preference_extractor import (
 from app.agent.preference_elicitation_agent.metadata_extractor import MetadataExtractor
 from app.agent.preference_elicitation_agent.user_context_extractor import UserContextExtractor
 from app.agent.preference_elicitation_agent import bws_utils
+from app.agent.sentry_trace import trace, trace_exception
 from app.agent.prompt_template.agent_prompt_template import (
     STD_AGENT_CHARACTER,
     STD_LANGUAGE_STYLE
@@ -643,10 +644,17 @@ class PreferenceElicitationAgent(Agent):
                 f"Saved preference vector to DB6 for youth {youth_id} "
                 f"(confidence: {self._state.preference_vector.confidence_score:.2f})"
             )
+            trace(
+                "preference.db6_save.success",
+                youth_id=youth_id,
+                confidence_score=float(self._state.preference_vector.confidence_score),
+                n_completed_vignettes=len(self._state.completed_vignettes),
+            )
 
         except Exception as e:
             # Don't fail the conversation - just log the error
             self.logger.error(f"Failed to save preference vector to DB6: {e}", exc_info=True)
+            trace_exception("preference.db6_save.failed", e, session_id=str(self._state.session_id))
 
 
     async def _handle_bws_phase(
@@ -1036,6 +1044,14 @@ class PreferenceElicitationAgent(Agent):
                     f"✅ MARKED VIGNETTE AS COMPLETED: {vignette_response.vignette_id}\n"
                     f"   Total completed: {len(self._state.completed_vignettes)}\n"
                     f"   List: {self._state.completed_vignettes}"
+                )
+                trace(
+                    "preference.vignette_response.received",
+                    vignette_id=vignette_response.vignette_id,
+                    chosen_option_id=extraction_result.chosen_option_id,
+                    extractor_confidence=extraction_result.confidence,
+                    n_completed_vignettes=len(self._state.completed_vignettes),
+                    phase=self._state.conversation_phase,
                 )
 
                 # DISABLED: LLM-based preference vector update (replaced by Bayesian)
@@ -1989,8 +2005,29 @@ Vignettes Completed: {pv.n_vignettes_completed}
             # Sync Bayesian posterior to PreferenceVector
             self._sync_bayesian_posterior_to_preference_vector()
 
+            trace(
+                "preference.bayesian_update.success",
+                vignette_id=vignette.vignette_id,
+                fim_determinant=self._state.fim_determinant,
+                posterior_dim=n_dims,
+                n_completed_vignettes=len(self._state.completed_vignettes),
+            )
+
         except Exception as e:
             self.logger.error(f"Failed to update Bayesian posterior: {e}", exc_info=True)
+            # Surface the swallowed exception explicitly so we can see what hit
+            # this try/except in production (dim mismatch, LLM 5xx, schema
+            # load, numerical instability — all otherwise indistinguishable
+            # from the saved state alone). See [[project-pv-silent-except-funnel]]
+            # in /memory.
+            trace_exception(
+                "preference.bayesian_update.failed",
+                e,
+                vignette_id=vignette.vignette_id,
+                chosen_option_id=chosen_option_id,
+                phase=self._state.conversation_phase,
+                state_posterior_mean_len=len(self._state.posterior_mean or []),
+            )
 
     def _sync_bayesian_posterior_to_preference_vector(self) -> None:
         """
@@ -2006,16 +2043,23 @@ Vignettes Completed: {pv.n_vignettes_completed}
         """
         # Only sync if using adaptive/hybrid mode
         if not (self._state.use_adaptive_selection or self._use_offline_with_personalization):
+            trace("preference.pv_sync.skipped", reason="not_adaptive_or_hybrid")
             return
 
         # Only sync if posterior exists
         if not self._state.posterior_mean or not self._state.posterior_covariance:
+            trace(
+                "preference.pv_sync.skipped",
+                reason="posterior_not_initialised",
+                state_posterior_mean_len=len(self._state.posterior_mean or []),
+            )
             return
 
         if self._posterior_manager is None:
             self._init_adaptive_components()
 
         if self._posterior_manager is None:
+            trace("preference.pv_sync.skipped", reason="posterior_manager_unavailable")
             return
 
         try:
@@ -2089,8 +2133,16 @@ Vignettes Completed: {pv.n_vignettes_completed}
                 f"(variance_component={confidence_variance:.3f}, count_component={confidence_count:.3f}, n={n_vignettes})"
             )
 
+            trace(
+                "preference.pv_sync.success",
+                n_dimensions=len(dimensions),
+                confidence_score=float(self._state.preference_vector.confidence_score),
+                n_vignettes=n_vignettes,
+            )
+
         except Exception as e:
             self.logger.error(f"Failed to sync Bayesian posterior to PreferenceVector: {e}", exc_info=True)
+            trace_exception("preference.pv_sync.failed", e, n_vignettes=len(self._state.completed_vignettes))
 
     async def _update_qualitative_metadata(self, force: bool = False) -> None:
         """
