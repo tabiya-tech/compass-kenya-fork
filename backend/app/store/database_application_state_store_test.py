@@ -423,8 +423,13 @@ class TestBwsHandoffToRecommender:
 
     @staticmethod
     def _seed_pref_state(state: ApplicationState) -> None:
-        """Mark the preference agent as having done meaningful work so the handoff fires."""
+        """Mark the preference agent as having done meaningful work and put the
+        director in the recommender sub-phase so the phase-gated handoff fires.
+        """
+        from app.agent.agent_director.abstract_agent_director import CounselingSubPhase
         state.preference_elicitation_agent_state.preference_vector.n_vignettes_completed = 4
+        state.agent_director_state.current_phase = AgentDirectorConversationPhase.COUNSELING
+        state.agent_director_state.counseling_sub_phase = CounselingSubPhase.RECOMMENDER_ADVISOR
 
     @pytest.mark.asyncio
     async def test_handoff_uses_hb_means_and_ranking_when_hb_present(
