@@ -5,7 +5,7 @@ import logging
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 
-from app.agent.agent_director.abstract_agent_director import ConversationPhase
+from app.agent.agent_director.abstract_agent_director import ConversationPhase, CounselingSubPhase
 from app.agent.agent_director.llm_agent_director import LLMAgentDirector
 from app.conversations.phase_state_machine import JourneyPhase, PhaseDataStatus, determine_start_phase
 from app.agent.agent_types import AgentInput
@@ -379,24 +379,27 @@ class ConversationService(IConversationService):
 
     async def _prepare_recommender_state_if_needed(self, state: ApplicationState, user_id: str) -> None:
         """
-        Prepare RecommenderAdvisorAgent state with skills and preferences if not already initialized.
+        Sync the RecommenderAdvisorAgentState (RAAS) view of PreferenceElicitation
+        AgentState (PEAS) data when the conversation is in (or skipping into) the
+        recommendation phase.
 
-        When skip_to_phase is RECOMMENDATION, loads pre-computed recommendations from
-        user_recommendations collection and passes them to the agent.
-
-        Otherwise populates:
-        - Skills vector from explored experiences
-        - Preference vector from preference elicitation agent
-        - BWS occupation scores from preference elicitation
-        - Location data (city/province) - optional for v1
+        Phase-gated rather than per-turn because the recommender doesn't consume any
+        of this data until COUNSELING begins. Inside the gate, values are copied
+        unconditionally with a difference check — relying on the upstream invariant
+        that PEAS holds real (post-vignette / post-BWS) values by the time the
+        conversation reaches COUNSELING.
 
         Args:
             state: Application state containing all agent states
             user_id: User ID for loading pre-computed recommendations when skipping
         """
         rec_state = state.recommender_advisor_agent_state
+        director_state = state.agent_director_state
 
-        if (state.agent_director_state.skip_to_phase == JourneyPhase.RECOMMENDATION
+        # Step-skip: load pre-computed recommendations from user_recommendations.
+        # Independent of the regular sync; runs only when the user is jumped past
+        # the elicitation flow with cached results.
+        if (director_state.skip_to_phase == JourneyPhase.RECOMMENDATION
                 and rec_state.recommendations is None):
             self._logger.info(
                 "Step-skip: loading pre-computed recommendations for user=%s", user_id
@@ -421,11 +424,39 @@ class ConversationService(IConversationService):
                     "Failed to load pre-computed recommendations for skip: %s", e, exc_info=True
                 )
 
-        if rec_state.skills_vector is not None and rec_state.preference_vector is not None:
+        # Gate on the *sub*-phase, not just current_phase. COUNSELING covers the
+        # entire EXPLORE_EXPERIENCES -> PREFERENCE_ELICITATION -> RECOMMENDER_ADVISOR
+        # progression, so a current_phase-only gate would open before any vignette
+        # runs and copy PEAS's default-shaped instance into RAAS — re-arming the
+        # original lock-in bug one phase later. RECOMMENDER_ADVISOR is the moment
+        # PEAS is actually done. CHECKOUT/ENDED also pass so that production
+        # sessions stuck with stale RAAS heal on next state load.
+        #
+        # The n_vignettes_completed > 0 precondition prevents the same defaults-trap
+        # in edge cases (e.g. a session that lands in CHECKOUT without going through
+        # vignettes): without it the sync would still see PEAS != RAAS (default
+        # instance vs None) and copy the defaults across.
+        peas_has_data = (
+            state.preference_elicitation_agent_state.preference_vector.n_vignettes_completed > 0
+        )
+        in_recommender_phase = (
+            (director_state.current_phase == ConversationPhase.COUNSELING
+             and director_state.counseling_sub_phase == CounselingSubPhase.RECOMMENDER_ADVISOR)
+            or director_state.current_phase in (
+                ConversationPhase.CHECKOUT, ConversationPhase.ENDED,
+            )
+            or director_state.skip_to_phase in (
+                JourneyPhase.RECOMMENDATION, JourneyPhase.MATCHING,
+            )
+        )
+        if not (in_recommender_phase and peas_has_data):
             return
 
         try:
-            # Extract skills from explored experiences
+            pref_state = state.preference_elicitation_agent_state
+
+            # Skills vector — extracted once when missing. Cheap when explored_experiences
+            # is empty so safe to recompute defensively at phase entry.
             if rec_state.skills_vector is None:
                 from app.agent.recommender_advisor_agent.skills_extractor import SkillsExtractor
 
@@ -440,41 +471,59 @@ class ConversationService(IConversationService):
                     f"{skills_vector.get('total_experiences', 0)} experiences"
                 )
 
-            # Extract preference vector from preference elicitation agent
-            if rec_state.preference_vector is None:
-                pref_state = state.preference_elicitation_agent_state
-                if pref_state.preference_vector is not None:
-                    rec_state.preference_vector = pref_state.preference_vector
-                    self._logger.info(
-                        f"Loaded preference vector for recommender "
-                        f"(confidence: {pref_state.preference_vector.confidence_score:.2f})"
-                    )
+            # Preference vector — content-only diff (PreferenceVector has a fresh
+            # `last_updated` on every default instance which would otherwise flag
+            # spurious diffs on every round-trip).
+            if not pref_state.preference_vector.content_equals(rec_state.preference_vector):
+                rec_state.preference_vector = pref_state.preference_vector
+                self._logger.info(
+                    f"Synced preference_vector to recommender "
+                    f"(vignettes: {pref_state.preference_vector.n_vignettes_completed}, "
+                    f"confidence: {pref_state.preference_vector.confidence_score:.2f})"
+                )
+                trace(
+                    "recommender.preference_vector.synced",
+                    session_id=state.session_id,
+                    n_vignettes_completed=int(pref_state.preference_vector.n_vignettes_completed),
+                    confidence_score=float(pref_state.preference_vector.confidence_score),
+                )
 
-            # Extract BWS occupation scores from preference elicitation
-            if rec_state.bws_scores is None:
-                pref_state = state.preference_elicitation_agent_state
-                if pref_state.bws_scores:
-                    rec_state.bws_scores = pref_state.bws_scores
-                    self._logger.info(
-                        f"Loaded BWS scores for recommender: "
-                        f"{len(pref_state.bws_scores)} items"
-                    )
+            # BWS bundle — HB ranking is the source of truth when available; raw
+            # bws_scores + top_10_bws are the fallback when HB scoring failed.
+            if pref_state.hb_scores and pref_state.hb_ranking:
+                new_bws = {wa_id: entry["mean"] for wa_id, entry in pref_state.hb_scores.items()}
+                new_top10 = list(pref_state.hb_ranking)
+                source = "hb"
+            else:
+                new_bws = pref_state.bws_scores
+                new_top10 = list(pref_state.top_10_bws) if pref_state.top_10_bws else None
+                source = "fallback"
+            if rec_state.bws_scores != new_bws or rec_state.top_10_bws != new_top10:
+                rec_state.bws_scores = new_bws
+                rec_state.top_10_bws = new_top10
+                self._logger.info(
+                    f"Synced BWS bundle to recommender "
+                    f"(items: {len(new_bws) if new_bws else 0}, "
+                    f"top_10: {len(new_top10) if new_top10 else 0}, source: {source})"
+                )
+                trace(
+                    "recommender.bws.synced",
+                    session_id=state.session_id,
+                    bws_items=len(new_bws) if new_bws else 0,
+                    top_10_bws_len=len(new_top10) if new_top10 else 0,
+                    source=source,
+                )
 
-            # Extract education experiences for matching service signals
+            # Education experiences for matching service signals.
             rec_state.education_experiences = [
                 e for e in state.collect_experience_state.collected_data
                 if e.source == "education"
             ]
 
-            # Set youth_id (use session_id as fallback)
+            # Youth id fallback.
             if rec_state.youth_id is None:
                 rec_state.youth_id = f"youth_{state.session_id}"
 
-            # Location data (city/province) - optional for v1
-            # TODO: Extract from user profile or welcome agent when implemented
-            # For now, matching service will use defaults
-
         except Exception as e:
-            # Don't fail - just log the error
-            # Recommender agent will work with whatever data is available
+            # Recommender will work with whatever data is available; don't fail the conversation.
             self._logger.warning(f"Error preparing recommender state: {e}", exc_info=True)

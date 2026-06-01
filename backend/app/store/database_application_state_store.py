@@ -6,7 +6,11 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from ._utils import filter_explored_experiences
 
-from app.agent.agent_director.abstract_agent_director import AgentDirectorState
+from app.agent.agent_director.abstract_agent_director import (
+    AgentDirectorState, ConversationPhase, CounselingSubPhase,
+)
+from app.agent.sentry_trace import trace
+from app.conversations.phase_state_machine import JourneyPhase
 from app.agent.collect_experiences_agent import CollectExperiencesAgentState
 from app.agent.explore_experiences_agent_director import ExploreExperiencesAgentDirectorState
 from app.agent.skill_explorer_agent import SkillsExplorerAgentState
@@ -272,49 +276,93 @@ class DatabaseApplicationStateStore(ApplicationStateStore):
                 )
 
             # ========== Recommender Agent Data Transfer ==========
-            # Copy preference data from preference agent to recommender agent if needed
-            # This ensures seamless handoff from preference elicitation to recommendations
-            # Only transfer when the preference agent has actually completed work
-            # (not just default values). PreferenceVector() defaults exist on fresh states,
-            # so we check n_vignettes_completed > 0 to avoid mutating state on every load.
-            _pref_vec = state.preference_elicitation_agent_state.preference_vector
-            _has_meaningful_preferences = (
-                _pref_vec is not None
-                and _pref_vec.n_vignettes_completed > 0
+            # Sync PEAS values into RAAS so the recommender has what it needs.
+            # Gate semantics mirror service._prepare_recommender_state_if_needed:
+            # only sync when the recommender is actually about to run (sub-phase
+            # RECOMMENDER_ADVISOR), post-COUNSELING phases (CHECKOUT/ENDED self-heal
+            # for stuck production sessions), or a step-skip into RECOMMENDATION /
+            # MATCHING. ConversationPhase.COUNSELING alone is too coarse because it
+            # also covers EXPLORE_EXPERIENCES and PREFERENCE_ELICITATION sub-phases
+            # where PEAS is still at defaults.
+            director_state = state.agent_director_state
+            pref_state = state.preference_elicitation_agent_state
+            rec_state = state.recommender_advisor_agent_state
+            in_recommender_phase = (
+                (director_state.current_phase == ConversationPhase.COUNSELING
+                 and director_state.counseling_sub_phase == CounselingSubPhase.RECOMMENDER_ADVISOR)
+                or director_state.current_phase in (
+                    ConversationPhase.CHECKOUT, ConversationPhase.ENDED,
+                )
+                or director_state.skip_to_phase in (
+                    JourneyPhase.RECOMMENDATION, JourneyPhase.MATCHING,
+                )
             )
-            if (state.recommender_advisor_agent_state.preference_vector is None
-                    and _has_meaningful_preferences):
-
-                self._logger.info("Transferring preference data to recommender agent")
-
-                # Transfer preference vector
-                state.recommender_advisor_agent_state.preference_vector = state.preference_elicitation_agent_state.preference_vector
-
-                # Transfer BWS data to recommender. HB is the source of truth for the ranking
-                # sent to the matching service; counts are kept only as a fallback if HB failed.
-                pref_state = state.preference_elicitation_agent_state
-                if pref_state.hb_scores and pref_state.hb_ranking:
-                    state.recommender_advisor_agent_state.bws_scores = {
-                        wa_id: entry["mean"]
-                        for wa_id, entry in pref_state.hb_scores.items()
-                    }
-                    state.recommender_advisor_agent_state.top_10_bws = list(pref_state.hb_ranking)
-                else:
-                    state.recommender_advisor_agent_state.bws_scores = pref_state.bws_scores
-                    state.recommender_advisor_agent_state.top_10_bws = (
-                        list(pref_state.top_10_bws) if pref_state.top_10_bws else None
+            # n_vignettes_completed > 0 means PEAS has actually done meaningful work;
+            # without this the CHECKOUT/ENDED self-heal path would copy PEAS defaults
+            # into RAAS for sessions that never went through vignettes.
+            peas_has_data = pref_state.preference_vector.n_vignettes_completed > 0
+            if in_recommender_phase and peas_has_data:
+                _rec_changes = False
+                # Content-only equality on PV: its last_updated field is a fresh
+                # datetime.now() on default instances, so Pydantic's ``==`` would
+                # falsely report differences whenever the two halves are constructed
+                # separately (e.g. on a load before any sync has fired yet).
+                if not pref_state.preference_vector.content_equals(rec_state.preference_vector):
+                    rec_state.preference_vector = pref_state.preference_vector
+                    _rec_changes = True
+                    trace(
+                        "recommender.preference_vector.synced",
+                        session_id=state.session_id,
+                        source="state_load",
+                        n_vignettes_completed=int(pref_state.preference_vector.n_vignettes_completed),
+                        confidence_score=float(pref_state.preference_vector.confidence_score),
                     )
 
-                # Extract and transfer skills vector
-                state.recommender_advisor_agent_state.skills_vector = self._extract_skills_from_experiences(
-                    state.preference_elicitation_agent_state.initial_experiences_snapshot
-                )
+                if pref_state.hb_scores and pref_state.hb_ranking:
+                    new_bws = {wa_id: entry["mean"] for wa_id, entry in pref_state.hb_scores.items()}
+                    new_top10 = list(pref_state.hb_ranking)
+                    source = "hb"
+                else:
+                    new_bws = pref_state.bws_scores
+                    new_top10 = list(pref_state.top_10_bws) if pref_state.top_10_bws else None
+                    source = "fallback"
+                if rec_state.bws_scores != new_bws or rec_state.top_10_bws != new_top10:
+                    rec_state.bws_scores = new_bws
+                    rec_state.top_10_bws = new_top10
+                    _rec_changes = True
+                    trace(
+                        "recommender.bws.synced",
+                        session_id=state.session_id,
+                        source_event="state_load",
+                        bws_items=len(new_bws) if new_bws else 0,
+                        top_10_bws_len=len(new_top10) if new_top10 else 0,
+                        source=source,
+                    )
 
-                # Set youth_id based on session_id
-                state.recommender_advisor_agent_state.youth_id = f"youth_{state.session_id}"
+                if rec_state.skills_vector is None:
+                    rec_state.skills_vector = self._extract_skills_from_experiences(
+                        pref_state.initial_experiences_snapshot
+                    )
+                    _rec_changes = True
 
-                _changes = True
-                self._logger.info("Successfully transferred preference data to recommender agent")
+                # Education experiences are recommender input; mirror the service-layer
+                # behavior so consumers that come in through state load (export script,
+                # metrics jobs) get the same payload.
+                new_education = [
+                    e for e in state.collect_experience_state.collected_data
+                    if e.source == "education"
+                ]
+                if rec_state.education_experiences != new_education:
+                    rec_state.education_experiences = new_education
+                    _rec_changes = True
+
+                if rec_state.youth_id is None:
+                    rec_state.youth_id = f"youth_{state.session_id}"
+                    _rec_changes = True
+
+                if _rec_changes:
+                    _changes = True
+                    self._logger.info("Synced PEAS data into recommender state on load")
 
             # after the upgrade, we save the state
             if _changes:

@@ -370,6 +370,20 @@ class PreferenceVector(BaseModel):
             dt = value
         return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
+    def content_equals(self, other: Optional["PreferenceVector"]) -> bool:
+        """Compare two PreferenceVector instances on content alone.
+
+        Pydantic's default ``==`` includes ``last_updated``, which is a fresh
+        ``datetime.now()`` on every default instance. That makes
+        ``PreferenceVector() == PreferenceVector()`` False and turns identity
+        checks across two freshly-constructed instances into spurious diffs.
+        Compare via ``model_dump(exclude={"last_updated"})`` to get
+        content-only equality suitable for sync-or-skip decisions.
+        """
+        if other is None:
+            return False
+        return self.model_dump(exclude={"last_updated"}) == other.model_dump(exclude={"last_updated"})
+
 
 class VignetteOption(BaseModel):
     """
