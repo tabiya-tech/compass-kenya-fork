@@ -330,15 +330,15 @@ def _top_k_trace_summary(items: Optional[list], label_field: str, k: int = 3) ->
         return []
 
     def _get(obj, name):
-        try:
-            v = getattr(obj, name, None)
-            if v is not None:
-                return v
-        except Exception:
-            pass
+        # getattr's default arg handles plain missing attributes — no try/except
+        # needed for the Pydantic-model case. Only the dict-style fallback can
+        # raise (TypeError when obj doesn't support [], KeyError when missing).
+        v = getattr(obj, name, None)
+        if v is not None:
+            return v
         try:
             return obj[name]
-        except Exception:
+        except (TypeError, KeyError, IndexError):
             return None
 
     summaries: list[dict] = []

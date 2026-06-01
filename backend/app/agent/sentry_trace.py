@@ -50,8 +50,7 @@ def trace(point: str, level: str = "info", **extras: Any) -> None:
                 # Only set context if we actually have data; keeps lean events lean.
                 scope.set_context("trace_data", _sanitise(extras))
             sentry_sdk.capture_message(f"{_TRACE_PREFIX} {point}", level=level)
-    except Exception:
-        # Observability must never break the request path.
+    except Exception:  # nosec B110 # observability must never break the request path
         pass
 
 
@@ -75,7 +74,7 @@ def trace_exception(point: str, exc: BaseException, **extras: Any) -> None:
             # we pass exc explicitly so this works even when called from
             # outside an `except` block.
             sentry_sdk.capture_exception(exc)
-    except Exception:
+    except Exception:  # nosec B110 # observability must never break the request path
         pass
 
 
