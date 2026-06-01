@@ -26,6 +26,7 @@ from app.agent.recommender_advisor_agent.types import (
     SkillsTrainingRecommendation,
 )
 from app.agent.preference_elicitation_agent.types import PreferenceVector
+from app.agent.sentry_trace import trace, trace_exception
 
 logger = logging.getLogger(__name__)
 
@@ -410,6 +411,19 @@ class RecommendationInterface:
                     f"Generating recommendations for {youth_id} via MatchingService "
                     f"(version={self._matching_service.algorithm_version})"
                 )
+                trace(
+                    "recommender.matching_service.called",
+                    youth_id=youth_id,
+                    algorithm_version=str(self._matching_service.algorithm_version),
+                    has_preference_vector=preference_vector is not None,
+                    has_skills_vector=bool(skills_vector),
+                    pref_confidence=(
+                        float(preference_vector.confidence_score)
+                        if preference_vector is not None else None
+                    ),
+                    has_bws_scores=bool(bws_scores),
+                    has_top_10_bws=bool(top_10_bws),
+                )
                 any_educ, num_educ, total_dur = _compute_education_fields(education_experiences or [])
                 result = await self._matching_service.generate_recommendations(
                     youth_id=youth_id,
@@ -428,10 +442,27 @@ class RecommendationInterface:
 
                 # Convert unified CompassMatchingResult to agent format
                 logger.debug("Converting CompassMatchingResult to agent format")
-                return _compass_result_to_node2vec(result)
+                converted = _compass_result_to_node2vec(result)
+                trace(
+                    "recommender.matching_service.success",
+                    youth_id=youth_id,
+                    n_occupations=len(converted.occupation_recommendations or []),
+                    n_opportunities=len(converted.opportunity_recommendations or []),
+                    n_trainings=len(converted.skillstraining_recommendations or []),
+                )
+                return converted
 
             except Exception as e:
                 logger.warning(f"MatchingService failed, trying fallbacks: {e}")
+                # Surface the swallowed exception so failure modes (timeout,
+                # 5xx, schema mismatch, auth) are visible in Sentry instead
+                # of buried in WARNING-level logs.
+                trace_exception(
+                    "recommender.matching_service.failed",
+                    e,
+                    youth_id=youth_id,
+                    will_fallback=True,
+                )
 
         # Try Node2Vec client (legacy/local)
         if self._node2vec_client and NODE2VEC_AVAILABLE:
@@ -450,9 +481,21 @@ class RecommendationInterface:
 
             except Exception as e:
                 logger.warning(f"Node2Vec failed, using stubs: {e}")
+                trace_exception(
+                    "recommender.node2vec.failed",
+                    e,
+                    youth_id=youth_id,
+                    will_fallback=True,
+                )
 
         # Return stub recommendations for development
         logger.info(f"Using stub recommendations for {youth_id}")
+        trace(
+            "recommender.fallback_to_stub",
+            youth_id=youth_id,
+            had_matching_service=self._matching_service is not None,
+            had_node2vec_client=self._node2vec_client is not None and NODE2VEC_AVAILABLE,
+        )
         return self.get_stub_recommendations(youth_id)
     
     def get_stub_recommendations(self, youth_id: str) -> Node2VecRecommendations:
