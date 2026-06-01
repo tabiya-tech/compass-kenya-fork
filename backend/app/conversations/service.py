@@ -10,6 +10,7 @@ from app.agent.agent_director.llm_agent_director import LLMAgentDirector
 from app.conversations.phase_state_machine import JourneyPhase, PhaseDataStatus, determine_start_phase
 from app.agent.agent_types import AgentInput
 from app.agent.explore_experiences_agent_director import DiveInPhase
+from app.agent.sentry_trace import trace, trace_exception
 from app.application_state import ApplicationState
 from app.conversation_memory.conversation_memory_manager import IConversationMemoryManager
 from app.conversations.reactions.repository import IReactionRepository
@@ -235,6 +236,17 @@ class ConversationService(IConversationService):
         # Save preference vector to JobPreferences if preference elicitation just completed
         if self._should_save_preference_vector(state):
             await self._save_preference_vector_to_job_preferences(state)
+        else:
+            # Trace the skip — most "preferences not saving" reports turn out
+            # to be this branch firing because conversation_phase never
+            # reached COMPLETE. Logging the reason makes it queryable in Sentry.
+            _pref = state.preference_elicitation_agent_state
+            trace(
+                "preference.job_preferences_save.skipped",
+                conversation_phase=_pref.conversation_phase,
+                confidence_score=float(_pref.preference_vector.confidence_score),
+                n_completed_vignettes=len(_pref.completed_vignettes),
+            )
 
         # get the date when the conversation was conducted
         state.agent_director_state.conversation_conducted_at = datetime.now(timezone.utc)
@@ -348,11 +360,22 @@ class ConversationService(IConversationService):
                 f"Saved preference vector to JobPreferences for session {pref_state.session_id} "
                 f"(confidence: {pv.confidence_score:.2f})"
             )
+            trace(
+                "preference.job_preferences_save.success",
+                session_id=pref_state.session_id,
+                confidence_score=float(pv.confidence_score),
+                n_vignettes_completed=int(pv.n_vignettes_completed),
+            )
 
         except Exception as e:
             # Don't fail the conversation - just log the error
             # This is a denormalized copy; the primary data is already in DB6
             self._logger.error(f"Failed to save preference vector to JobPreferences: {e}", exc_info=True)
+            trace_exception(
+                "preference.job_preferences_save.failed",
+                e,
+                session_id=pref_state.session_id,
+            )
 
     async def _prepare_recommender_state_if_needed(self, state: ApplicationState, user_id: str) -> None:
         """
