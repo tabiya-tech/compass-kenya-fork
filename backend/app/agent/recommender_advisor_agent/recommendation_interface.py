@@ -314,6 +314,45 @@ def _to_matching_preference_vector(
     )
 
 
+def _top_k_trace_summary(items: Optional[list], label_field: str, k: int = 3) -> list[dict]:
+    """
+    Build a small list of {rank, label, code, final_score} dicts for the top-k
+    items in a recommendation list, intended as the payload for a Sentry
+    trace event. Tolerates missing fields and Pydantic / dict / namedtuple
+    shapes via getattr/getitem fallback.
+
+    Used so a Sentry event for `recommender.matching_service.success` carries
+    enough content to be diffed retroactively against what a user actually
+    saw, without re-running the matching service. Capped at k=3 to keep
+    payload tiny.
+    """
+    if not items:
+        return []
+
+    def _get(obj, name):
+        try:
+            v = getattr(obj, name, None)
+            if v is not None:
+                return v
+        except Exception:
+            pass
+        try:
+            return obj[name]
+        except Exception:
+            return None
+
+    summaries: list[dict] = []
+    for it in items[:k]:
+        score = _get(it, "final_score")
+        summaries.append({
+            "rank": _get(it, "rank"),
+            "label": _get(it, label_field),
+            "code": _get(it, "occupation_code"),  # only set for OccupationRecommendation
+            "final_score": float(score) if score is not None else None,
+        })
+    return summaries
+
+
 def _parse_year(date_str: Optional[str]) -> Optional[int]:
     """Extract the year from a date string of format YYYY, YYYY-MM, or DD-MM-YYYY."""
     if not date_str or not date_str.strip():
@@ -449,6 +488,19 @@ class RecommendationInterface:
                     n_occupations=len(converted.occupation_recommendations or []),
                     n_opportunities=len(converted.opportunity_recommendations or []),
                     n_trainings=len(converted.skillstraining_recommendations or []),
+                    # Top-3 content summaries so we can retroactively diff a
+                    # Sentry event against a user's actual recommendations
+                    # without re-running matching. Kept tiny (~300 chars total)
+                    # to stay well within Sentry's per-event payload budget.
+                    top_occupations=_top_k_trace_summary(
+                        converted.occupation_recommendations, label_field="occupation"
+                    ),
+                    top_opportunities=_top_k_trace_summary(
+                        converted.opportunity_recommendations, label_field="opportunity_title"
+                    ),
+                    top_trainings=_top_k_trace_summary(
+                        converted.skillstraining_recommendations, label_field="training_title"
+                    ),
                 )
                 return converted
 
