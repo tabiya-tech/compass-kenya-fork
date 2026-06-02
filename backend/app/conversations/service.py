@@ -427,15 +427,21 @@ class ConversationService(IConversationService):
                         f"(confidence: {pref_state.preference_vector.confidence_score:.2f})"
                     )
 
-            # Extract BWS occupation scores from preference elicitation
-            if rec_state.bws_scores is None:
-                pref_state = state.preference_elicitation_agent_state
-                if pref_state.bws_scores:
-                    rec_state.bws_scores = pref_state.bws_scores
-                    self._logger.info(
-                        f"Loaded BWS scores for recommender: "
-                        f"{len(pref_state.bws_scores)} items"
-                    )
+            # Extract BWS bundle from preference elicitation. HB posterior means are
+            # forwarded as bws_scores (field name kept for the matching service);
+            # counts are only a fallback. See PreferenceElicitationAgentState.bws_bundle_for_matching.
+            # Recompute every prep (no `is None` guard) so the latest HB bundle replaces any
+            # stale counts a prior turn/legacy session may have left in rec_state.bws_scores.
+            pref_state = state.preference_elicitation_agent_state
+            bws_scores, top_10_bws = pref_state.bws_bundle_for_matching()
+            if bws_scores:
+                rec_state.bws_scores = bws_scores
+                rec_state.top_10_bws = top_10_bws
+                self._logger.info(
+                    f"Loaded BWS bundle for recommender: "
+                    f"{len(bws_scores)} items, "
+                    f"top_10={len(top_10_bws) if top_10_bws else 0}"
+                )
 
             # Extract education experiences for matching service signals
             rec_state.education_experiences = [

@@ -199,6 +199,28 @@ class PreferenceElicitationAgentState(BaseModel):
     class Config:
         extra = "forbid"
 
+    def bws_bundle_for_matching(self) -> tuple[Optional[dict[str, float]], Optional[list[str]]]:
+        """Build the (bws_scores, top_10_bws) bundle to forward to the matching service.
+
+        HB posterior means are the source of truth when HB scoring succeeded. The
+        field keeps the name ``bws_scores`` for wire compatibility with the matching
+        service but carries the continuous HB utilities; the count-based scores are
+        used only as a fallback when HB is unavailable. When HB means exist but
+        ``hb_ranking`` is empty (e.g. sessions written before that field existed),
+        the ranking is derived from the means so the bundle stays consistent.
+
+        Returns ``(None, None)`` when no BWS data is available.
+        """
+        if self.hb_scores:
+            bws_scores = {wa_id: entry["mean"] for wa_id, entry in self.hb_scores.items()}
+            ranking = list(self.hb_ranking) or [
+                wa_id for wa_id, _ in sorted(bws_scores.items(), key=lambda kv: kv[1], reverse=True)
+            ]
+            return bws_scores, (ranking or None)
+        if self.bws_scores:
+            return self.bws_scores, (list(self.top_10_bws) or None)
+        return None, None
+
     @staticmethod
     def _normalize_experience_for_deserialization(exp_dict: dict) -> dict:
         """
