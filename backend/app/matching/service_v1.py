@@ -20,10 +20,10 @@ class OptionalSkillMatch(BaseModel):
 
 
 class SkillComponents(BaseModel):
-    loc: float
-    ess: float
-    opt: float
-    grp: float
+    loc: Optional[float] = None
+    ess: Optional[float] = None
+    opt: Optional[float] = None
+    grp: Optional[float] = None
 
 
 class SkillGroupMatch(BaseModel):
@@ -114,10 +114,13 @@ class OccupationRecommendation(BaseModel):
 class OpportunityRecommendation(BaseModel):
     uuid: str
     URL: Optional[str] = None
+    originUuid: Optional[str] = None
     rank: int
     opportunity_title: str
     opportunity_isco_occupation_group: Optional[str] = None
     opportunity_isco_occupation_group_id: Optional[str] = None
+    related_occupation_id: Optional[str] = None
+    posted_date: Optional[str] = None
     location: Optional[str] = None
     employer: Optional[str] = None
     employment_type: Optional[str] = None
@@ -128,6 +131,9 @@ class OpportunityRecommendation(BaseModel):
     is_eligible: bool
     justification: str
     opportunity_description: Optional[str] = None
+    salary_range: Optional[str] = None
+    typical_tasks: List[str] = Field(default_factory=list)
+    career_path_next_steps: List[str] = Field(default_factory=list)
     contract_type: Optional[str] = None
     final_score: float
     score_breakdown: ScoreBreakdown
