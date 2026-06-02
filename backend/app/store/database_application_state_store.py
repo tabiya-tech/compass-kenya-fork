@@ -290,20 +290,13 @@ class DatabaseApplicationStateStore(ApplicationStateStore):
                 # Transfer preference vector
                 state.recommender_advisor_agent_state.preference_vector = state.preference_elicitation_agent_state.preference_vector
 
-                # Transfer BWS data to recommender. HB is the source of truth for the ranking
-                # sent to the matching service; counts are kept only as a fallback if HB failed.
+                # Transfer BWS bundle to recommender. HB posterior means are forwarded as
+                # bws_scores (field name kept for the matching service); counts are only a
+                # fallback when HB is unavailable. See PreferenceElicitationAgentState.bws_bundle_for_matching.
                 pref_state = state.preference_elicitation_agent_state
-                if pref_state.hb_scores and pref_state.hb_ranking:
-                    state.recommender_advisor_agent_state.bws_scores = {
-                        wa_id: entry["mean"]
-                        for wa_id, entry in pref_state.hb_scores.items()
-                    }
-                    state.recommender_advisor_agent_state.top_10_bws = list(pref_state.hb_ranking)
-                else:
-                    state.recommender_advisor_agent_state.bws_scores = pref_state.bws_scores
-                    state.recommender_advisor_agent_state.top_10_bws = (
-                        list(pref_state.top_10_bws) if pref_state.top_10_bws else None
-                    )
+                bws_scores, top_10_bws = pref_state.bws_bundle_for_matching()
+                state.recommender_advisor_agent_state.bws_scores = bws_scores
+                state.recommender_advisor_agent_state.top_10_bws = top_10_bws
 
                 # Extract and transfer skills vector
                 state.recommender_advisor_agent_state.skills_vector = self._extract_skills_from_experiences(
