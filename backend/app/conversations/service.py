@@ -5,7 +5,7 @@ import logging
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 
-from app.agent.agent_director.abstract_agent_director import ConversationPhase
+from app.agent.agent_director.abstract_agent_director import ConversationPhase, CounselingSubPhase
 from app.agent.agent_director.llm_agent_director import LLMAgentDirector
 from app.conversations.phase_state_machine import JourneyPhase, PhaseDataStatus, determine_start_phase
 from app.agent.agent_types import AgentInput
@@ -356,15 +356,18 @@ class ConversationService(IConversationService):
 
     async def _prepare_recommender_state_if_needed(self, state: ApplicationState, user_id: str) -> None:
         """
-        Prepare RecommenderAdvisorAgent state with skills and preferences if not already initialized.
+        Prepare RecommenderAdvisorAgent state with the inputs the matching service needs.
 
         When skip_to_phase is RECOMMENDATION, loads pre-computed recommendations from
         user_recommendations collection and passes them to the agent.
 
-        Otherwise populates:
+        Populates the matching inputs only once the conversation has reached the
+        recommender stage (counseling_sub_phase == RECOMMENDER_ADVISOR, or a step-skip to
+        RECOMMENDATION), so the FINAL upstream state is read. They are refreshed from
+        source on each prep rather than latched on the first turn:
         - Skills vector from explored experiences
         - Preference vector from preference elicitation agent
-        - BWS occupation scores from preference elicitation
+        - BWS occupation scores (HB posterior means) from preference elicitation
         - Location data (city/province) - optional for v1
 
         Args:
@@ -398,12 +401,27 @@ class ConversationService(IConversationService):
                     "Failed to load pre-computed recommendations for skip: %s", e, exc_info=True
                 )
 
-        if rec_state.skills_vector is not None and rec_state.preference_vector is not None:
+        # Only populate the recommender's matching inputs once the conversation has
+        # actually reached the recommender stage (or is being step-skipped straight to
+        # recommendations). Earlier sub-phases would capture premature/empty skills,
+        # preferences and BWS scores, and the old "both already set -> return" guard then
+        # latched that early snapshot for the rest of the session. Gating here and
+        # refreshing from source each prep means the matching request always carries the
+        # final skills, preferences and HB-derived BWS scores.
+        director_state = state.agent_director_state
+        in_recommender_stage = (
+            director_state.counseling_sub_phase == CounselingSubPhase.RECOMMENDER_ADVISOR
+            or director_state.skip_to_phase == JourneyPhase.RECOMMENDATION
+        )
+        if not in_recommender_stage:
             return
 
         try:
-            # Extract skills from explored experiences
-            if rec_state.skills_vector is None:
+            pref_state = state.preference_elicitation_agent_state
+
+            # Extract skills from explored experiences. Re-extract if a prior turn latched
+            # an empty vector before the experiences were explored.
+            if not rec_state.skills_vector or not rec_state.skills_vector.get("skills"):
                 from app.agent.recommender_advisor_agent.skills_extractor import SkillsExtractor
 
                 explored_experiences = state.explore_experiences_director_state.explored_experiences
@@ -417,22 +435,20 @@ class ConversationService(IConversationService):
                     f"{skills_vector.get('total_experiences', 0)} experiences"
                 )
 
-            # Extract preference vector from preference elicitation agent
-            if rec_state.preference_vector is None:
-                pref_state = state.preference_elicitation_agent_state
-                if pref_state.preference_vector is not None:
-                    rec_state.preference_vector = pref_state.preference_vector
-                    self._logger.info(
-                        f"Loaded preference vector for recommender "
-                        f"(confidence: {pref_state.preference_vector.confidence_score:.2f})"
-                    )
+            # Refresh the preference vector from the preference elicitation agent (source
+            # of truth) each prep, so the recommender uses the final vector rather than an
+            # early snapshot.
+            if pref_state.preference_vector is not None:
+                rec_state.preference_vector = pref_state.preference_vector
+                self._logger.info(
+                    f"Loaded preference vector for recommender "
+                    f"(confidence: {pref_state.preference_vector.confidence_score:.2f})"
+                )
 
             # Extract BWS bundle from preference elicitation. HB posterior means are
             # forwarded as bws_scores (field name kept for the matching service);
             # counts are only a fallback. See PreferenceElicitationAgentState.bws_bundle_for_matching.
-            # Recompute every prep (no `is None` guard) so the latest HB bundle replaces any
-            # stale counts a prior turn/legacy session may have left in rec_state.bws_scores.
-            pref_state = state.preference_elicitation_agent_state
+            # Recompute every prep so the latest HB bundle replaces any earlier value.
             bws_scores, top_10_bws = pref_state.bws_bundle_for_matching()
             if bws_scores:
                 rec_state.bws_scores = bws_scores
