@@ -121,13 +121,20 @@ class ConcernsPhaseHandler(BasePhaseHandler):
                         target_occ = state.get_recommendation_by_id(intent.target_recommendation_id)
 
                     if target_occ:
+                        # Works for occupations and job openings — derive type/name from the
+                        # resolved recommendation rather than assuming occupation.
+                        target_name = (
+                            getattr(target_occ, "occupation", None)
+                            or getattr(target_occ, "opportunity_title", "that option")
+                        )
+                        is_opportunity = hasattr(target_occ, "opportunity_title")
                         state.current_focus_id = target_occ.uuid
-                        state.current_recommendation_type = "occupation"
+                        state.current_recommendation_type = "opportunity" if is_opportunity else "occupation"
                         state.conversation_phase = ConversationPhase.CAREER_EXPLORATION
 
                         return ConversationResponse(
-                            reasoning=f"User wants to explore {target_occ.occupation} instead, transitioning to CAREER_EXPLORATION",
-                            message=f"Okay, let's explore the {target_occ.occupation} option instead.",
+                            reasoning=f"User wants to explore {target_name} instead, transitioning to CAREER_EXPLORATION",
+                            message=f"Okay, let's explore the {target_name} option instead.",
                             finished=False
                         ), all_llm_stats
 

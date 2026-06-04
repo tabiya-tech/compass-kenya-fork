@@ -601,6 +601,90 @@ async def test_present_phase():
         traceback.print_exc()
 
 
+async def test_view_choice_flow():
+    """Test the 'careers / jobs / both' choice flow: INTRO asks, PRESENT classifies + renders.
+
+    Exercises the new gate end-to-end with the LLM. Sample data already includes job
+    openings (opportunity_recommendations), which match the shape the recommender receives
+    from the matching service, so the jobs/both views render fully.
+    """
+    print_header("Testing Ask Careers / Jobs / Both Flow")
+    print_info("INTRO asks the choice; you answer; PRESENT classifies it and renders the chosen view.")
+
+    try:
+        handlers = await initialize_handlers()
+
+        recommendations = create_sample_recommendations()
+        state = RecommenderAdvisorAgentState(
+            session_id=12345,
+            youth_id="test_user_123",
+            country_of_user=TEST_COUNTRY,
+            conversation_phase=ConversationPhase.INTRO,
+            recommendations=recommendations,
+            skills_vector=create_sample_skills_vector(),
+            preference_vector=create_sample_preference_vector(),
+            discuss_recommendations=True,  # conversational flow — the gate lives here
+        )
+
+        conversation_history = ConversationHistory()
+
+        def ctx() -> ConversationContext:
+            return ConversationContext(
+                all_history=conversation_history, history=conversation_history, summary=""
+            )
+
+        # --- Step 1: INTRO asks the choice ---
+        print_section("Step 1: INTRO asks the choice")
+        intro_resp, _ = await handlers[ConversationPhase.INTRO].handle("", state, ctx())
+        print_agent(intro_resp.message)
+        print_info(
+            f"awaiting_view_choice={state.awaiting_view_choice} | phase={state.conversation_phase}"
+        )
+        conversation_history.turns.append(
+            ConversationTurn(
+                index=0,
+                input=AgentInput(message="", is_artificial=True),
+                output=AgentOutput(
+                    message_for_user=intro_resp.message,
+                    finished=False,
+                    llm_stats=[],
+                    agent_response_time_in_sec=0.0,
+                ),
+            )
+        )
+
+        # --- Step 2: user answers; PRESENT classifies + renders the chosen view ---
+        print_section("Step 2: Your answer")
+        console.print("[dim]Try: 'jobs', 'career paths', 'both', or anything (e.g. 'nipe kazi')[/]")
+        answer = get_user_input("You: ") or "both"
+        print_user(answer)
+
+        present_handler = handlers[ConversationPhase.PRESENT_RECOMMENDATIONS]
+        with console.status("[bold green]Classifying choice & rendering view...", spinner="dots"):
+            response, llm_stats = await present_handler.handle(answer, state, ctx())
+
+        print_info(f"Classified recommendation_view = [bold]{state.recommendation_view}[/]")
+        print_agent(response.message)
+
+        print_section("LLM Stats")
+        if llm_stats:
+            stats_table = Table(box=box.SIMPLE)
+            stats_table.add_column("Metric", style="cyan")
+            stats_table.add_column("Value", style="yellow")
+            stats_table.add_row("LLM Calls", str(len(llm_stats)))
+            stats_table.add_row("Input Tokens", f"{sum(s.prompt_token_count for s in llm_stats):,}")
+            stats_table.add_row("Output Tokens", f"{sum(s.response_token_count for s in llm_stats):,}")
+            stats_table.add_row("Latency", f"{sum(s.response_time_in_sec for s in llm_stats):.2f}s")
+            console.print(stats_table)
+
+        console.input("\n[dim]Press Enter to continue...[/]")
+
+    except Exception as e:
+        print_error(f"Error testing view-choice flow: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 async def test_exploration_phase():
     """Test the CAREER_EXPLORATION phase."""
     print_header("Testing CAREER_EXPLORATION Phase")
@@ -1508,6 +1592,7 @@ async def main_menu():
             "Test Simple Flow (discuss_recommendations=False) [no LLM]",
             "View Sample Data (recommendations, skills, preferences)",
             "Change Logging Level",
+            "Test Ask Careers/Jobs/Both Flow (with LLM)",
             "Exit"
         ])
 
@@ -1559,6 +1644,8 @@ async def main_menu():
             setup_logging(log_levels[new_log_choice])
             print_success(f"Logging changed to {logging.getLevelName(log_levels[new_log_choice])} level")
         elif choice == 14:
+            await test_view_choice_flow()
+        elif choice == 15:
             print_info("Exiting...")
             break
 

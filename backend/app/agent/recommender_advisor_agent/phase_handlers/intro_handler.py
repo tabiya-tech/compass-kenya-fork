@@ -65,20 +65,23 @@ class IntroPhaseHandler(BasePhaseHandler):
                 f"{len(state.recommendations.skillstraining_recommendations)} trainings"
             )
         
-        # Build intro message
-        intro_message = """Great! I've identified some career paths that could be a really good fit for you.
+        # Build intro message — ask up front whether they want career paths, actual job
+        # openings, or both, so everyone can reach jobs quickly without having to ask.
+        intro_message = """Great! Based on what you've told me, I've got some options for you.
 
-            I'll show you a few options, and we can discuss what appeals to you and what concerns you might have. There's no pressure - I just want to help you understand what's out there and find something worth pursuing.
-
-            Ready to see what I found?
+            Would you like to see career paths to consider, actual job openings you could apply to right now, or both?
         """
-        
+
         response = ConversationResponse(
-            reasoning="Introducing the recommendation session, building rapport",
+            reasoning="Introducing the recommendation session and asking whether the user wants careers, jobs, or both",
             message=intro_message,
             finished=False
         )
-        
+
+        # The user's answer is classified in the PRESENT phase, which then renders the
+        # chosen view. Flag that we're awaiting that choice.
+        state.awaiting_view_choice = True
+
         # Transition to presenting recommendations
         state.conversation_phase = ConversationPhase.PRESENT_RECOMMENDATIONS
         

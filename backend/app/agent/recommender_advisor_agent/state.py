@@ -7,7 +7,7 @@ recommendations shown, user reactions, concerns, and action commitments.
 Epic 3: Recommender Agent Implementation
 """
 
-from typing import Any, Mapping, Optional
+from typing import Any, Literal, Mapping, Optional
 from pydantic import BaseModel, Field, field_serializer, field_validator, model_validator
 
 from app.agent.recommender_advisor_agent.types import (
@@ -55,6 +55,18 @@ class RecommenderAdvisorAgentState(BaseModel):
     conversation_phase: ConversationPhase = Field(
         default=ConversationPhase.INTRO,
         description="Current phase of the conversation"
+    )
+
+    # Set True by the INTRO phase after it asks whether the user wants to see career
+    # paths, job openings, or both. The PRESENT phase consumes the user's answer once,
+    # records recommendation_view, and clears this flag.
+    awaiting_view_choice: bool = Field(
+        default=False,
+        description="True while waiting for the user to choose careers / jobs / both"
+    )
+    recommendation_view: Optional[Literal["careers", "jobs", "both"]] = Field(
+        default=None,
+        description="What the user asked to see: career paths, job openings, or both"
     )
     conversation_turn_count: int = Field(
         default=0, ge=0,
