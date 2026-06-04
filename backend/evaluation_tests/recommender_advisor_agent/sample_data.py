@@ -205,6 +205,7 @@ def create_sample_recommendations() -> Node2VecRecommendations:
                 employer="Nyali Heights Development",
                 contract_type="contract",
                 salary_range="KES 500-800/day + skills training",
+                demand_label="High Expected Demand",
                 justification="Learn from certified electricians while earning. The foreman is known to train serious workers.",
                 essential_skills=["Basic wiring", "Willingness to learn", "Physical work"]
             ),
@@ -217,6 +218,7 @@ def create_sample_recommendations() -> Node2VecRecommendations:
                 employer="Glovo Kenya",
                 contract_type="freelance",
                 salary_range="KES 100-200 per delivery",
+                demand_label="Moderate Expected Demand",
                 posting_url="https://glovoapp.com/ke/riders",
                 justification="Flexible hours, paid per delivery. Good way to earn while exploring other opportunities.",
                 essential_skills=["Motorcycle + license", "Smartphone", "M-Pesa"]
@@ -230,6 +232,7 @@ def create_sample_recommendations() -> Node2VecRecommendations:
                 employer="Various shipping agents",
                 contract_type="contract",
                 salary_range="KES 800-1,200/day",
+                demand_label="High Expected Demand",
                 justification="Regular work available. Being registered with a gang gives more consistent income than casual pickup.",
                 essential_skills=["Physical fitness", "Reliability", "Safety awareness"]
             )

@@ -176,6 +176,8 @@ def _to_compass_occupation(occ: OccupationRecommendation) -> CompassOccupation:
         final_score=occ.final_score,
         justification=occ.justification,
         province=occ.province,
+        demand_label=occ.score_breakdown.demand_label if occ.score_breakdown else None,
+        demand_score=occ.score_breakdown.demand_score if occ.score_breakdown else None,
         raw=occ.model_dump(),
     )
 
@@ -200,6 +202,8 @@ def _to_compass_opportunity(opp: OpportunityRecommendation) -> CompassOpportunit
         contract_type=opp.contract_type,
         salary_text=opp.salary_text,
         salary_range=opp.salary_range,
+        demand_label=opp.score_breakdown.demand_label if opp.score_breakdown else None,
+        demand_score=opp.score_breakdown.demand_score if opp.score_breakdown else None,
         matched_skill_labels=matched_labels,
         raw=opp.model_dump(),
     )
