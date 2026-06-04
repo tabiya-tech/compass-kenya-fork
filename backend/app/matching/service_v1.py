@@ -199,6 +199,7 @@ def _to_compass_opportunity(opp: OpportunityRecommendation) -> CompassOpportunit
         description=opp.opportunity_description,
         contract_type=opp.contract_type,
         salary_text=opp.salary_text,
+        salary_range=opp.salary_range,
         matched_skill_labels=matched_labels,
         raw=opp.model_dump(),
     )
