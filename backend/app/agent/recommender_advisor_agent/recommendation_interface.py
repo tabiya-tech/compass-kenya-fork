@@ -227,7 +227,7 @@ def _compass_result_to_node2vec(result: CompassMatchingResult) -> Node2VecRecomm
             justification=opp.justification,
             contract_type=opp.contract_type,
             employer=opp.employer,
-            salary_range=opp.salary_text,
+            salary_range=opp.salary_text or opp.salary_range,
             posting_url=opp.url,
         )
         for opp in result.opportunities
