@@ -65,6 +65,8 @@ class CompassOccupation(BaseModel):
     final_score: Optional[float] = None
     justification: Optional[str] = None
     province: Optional[str] = None
+    demand_label: Optional[str] = None
+    demand_score: Optional[float] = None
 
     raw: dict[str, Any] = Field(default_factory=dict)
     """Full original payload from the matching service for fields not surfaced above."""
@@ -77,7 +79,8 @@ class CompassOpportunity(BaseModel):
 
     Both v1 and v2 produce this. v2 sources `final_score` from `fusion_score`
     and `uuid` from `job_uuid`; v1-only fields (`justification`, `description`,
-    `contract_type`, `salary_text`, `salary_range`) are left None when produced by v2.
+    `contract_type`, `salary_text`, `salary_range`, `demand_label`, `demand_score`) are
+    left None when produced by v2.
     """
 
     uuid: str
@@ -93,6 +96,8 @@ class CompassOpportunity(BaseModel):
     contract_type: Optional[str] = None
     salary_text: Optional[str] = None
     salary_range: Optional[str] = None
+    demand_label: Optional[str] = None
+    demand_score: Optional[float] = None
     matched_skill_labels: list[str] = Field(default_factory=list)
 
     raw: dict[str, Any] = Field(default_factory=dict)

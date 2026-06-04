@@ -279,6 +279,16 @@ class OccupationRecommendation(BaseModel):
         default=None,
         description="Typical salary range (e.g., 'KES 60,000-120,000/month')"
     )
+    # Labor demand carried directly from the matching service when the full score_breakdown
+    # isn't reconstructed (the live conversion path). The properties below fall back to these.
+    demand_label: Optional[str] = Field(
+        default=None,
+        description="Human-readable labor demand (e.g., 'High Expected Demand')"
+    )
+    demand_score: Optional[float] = Field(
+        default=None,
+        description="Labor demand score (0-1) from the matching service"
+    )
 
     class Config:
         extra = "allow"  # Allow Node2Vec to add new fields
@@ -303,15 +313,18 @@ class OccupationRecommendation(BaseModel):
 
     @property
     def labor_demand_score(self) -> Optional[float]:
-        """Extract labor demand from score_breakdown for agent use."""
-        return self.score_breakdown.demand_score if self.score_breakdown else None
+        """Labor demand score from score_breakdown, falling back to the direct demand_score field."""
+        if self.score_breakdown:
+            return self.score_breakdown.demand_score
+        return self.demand_score
 
     @property
     def labor_demand_category(self) -> Optional[Literal["high", "medium", "low"]]:
-        """Extract and normalize demand category from score_breakdown."""
-        if not self.score_breakdown:
+        """Normalized demand category from score_breakdown, falling back to the direct demand_label field."""
+        label = self.score_breakdown.demand_label if self.score_breakdown else self.demand_label
+        if not label:
             return None
-        label = self.score_breakdown.demand_label.lower()
+        label = label.lower()
         if "high" in label:
             return "high"
         elif "moderate" in label or "medium" in label:
@@ -434,6 +447,16 @@ class OpportunityRecommendation(BaseModel):
         description="ID of related occupation recommendation"
     )
 
+    # Labor demand for this posting, carried from the matching service.
+    demand_label: Optional[str] = Field(
+        default=None,
+        description="Human-readable labor demand (e.g., 'Moderate Expected Demand')"
+    )
+    demand_score: Optional[float] = Field(
+        default=None,
+        description="Labor demand score (0-1) from the matching service"
+    )
+
     class Config:
         extra = "allow"  # Allow Node2Vec to add new fields
 
@@ -445,6 +468,27 @@ class OpportunityRecommendation(BaseModel):
         if not self.matched_skills:
             return []
         return [match.job_skill_label for match in self.matched_skills.essential_skill_matches]
+
+    @property
+    def labor_demand_score(self) -> Optional[float]:
+        """Labor demand score from score_breakdown, falling back to the direct demand_score field."""
+        if self.score_breakdown:
+            return self.score_breakdown.demand_score
+        return self.demand_score
+
+    @property
+    def labor_demand_category(self) -> Optional[Literal["high", "medium", "low"]]:
+        """Normalized demand category from score_breakdown, falling back to the direct demand_label field."""
+        label = self.score_breakdown.demand_label if self.score_breakdown else self.demand_label
+        if not label:
+            return None
+        label = label.lower()
+        if "high" in label:
+            return "high"
+        elif "moderate" in label or "medium" in label:
+            return "medium"
+        else:
+            return "low"
 
 
 class SkillsTrainingRecommendation(BaseModel):

@@ -211,6 +211,8 @@ def _compass_result_to_node2vec(result: CompassMatchingResult) -> Node2VecRecomm
             final_score=occ.final_score,
             justification=occ.justification,
             description=occ.description,
+            demand_label=occ.demand_label,
+            demand_score=occ.demand_score,
         )
         for occ in result.occupations
     ]
@@ -229,6 +231,8 @@ def _compass_result_to_node2vec(result: CompassMatchingResult) -> Node2VecRecomm
             employer=opp.employer,
             salary_range=opp.salary_text or opp.salary_range,
             posting_url=opp.url,
+            demand_label=opp.demand_label,
+            demand_score=opp.demand_score,
         )
         for opp in result.opportunities
     ]

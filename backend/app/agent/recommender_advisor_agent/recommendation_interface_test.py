@@ -53,3 +53,52 @@ def test_bws_fields_forwarded_even_when_agent_pref_vector_is_none():
 
     assert out.bws_scores == bws_scores
     assert out.top_10_bws == top_10_bws
+
+
+# --- salary & labor-demand passthrough (CompassMatchingResult -> agent Node2Vec model) ---
+from app.agent.recommender_advisor_agent.recommendation_interface import _compass_result_to_node2vec
+from app.matching.matching_types import CompassMatchingResult, CompassOccupation, CompassOpportunity
+
+
+def test_opportunity_salary_and_demand_reach_agent_model():
+    """Salary (from salary_text/salary_range) and labor demand must survive the live conversion."""
+    result = CompassMatchingResult(
+        user_id="y1",
+        algorithm_version="v1",
+        opportunities=[
+            CompassOpportunity(
+                uuid="opp1", rank=1, opportunity_title="Borehole Driller",
+                salary_text="KES 30,000/month", demand_label="Moderate Expected Demand",
+                demand_score=0.5,
+            ),
+            # salary only in salary_range (salary_text empty) -> must still come through
+            CompassOpportunity(
+                uuid="opp2", rank=2, opportunity_title="Web Developer",
+                salary_range="KES 80,000/month", demand_label="High Expected Demand",
+            ),
+        ],
+    )
+    recs = _compass_result_to_node2vec(result)
+    o1, o2 = recs.opportunity_recommendations
+    assert o1.salary_range == "KES 30,000/month"
+    assert o1.demand_label == "Moderate Expected Demand"
+    assert o1.labor_demand_category == "medium"
+    assert o1.labor_demand_score == 0.5
+    assert o2.salary_range == "KES 80,000/month"   # fell back from salary_range
+    assert o2.labor_demand_category == "high"
+
+
+def test_occupation_demand_reaches_agent_model_via_fallback():
+    """Occupation labor demand (no score_breakdown on the live path) reaches the model via demand_label."""
+    result = CompassMatchingResult(
+        user_id="y1",
+        algorithm_version="v1",
+        occupations=[
+            CompassOccupation(uuid="occ1", rank=1, label="Electrician",
+                              demand_label="High Expected Demand", demand_score=0.9),
+        ],
+    )
+    occ = _compass_result_to_node2vec(result).occupation_recommendations[0]
+    assert occ.demand_label == "High Expected Demand"
+    assert occ.labor_demand_category == "high"
+    assert occ.labor_demand_score == 0.9
