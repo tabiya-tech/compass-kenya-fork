@@ -11,6 +11,7 @@ from app.agent.recommender_advisor_agent.state import RecommenderAdvisorAgentSta
 from app.agent.recommender_advisor_agent.types import (
     ConversationPhase,
     OccupationRecommendation,
+    OpportunityRecommendation,
     UserInterestLevel
 )
 from app.agent.recommender_advisor_agent.llm_response_models import (
@@ -20,6 +21,7 @@ from app.agent.recommender_advisor_agent.llm_response_models import (
 from app.agent.recommender_advisor_agent.phase_handlers.base_handler import BasePhaseHandler
 from app.agent.recommender_advisor_agent.prompts import (
     CAREER_EXPLORATION_PROMPT,
+    CAREER_EXPLORATION_OPPORTUNITY_PROMPT,
     build_context_block
 )
 from app.agent.recommender_advisor_agent.intent_classifier import IntentClassifier
@@ -89,15 +91,17 @@ class ExplorationPhaseHandler(BasePhaseHandler):
                 finished=False
             ), []
 
-        # Get the focused occupation
+        # Get the focused recommendation (occupation OR job opening — both are explored here)
         rec = state.get_recommendation_by_id(state.current_focus_id)
 
-        if rec is None or not isinstance(rec, OccupationRecommendation):
+        if rec is None or not isinstance(rec, (OccupationRecommendation, OpportunityRecommendation)):
             return ConversationResponse(
-                reasoning="Could not find selected occupation",
-                message="I couldn't find that occupation. Would you like to see the options again?",
+                reasoning="Could not find selected recommendation",
+                message="I couldn't find that option. Would you like to see the choices again?",
                 finished=False
             ), []
+
+        is_opportunity = isinstance(rec, OpportunityRecommendation)
 
         # Mark as explored (only on first exploration)
         is_initial_exploration = rec.uuid not in state.explored_items
@@ -129,40 +133,54 @@ class ExplorationPhaseHandler(BasePhaseHandler):
                     all_llm_stats.extend(phase_transition[1])
                     return phase_transition[0], all_llm_stats
 
-        # Build occupation summary for LLM
-        occ_summary = self._build_occupation_summary(rec)
+        # Build summary for LLM (job openings have thin data; occupations are rich)
+        rec_summary = (
+            self._build_opportunity_summary(rec) if is_opportunity
+            else self._build_occupation_summary(rec)
+        )
 
         # Build full context for LLM
         skills_list = self._extract_skills_list(state)
         pref_vec_dict = state.preference_vector.model_dump() if state.preference_vector else {}
         conv_history = ConversationHistoryFormatter.format_to_string(context)
 
-        # Add occupation details to context
+        # Add recommendation details to context
         context_block = build_context_block(
             skills=skills_list,
             preference_vector=pref_vec_dict,
-            recommendations_summary=f"Currently exploring: {occ_summary}",
+            recommendations_summary=f"Currently exploring: {rec_summary}",
             conversation_history=conv_history,
             country_of_user=state.country_of_user
         )
 
-        # Build prompt for LLM
-        full_prompt = context_block + CAREER_EXPLORATION_PROMPT + get_json_response_instructions()
+        # Build prompt for LLM (opportunity prompt forbids inventing day-to-day detail)
+        exploration_prompt = (
+            CAREER_EXPLORATION_OPPORTUNITY_PROMPT if is_opportunity else CAREER_EXPLORATION_PROMPT
+        )
+        full_prompt = context_block + exploration_prompt + get_json_response_instructions()
 
         # Call LLM to generate exploration
         response, llm_stats = await self._call_llm(full_prompt, user_input, context, rec)
         all_llm_stats.extend(llm_stats)
 
         # Add metadata
-        response.metadata = self._build_metadata(
-            interaction_type="occupation_exploration",
-            occupation_id=rec.uuid,
-            occupation=rec.occupation,
-            confidence_score=rec.confidence_score,
-            skills_match_score=rec.skills_match_score,
-            preference_match_score=rec.preference_match_score,
-            labor_demand_score=rec.labor_demand_score,
-        )
+        if is_opportunity:
+            response.metadata = self._build_metadata(
+                interaction_type="opportunity_exploration",
+                opportunity_id=rec.uuid,
+                opportunity_title=rec.opportunity_title,
+                final_score=rec.final_score,
+            )
+        else:
+            response.metadata = self._build_metadata(
+                interaction_type="occupation_exploration",
+                occupation_id=rec.uuid,
+                occupation=rec.occupation,
+                confidence_score=rec.confidence_score,
+                skills_match_score=rec.skills_match_score,
+                preference_match_score=rec.preference_match_score,
+                labor_demand_score=rec.labor_demand_score,
+            )
 
         return response, all_llm_stats
 
@@ -230,41 +248,52 @@ class ExplorationPhaseHandler(BasePhaseHandler):
             if state.current_focus_id:
                 state.mark_interest(state.current_focus_id, UserInterestLevel.REJECTED)
 
-            # Go back to PRESENT_RECOMMENDATIONS
+            # Go back to PRESENT_RECOMMENDATIONS. Clear the jobs/careers view too, otherwise the
+            # next turn would be re-routed through the jobs follow-up gate despite the user
+            # asking to look at other options.
             state.conversation_phase = ConversationPhase.PRESENT_RECOMMENDATIONS
             state.current_focus_id = None
             state.current_recommendation_type = None
+            state.recommendation_view = None
 
-            self.logger.info("User rejected occupation, returning to PRESENT_RECOMMENDATIONS")
+            self.logger.info("User rejected recommendation, returning to PRESENT_RECOMMENDATIONS")
 
             return ConversationResponse(
-                reasoning="User rejected occupation, returning to presentation",
+                reasoning="User rejected recommendation, returning to presentation",
                 message="No problem. Let's look at the other options.",
                 finished=False
             ), []
 
-        # Handle EXPLORE_DIFFERENT - user wants to explore a different occupation
+        # Handle EXPLORE_DIFFERENT - user wants to explore a different recommendation
         elif intent.intent == "explore_different":
             if intent.target_recommendation_id or intent.target_occupation_index:
-                # Find the new occupation
-                target_occ = None
-                if intent.target_occupation_index and state.recommendations:
+                # Find the new target. When the current focus is a job opening, an index
+                # refers to the opportunity list; otherwise to the occupation list.
+                target = None
+                if intent.target_recommendation_id:
+                    target = state.get_recommendation_by_id(intent.target_recommendation_id)
+
+                if target is None and intent.target_occupation_index and state.recommendations:
                     idx = intent.target_occupation_index - 1
-                    occupations = state.recommendations.occupation_recommendations
-                    if 0 <= idx < len(occupations):
-                        target_occ = occupations[idx]
+                    if state.current_recommendation_type == "opportunity":
+                        items = state.recommendations.opportunity_recommendations
+                    else:
+                        items = state.recommendations.occupation_recommendations
+                    if 0 <= idx < len(items):
+                        target = items[idx]
 
-                elif intent.target_recommendation_id:
-                    target_occ = state.get_recommendation_by_id(intent.target_recommendation_id)
+                if target:
+                    # Switch focus to the new recommendation
+                    state.current_focus_id = target.uuid
+                    state.current_recommendation_type = (
+                        "opportunity" if isinstance(target, OpportunityRecommendation) else "occupation"
+                    )
+                    state.mark_interest(target.uuid, UserInterestLevel.EXPLORING)
 
-                if target_occ:
-                    # Switch focus to new occupation
-                    state.current_focus_id = target_occ.uuid
-                    state.mark_interest(target_occ.uuid, UserInterestLevel.EXPLORING)
+                    target_name = getattr(target, "occupation", None) or getattr(target, "opportunity_title", "recommendation")
+                    self.logger.info(f"User wants to explore different recommendation: {target_name}")
 
-                    self.logger.info(f"User wants to explore different occupation: {target_occ.occupation}")
-
-                    # Re-invoke this handler with empty input to trigger exploration of new occupation
+                    # Re-invoke this handler with empty input to trigger exploration of new target
                     return await self.handle("", state, context)
 
             # Couldn't identify which occupation in our recommendations
@@ -348,6 +377,40 @@ class ExplorationPhaseHandler(BasePhaseHandler):
 
         return '\n'.join(lines)
 
+    def _build_opportunity_summary(self, opp: OpportunityRecommendation) -> str:
+        """
+        Build a summary of a job opening for LLM context.
+
+        Job postings are thin: only fields actually present are included, and we never tell
+        the LLM to fabricate tasks/career paths the way the occupation summary does.
+        """
+        lines = [f"**{opp.opportunity_title}** (job opening)"]
+        if opp.location:
+            lines.append(f"Location: {opp.location}")
+        if opp.contract_type:
+            lines.append(f"Contract type: {opp.contract_type}")
+        if opp.demand_label:
+            lines.append(f"Labor demand: {opp.demand_label}")
+        if opp.employer:
+            lines.append(f"Employer: {opp.employer}")
+        if opp.salary_range:
+            lines.append(f"Salary: {opp.salary_range}")
+        if opp.application_deadline:
+            lines.append(f"Closing date: {opp.application_deadline}")
+        if opp.final_score is not None:
+            lines.append(f"Match Score: {opp.final_score:.0%}")
+        if opp.essential_skills:
+            lines.append(f"Relevant skills: {', '.join(opp.essential_skills)}")
+        if opp.justification:
+            lines.append(f"Why it matches you: {opp.justification}")
+        if opp.posting_url:
+            lines.append(f"Apply here: {opp.posting_url}")
+        lines.append(
+            "NOTE: This is a specific posting — day-to-day tasks, salary, and employer are "
+            "only what is shown above. Do not invent any details that are not listed."
+        )
+        return '\n'.join(lines)
+
     def _build_occupation_summary_for_context(self, state: RecommenderAdvisorAgentState) -> str:
         """Build occupation summary for context when handling out-of-list occupations."""
         if not state.recommendations:
@@ -386,6 +449,23 @@ class ExplorationPhaseHandler(BasePhaseHandler):
             return result, llm_stats
         except Exception as e:
             self.logger.error(f"LLM call failed: {e}")
+
+            # Job-opening fallback: only use fields the posting actually has — never invent.
+            if isinstance(occ, OpportunityRecommendation):
+                opp_lines = [f"Let's look at the **{occ.opportunity_title}** opening:", ""]
+                if occ.location:
+                    opp_lines.append(f"**Location**: {occ.location}")
+                if occ.justification:
+                    opp_lines.append(f"**Why this matches you**: {occ.justification}")
+                if occ.posting_url:
+                    opp_lines.append(f"**Apply here**: {occ.posting_url}")
+                opp_lines.append("\n**What would you like to know, or any concerns?**")
+                return ConversationResponse(
+                    reasoning="LLM call failed, using fallback opportunity exploration",
+                    message="\n".join(opp_lines),
+                    finished=False
+                ), []
+
             # Fallback to basic exploration
             fallback_message = f"""Let's explore **{occ.occupation}**:
 

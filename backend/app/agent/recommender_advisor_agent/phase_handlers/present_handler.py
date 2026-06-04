@@ -13,7 +13,8 @@ from app.agent.recommender_advisor_agent.state import RecommenderAdvisorAgentSta
 from app.agent.recommender_advisor_agent.types import (
     ConversationPhase,
     UserInterestLevel,
-    OccupationRecommendation
+    OccupationRecommendation,
+    OpportunityRecommendation
 )
 from app.agent.recommender_advisor_agent.llm_response_models import (
     ConversationResponse,
@@ -31,6 +32,43 @@ from app.agent.simple_llm_agent.prompt_response_template import get_json_respons
 from common_libs.llm.generative_models import GeminiGenerativeLLM
 from app.vector_search.esco_entities import OccupationEntity
 from app.vector_search.similarity_search_service import SimilaritySearchService
+
+
+# Instruction prompts for the careers/jobs/both views chosen at INTRO. They tell the LLM
+# to present only the fields present in the data (every job field is optional and guarded
+# upstream), so missing salary/employer/deadline simply don't appear rather than being
+# invented.
+_PRESENT_JOBS_PROMPT = """
+You are a warm, encouraging career advisor. The user asked to see actual job openings.
+Present the job opportunities from the context above clearly and concisely.
+
+For each job, include only the fields that are present in the data (skip any that are missing):
+the job title, location, why it matches the user, the contract type, the salary range (only if it
+appears in the data), the expected labor demand (only if present), and the application link (label
+it "Apply here:"). Do NOT invent salary, employer, demand, deadlines, or any field not in the data —
+if a field is missing, simply leave it out.
+
+End with one short, encouraging sentence that invites the user to dig into these openings — for
+example, ask if they'd like to know more about any one of them (how it matches them, what it
+involves, how to apply). As secondary options, mention they can also see career paths to consider,
+or check back another day as new listings are added regularly. Lead with exploring the jobs, not
+with leaving them.
+"""
+
+_PRESENT_BOTH_PROMPT = """
+You are a warm, encouraging career advisor. The user asked to see both job openings and career paths.
+Present the JOB OPENINGS FIRST, then the CAREER PATHS, using the data in the context above.
+
+For each job opening, include only the fields present in the data (skip missing ones): title, location,
+why it matches, contract type, salary range (only if present in the data), expected labor demand (only
+if present), and the application link (label it "Apply here:"). Do NOT invent salary, employer, demand,
+deadlines, or any field not in the data.
+
+For each career path, give its title and a brief, encouraging description of why it could fit.
+
+Keep it scannable. End with one encouraging sentence inviting the user to tell you which job or career
+path interests them, or to ask any questions.
+"""
 
 
 class PresentPhaseHandler(BasePhaseHandler):
@@ -94,6 +132,50 @@ class PresentPhaseHandler(BasePhaseHandler):
                 message="I don't have any recommendations ready yet. Let me prepare some for you.",
                 finished=False
             ), []
+
+        # View-choice gate: the INTRO phase asked whether the user wants career paths,
+        # job openings, or both. Classify their answer once, record it, and render the
+        # chosen view. "careers" falls through to the occupation presentation below.
+        if state.awaiting_view_choice:
+            state.awaiting_view_choice = False
+            view, choice_stats = await self._classify_view_choice(user_input, context)
+            state.recommendation_view = view
+            self.logger.info(f"Recommendation view choice classified as: {view}")
+            if view == "jobs":
+                response, stats = await self._present_jobs_view(user_input, state, context)
+                return response, choice_stats + stats
+            if view == "both":
+                response, stats = await self._present_both_view(user_input, state, context)
+                return response, choice_stats + stats
+            # view == "careers": fall through to the occupation presentation below
+            all_llm_stats.extend(choice_stats)
+
+        # Jobs view requested from elsewhere (e.g. show_opportunities routed here from
+        # FOLLOW_UP sets recommendation_view="jobs"). Render the openings directly instead
+        # of the occupation presentation; afterwards presented_opportunities is populated so
+        # later turns flow through the jobs follow-up gate below.
+        if (state.recommendation_view == "jobs"
+                and not state.awaiting_view_choice
+                and not state.presented_opportunities):
+            response, stats = await self._present_jobs_view(user_input, state, context)
+            all_llm_stats.extend(stats)
+            return response, all_llm_stats
+
+        # Follow-up after a jobs/both view: opportunities were already shown, so classify
+        # the user's reply in an opportunity-aware way. Without this, a follow-up about a
+        # specific opening falls into the initial occupation presentation below and wrongly
+        # dumps career paths (the post-jobs-view bug). Returns None only for "show me the
+        # careers", which deliberately falls through to the occupation presentation.
+        if (state.recommendation_view in ("jobs", "both")
+                and state.presented_opportunities
+                and not state.awaiting_view_choice
+                and user_input.strip()
+                and self._intent_classifier):
+            handled = await self._handle_jobs_followup(user_input, state, context)
+            if handled is not None:
+                response, stats = handled
+                all_llm_stats.extend(stats)
+                return response, all_llm_stats
 
         # Get top occupations to present (strict rank order)
         occupations = state.recommendations.occupation_recommendations[:5]
@@ -250,12 +332,128 @@ class PresentPhaseHandler(BasePhaseHandler):
         response, llm_stats = await self._call_llm(full_prompt, user_input, context)
         return response, llm_stats
 
+    async def _classify_view_choice(
+        self,
+        user_input: str,
+        context: ConversationContext,
+    ) -> tuple[str, list[LLMStats]]:
+        """Classify the user's careers/jobs/both choice. Defaults to 'both' when unclear."""
+        if self._intent_classifier:
+            intent, stats = await self._intent_classifier.classify_view_choice(
+                user_input=user_input,
+                context=context,
+                llm=self._conversation_llm,
+                logger=self.logger,
+            )
+            if intent and intent.intent in ("careers", "jobs", "both"):
+                return intent.intent, stats
+            return self._keyword_view_choice(user_input), stats
+        return self._keyword_view_choice(user_input), []
+
+    @staticmethod
+    def _keyword_view_choice(user_input: str) -> str:
+        """Keyword fallback for the careers/jobs/both choice. Defaults to 'both' when unclear."""
+        text = (user_input or "").lower()
+        wants_jobs = any(k in text for k in (
+            "job", "opening", "vacanc", "opportunit", "kazi", "apply", "hiring", "posting"))
+        wants_careers = any(k in text for k in ("career", "path", "occupation", "profession"))
+        if wants_jobs and not wants_careers:
+            return "jobs"
+        if wants_careers and not wants_jobs:
+            return "careers"
+        return "both"
+
+    async def _present_jobs_view(
+        self,
+        user_input: str,
+        state: RecommenderAdvisorAgentState,
+        context: ConversationContext,
+    ) -> tuple[ConversationResponse, list[LLMStats]]:
+        """Present job openings, keeping the conversation open (jobs-only view)."""
+        opportunities = state.recommendations.opportunity_recommendations[:5]
+        if not opportunities:
+            return ConversationResponse(
+                reasoning="User chose jobs but no job openings are available",
+                message=("I don't have job openings matching your profile right now. "
+                         "The listings refresh regularly, so it's worth checking back another day. "
+                         "In the meantime, would you like to see some career paths to consider?"),
+                finished=False
+            ), []
+
+        for opp in opportunities:
+            if opp.uuid not in state.presented_opportunities:
+                state.presented_opportunities.append(opp.uuid)
+
+        recs_summary = self._build_opportunities_summary(opportunities)
+        full_prompt = self._build_view_prompt(state, context, recs_summary, _PRESENT_JOBS_PROMPT)
+        response, llm_stats = await self._call_llm(full_prompt, user_input, context)
+        # Jobs view stays open (the user can keep talking) — never trust the LLM to end the turn.
+        response.finished = False
+        return response, llm_stats
+
+    async def _present_both_view(
+        self,
+        user_input: str,
+        state: RecommenderAdvisorAgentState,
+        context: ConversationContext,
+    ) -> tuple[ConversationResponse, list[LLMStats]]:
+        """Present job openings first, then career paths, in one message (both view)."""
+        opportunities = state.recommendations.opportunity_recommendations[:5]
+        occupations = state.recommendations.occupation_recommendations[:5]
+
+        if not opportunities and not occupations:
+            return ConversationResponse(
+                reasoning="User chose both but nothing is available",
+                message=("I couldn't find matches for you right now. The listings refresh "
+                         "regularly, so please check back another day."),
+                finished=False
+            ), []
+
+        for opp in opportunities:
+            if opp.uuid not in state.presented_opportunities:
+                state.presented_opportunities.append(opp.uuid)
+        for occ in occupations:
+            if occ.uuid not in state.presented_occupations:
+                state.presented_occupations.append(occ.uuid)
+
+        jobs_block = (self._build_opportunities_summary(opportunities)
+                      if opportunities else "No job openings available right now.")
+        careers_block = (self._build_detailed_recommendations_summary(occupations)
+                         if occupations else "No career paths available right now.")
+        recs_summary = (
+            f"{jobs_block}\n\n"
+            f"**Career Paths** (present these after the jobs):\n{careers_block}"
+        )
+        full_prompt = self._build_view_prompt(state, context, recs_summary, _PRESENT_BOTH_PROMPT)
+        response, llm_stats = await self._call_llm(full_prompt, user_input, context)
+        # Both view stays open so the user can keep discussing.
+        response.finished = False
+        return response, llm_stats
+
+    def _build_view_prompt(
+        self,
+        state: RecommenderAdvisorAgentState,
+        context: ConversationContext,
+        recs_summary: str,
+        instruction_prompt: str,
+    ) -> str:
+        """Assemble the context block + a view-specific instruction prompt."""
+        skills_list = self._extract_skills_list(state)
+        pref_vec_dict = state.preference_vector.model_dump() if state.preference_vector else {}
+        conv_history = ConversationHistoryFormatter.format_to_string(context)
+        context_block = build_context_block(
+            skills=skills_list,
+            preference_vector=pref_vec_dict,
+            recommendations_summary=recs_summary,
+            conversation_history=conv_history,
+            country_of_user=state.country_of_user,
+        )
+        return context_block + instruction_prompt + get_json_response_instructions()
+
     def _build_opportunities_summary(self, opportunities: list) -> str:
         """Build a summary of job opportunity recommendations for LLM context."""
         lines = [
-            "**NOTE: No occupation career-path recommendations are available. "
-            "Present the following job opportunity (posting) recommendations instead.**\n",
-            "**Job Opportunities**:"
+            "**Job Opportunities** (present these job postings to the user):"
         ]
         for i, opp in enumerate(opportunities, 1):
             lines.append(f"{i}. **{opp.opportunity_title}** (Rank: {opp.rank})")
@@ -263,6 +461,8 @@ class PresentPhaseHandler(BasePhaseHandler):
                 lines.append(f"   - Employer: {opp.employer}")
             if opp.location:
                 lines.append(f"   - Location: {opp.location}")
+            if opp.demand_label:
+                lines.append(f"   - Labor demand: {opp.demand_label}")
             if opp.salary_range:
                 lines.append(f"   - Salary: {opp.salary_range}")
             if opp.justification:
@@ -416,6 +616,106 @@ class PresentPhaseHandler(BasePhaseHandler):
         return None
 
 
+    async def _handle_jobs_followup(
+        self,
+        user_input: str,
+        state: RecommenderAdvisorAgentState,
+        context: ConversationContext
+    ) -> tuple[ConversationResponse, list[LLMStats]] | None:
+        """
+        Route a user's reply after a jobs/both view.
+
+        Returns the (response, stats) to send, or None to fall through to the occupation
+        presentation (used only when the user asks to switch to career paths).
+        """
+        all_llm_stats: list[LLMStats] = []
+        intent, stats = await self._intent_classifier.classify_jobs_followup(
+            user_input=user_input,
+            state=state,
+            context=context,
+            llm=self._conversation_llm,
+            logger=self.logger,
+        )
+        all_llm_stats.extend(stats)
+
+        if intent is not None:
+            self.logger.info(f"Jobs follow-up intent: {intent.intent}")
+
+            if intent.intent == "explore_opportunity":
+                result = await self._handle_explore_opportunity_intent(intent, user_input, state, context)
+                if result is not None:
+                    response, s = result
+                    return response, all_llm_stats + s
+                # Couldn't identify which opening → answer conversationally below
+
+            elif intent.intent == "explore_occupation" and (
+                intent.target_recommendation_id or intent.target_occupation_index
+            ):
+                result = await self._handle_explore_intent(intent, user_input, state, context)
+                if result is not None:
+                    response, s = result
+                    return response, all_llm_stats + s
+
+            elif intent.intent == "show_careers":
+                # Switch to the careers view; fall through to the occupation presentation.
+                state.recommendation_view = "careers"
+                return None
+
+            elif intent.intent == "express_concern":
+                response, s = await self._handle_concern_intent(intent, user_input, state, context)
+                return response, all_llm_stats + s
+
+        # Ambiguous / question / accept / classification failed → keep the user in the
+        # opportunity context with a conversational answer rather than dumping careers.
+        response, s = await self._present_jobs_view(user_input, state, context)
+        return response, all_llm_stats + s
+
+    async def _handle_explore_opportunity_intent(
+        self,
+        intent: UserIntentClassification,
+        user_input: str,
+        state: RecommenderAdvisorAgentState,
+        context: ConversationContext
+    ) -> tuple[ConversationResponse, list[LLMStats]] | None:
+        """Handle the user wanting to explore a specific job opening (parity with occupations)."""
+        target_opp = None
+
+        if intent.target_recommendation_id:
+            rec = state.get_recommendation_by_id(intent.target_recommendation_id)
+            if isinstance(rec, OpportunityRecommendation):
+                target_opp = rec
+
+        if target_opp is None and intent.target_occupation_index and state.recommendations:
+            idx = intent.target_occupation_index - 1  # Convert to 0-indexed
+            opportunities = state.recommendations.opportunity_recommendations
+            if 0 <= idx < len(opportunities):
+                target_opp = opportunities[idx]
+
+        if target_opp is None:
+            self.logger.warning(
+                f"Could not identify target opening. index={intent.target_occupation_index}, "
+                f"id={intent.target_recommendation_id}"
+            )
+            return None
+
+        # Set focus and explore via the shared exploration machinery. Opportunities skip the
+        # tradeoffs check (it compares occupation labor-demand, which a posting doesn't have).
+        state.current_focus_id = target_opp.uuid
+        state.current_recommendation_type = "opportunity"
+        state.mark_interest(target_opp.uuid, UserInterestLevel.EXPLORING)
+        state.conversation_phase = ConversationPhase.CAREER_EXPLORATION
+
+        self.logger.info(f"Transitioning to CAREER_EXPLORATION for opening {target_opp.opportunity_title}")
+
+        if self._exploration_handler:
+            return await self._exploration_handler.handle(user_input, state, context)
+
+        return ConversationResponse(
+            reasoning=f"User wants to explore opening {target_opp.opportunity_title}, transitioning to EXPLORATION",
+            message=f"Great! Let me tell you more about the {target_opp.opportunity_title} opening.",
+            finished=False
+        ), []
+
     async def _handle_reject_intent(
         self,
         intent: UserIntentClassification,
@@ -423,6 +723,10 @@ class PresentPhaseHandler(BasePhaseHandler):
         context: ConversationContext
     ) -> tuple[ConversationResponse, list[LLMStats]]:
         """Handle user rejecting recommendations."""
+        # A rejection means the user is moving on from the current jobs/careers view, so clear
+        # it — otherwise the jobs follow-up gate could re-fire on the next turn.
+        state.recommendation_view = None
+
         # Mark rejection in state
         # If they rejected a specific occupation, mark it
         if intent.target_recommendation_id:

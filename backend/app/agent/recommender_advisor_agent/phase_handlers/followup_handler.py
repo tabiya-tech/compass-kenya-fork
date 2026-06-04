@@ -86,7 +86,12 @@ class FollowupPhaseHandler(BasePhaseHandler):
 
         if next_phase:
             state.conversation_phase = next_phase
-            
+
+            # show_opportunities → render job openings, not the occupation presentation.
+            # PRESENT keys off recommendation_view to show the jobs view (see present_handler).
+            if intent.intent == "show_opportunities":
+                state.recommendation_view = "jobs"
+
             # If they selected an occupation (by number or name), set the focus
             if intent.target_occupation_index and state.recommendations:
                 idx = intent.target_occupation_index - 1  # Convert to 0-indexed

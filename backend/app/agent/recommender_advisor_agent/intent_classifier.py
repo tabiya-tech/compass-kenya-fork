@@ -84,6 +84,135 @@ class IntentClassifier:
             logger=logger
         )
 
+    async def classify_view_choice(
+        self,
+        user_input: str,
+        context: ConversationContext,
+        llm: GeminiGenerativeLLM,
+        logger: logging.Logger
+    ) -> Tuple[UserIntentClassification | None, list[LLMStats]]:
+        """
+        Classify the user's answer to "career paths, job openings, or both?".
+
+        Returns a UserIntentClassification whose `intent` is one of 'careers', 'jobs',
+        or 'both'. The caller maps this to the recommendation view to render.
+        """
+        prompt = f"""
+The user was just asked whether they want to see career paths, actual job openings, or both.
+
+User said: "{user_input}"
+
+Classify their choice into exactly one intent:
+- "careers": They want career paths / occupations to consider (e.g. "career paths", "careers", "the paths", "occupations", "show me careers")
+- "jobs": They want actual job openings / postings they can apply to (e.g. "jobs", "job openings", "openings", "vacancies", "kazi", "what can I apply to", "actual jobs")
+- "both": They want to see both, or they answered vaguely / affirmatively / unclear (e.g. "both", "everything", "all of it", "yes", "sure", "show me what you have", "anything")
+
+When in doubt, choose "both" — it shows the most.
+
+Your response must be a JSON object with the following schema:
+{{
+    "reasoning": "Brief explanation of why you classified this choice",
+    "intent": "One of: careers, jobs, both",
+    "target_recommendation_id": null,
+    "target_occupation_index": null,
+    "requested_occupation_name": null
+}}
+
+Always return a valid JSON object matching this exact schema.
+"""
+        return await self._intent_caller.call_llm(
+            llm=llm,
+            llm_input=ConversationHistoryFormatter.format_for_agent_generative_prompt(
+                model_response_instructions=prompt,
+                context=context,
+                user_input=user_input,
+            ),
+            logger=logger
+        )
+
+    async def classify_jobs_followup(
+        self,
+        user_input: str,
+        state: RecommenderAdvisorAgentState,
+        context: ConversationContext,
+        llm: GeminiGenerativeLLM,
+        logger: logging.Logger
+    ) -> Tuple[UserIntentClassification | None, list[LLMStats]]:
+        """
+        Classify a user's reply after a jobs/both view, where job openings were just shown.
+
+        Unlike the PRESENT phase prompt (occupation-centric), this lists the presented job
+        openings so a follow-up about a specific posting is captured as `explore_opportunity`.
+        """
+        prompt = self._build_jobs_followup_phase_prompt(user_input, state)
+        return await self._intent_caller.call_llm(
+            llm=llm,
+            llm_input=ConversationHistoryFormatter.format_for_agent_generative_prompt(
+                model_response_instructions=prompt,
+                context=context,
+                user_input=user_input,
+            ),
+            logger=logger
+        )
+
+    def _build_jobs_followup_phase_prompt(self, user_input: str, state: RecommenderAdvisorAgentState) -> str:
+        """
+        Build intent classification prompt for a follow-up after the jobs/both view.
+
+        Lists the job openings that were shown (and, for the "both" view, the career paths)
+        so the classifier can pin a specific opening to explore.
+        """
+        opp_list = ""
+        if state.recommendations:
+            for i, opp in enumerate(state.recommendations.opportunity_recommendations[:5], 1):
+                opp_list += f"{i}. {opp.opportunity_title} (uuid: {opp.uuid})\n"
+
+        # The "both" view also showed career paths, so the user might reference one of those.
+        occ_block = ""
+        if state.recommendation_view == "both" and state.recommendations:
+            occ_lines = ""
+            for i, occ in enumerate(state.recommendations.occupation_recommendations[:5], 1):
+                occ_lines += f"{i}. {occ.occupation} (uuid: {occ.uuid})\n"
+            if occ_lines:
+                occ_block = f"""
+Career paths also shown:
+{occ_lines}
+- "explore_occupation": They want to learn more about one of the CAREER PATHS above.
+  Set target_recommendation_id (uuid) and target_occupation_index (its number in the career list).
+"""
+
+        return f"""
+The user was just shown actual JOB OPENINGS they can apply to. Classify what they want next.
+
+User said: "{user_input}"
+
+Job openings shown:
+{opp_list}
+{occ_block}
+Possible intents:
+- "explore_opportunity": They want to learn more about a SPECIFIC job opening above
+  (e.g. "tell me about the Glovo one", "the first one", "#2", "what's the Safaricom role like?").
+  CRITICAL: set target_recommendation_id (the opening's uuid) AND target_occupation_index
+  (its NUMBER in the job-openings list above), using case-insensitive / partial matching.
+- "show_careers": They want to see career paths instead of (or in addition to) the openings
+  (e.g. "show me career paths", "what careers do you suggest?").
+- "express_concern": They're expressing worry, doubt, or an objection about an opening.
+- "ask_question": A factual question about an opening (e.g. "where is it?", "is it remote?").
+- "accept": They want to move forward / apply.
+- "other": Unclear or off-topic.
+
+Your response must be a JSON object with the following schema:
+{{
+    "reasoning": "A step by step explanation of why you classified this intent",
+    "intent": "One of: explore_opportunity, explore_occupation, show_careers, express_concern, ask_question, accept, other",
+    "target_recommendation_id": "The UUID of the opening (or career path) if identified, or null",
+    "target_occupation_index": "The 1-based index number in its list if identified, or null",
+    "requested_occupation_name": null
+}}
+
+Always return a valid JSON object matching this exact schema.
+"""
+
     def _build_present_phase_prompt(self, user_input: str, state: RecommenderAdvisorAgentState) -> str:
         """
         Build intent classification prompt for PRESENT_RECOMMENDATIONS phase.
