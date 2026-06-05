@@ -618,6 +618,16 @@ class Node2VecRecommendations(BaseModel):
         extra = "allow"  # Allow Node2Vec to add new fields
         populate_by_name = True  # Allow alias (user_id → youth_id)
 
+    def is_empty(self) -> bool:
+        """True when there is nothing presentable (no career paths and no job openings).
+
+        The matching service can return a valid response with empty lists (e.g. a user
+        with no eligible matches, or a transient backend issue). Such a result must not
+        be cached as "recommendations fetched", otherwise the user gets stuck — see the
+        retry guards in the intro/simple-flow handlers.
+        """
+        return not self.occupation_recommendations and not self.opportunity_recommendations
+
     @field_serializer("generated_at")
     def serialize_generated_at(self, dt: datetime) -> str:
         return dt.isoformat()

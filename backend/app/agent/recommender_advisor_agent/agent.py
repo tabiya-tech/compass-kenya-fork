@@ -457,7 +457,7 @@ class RecommenderAdvisorAgent(Agent):
 
         # First call: fetch recommendations if not yet loaded
         elif self._state.recommendations is None:
-            self._state.recommendations = await self._recommendation_interface.generate_recommendations(
+            recommendations = await self._recommendation_interface.generate_recommendations(
                 youth_id=self._state.youth_id,
                 city=self._state.city,
                 province=self._state.province,
@@ -467,6 +467,29 @@ class RecommenderAdvisorAgent(Agent):
                 education_experiences=self._state.education_experiences,
                 top_10_bws=self._state.top_10_bws,
             )
+
+            # Don't cache an empty result: leaving recommendations as None means the next
+            # user turn retries the matching service instead of getting stuck. Invite the
+            # user to try again so the retry actually fires.
+            if recommendations.is_empty():
+                self.logger.warning(
+                    "Simple flow: no recommendations returned for %s; not caching so the next turn retries",
+                    self._state.youth_id,
+                )
+                return AgentOutputWithReasoning(
+                    message_for_user=(
+                        "I wasn't able to pull up matching options for you just yet — this can "
+                        "happen while our job database is updating. Send me a message to try again, "
+                        "or check back a little later and I'll have a fresh set for you."
+                    ),
+                    finished=False,
+                    reasoning="Simple flow first call: matching returned nothing; not caching so the next turn retries.",
+                    agent_type=self.agent_type,
+                    agent_response_time_in_sec=round(time.time() - agent_start_time, 2),
+                    llm_stats=[],
+                )
+
+            self._state.recommendations = recommendations
             self.logger.info(
                 "Simple flow: generated recommendations for %s: %d occupations, %d opportunities",
                 self._state.youth_id,

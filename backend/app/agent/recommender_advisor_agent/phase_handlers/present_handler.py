@@ -188,9 +188,18 @@ class PresentPhaseHandler(BasePhaseHandler):
                     f"No occupation recommendations available; presenting {len(opportunities)} opportunity recommendations instead"
                 )
                 return await self._present_opportunities(user_input, state, context, opportunities)
+            # Nothing presentable. Don't freeze here: drop the (empty) cached
+            # recommendations and route back to INTRO so the next user turn re-calls the
+            # matching service rather than re-entering this dead-end every turn.
+            state.recommendations = None
+            state.conversation_phase = ConversationPhase.INTRO
             return ConversationResponse(
-                reasoning="No occupation or opportunity recommendations available",
-                message="I couldn't find suitable career recommendations at this time. Let me try a different approach.",
+                reasoning="No occupation or opportunity recommendations available; clearing cache and returning to INTRO so the next turn retries",
+                message=(
+                    "I couldn't find suitable recommendations just now — this can happen while "
+                    "our job database is updating. Send me a message to try again, or check back "
+                    "a little later and I'll have a fresh set for you."
+                ),
                 finished=False
             ), []
 
