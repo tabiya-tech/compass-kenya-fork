@@ -31,6 +31,7 @@ from app.agent.recommender_advisor_agent.types import (
 )
 from app.agent.recommender_advisor_agent.phase_handlers.intro_handler import IntroPhaseHandler
 from app.agent.recommender_advisor_agent.phase_handlers.present_handler import PresentPhaseHandler
+from app.agent.recommender_advisor_agent.recommendation_interface import RecommendationInterface
 from app.conversation_memory.conversation_memory_manager import ConversationContext
 from app.countries import Country
 
@@ -189,6 +190,43 @@ class TestIntroEmptyRetry:
 # ---------------------------------------------------------------------------
 # 5. PRESENT handler dead-end recovery
 # ---------------------------------------------------------------------------
+
+class TestNoFakeStubsOnFailure:
+    """
+    Stub recommendations are local-dev-only. A configured-but-failing matching service
+    must return an EMPTY result (which the agent surfaces honestly + retries), never fake
+    stub data shown to real users.
+    """
+
+    @pytest.mark.asyncio
+    async def test_matching_failure_returns_empty_not_stubs(self):
+        # GIVEN a configured matching service that raises
+        matching_service = MagicMock()
+        matching_service.algorithm_version = "v1"
+        matching_service.generate_recommendations = AsyncMock(side_effect=RuntimeError("503 outage"))
+        interface = RecommendationInterface(matching_service=matching_service, node2vec_client=None)
+
+        # WHEN recommendations are requested
+        result = await interface.generate_recommendations(youth_id="test_user")
+
+        # THEN the result is empty (not the stub Mombasa persona)
+        assert result.is_empty()
+        # AND it is NOT the stub data
+        stub = interface.get_stub_recommendations("test_user")
+        assert not stub.is_empty()  # sanity: stubs really do contain data
+        assert result.occupation_recommendations != stub.occupation_recommendations
+
+    @pytest.mark.asyncio
+    async def test_no_backend_configured_still_uses_stubs(self):
+        # GIVEN no matching service and no node2vec client (pure local dev)
+        interface = RecommendationInterface(matching_service=None, node2vec_client=None)
+
+        # WHEN recommendations are requested
+        result = await interface.generate_recommendations(youth_id="test_user")
+
+        # THEN stubs are used (dev convenience preserved)
+        assert not result.is_empty()
+
 
 class TestPresentEmptyRecovery:
     @pytest.mark.asyncio
