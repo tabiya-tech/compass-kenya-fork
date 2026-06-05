@@ -248,7 +248,7 @@ class MatchingServiceV1(MatchingService):
             total_duration_postsec=total_duration_postsec,
         )
 
-        response = await self._client.process_request(_ResponseList, "/match_v4", request)
+        response = await self._client.process_request(_ResponseList, "/match", request)
         if not response.root:
             return CompassMatchingResult(user_id=youth_id, algorithm_version="v1")
 
