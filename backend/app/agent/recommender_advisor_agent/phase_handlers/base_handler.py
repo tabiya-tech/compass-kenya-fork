@@ -556,21 +556,30 @@ Generate a response that:
         if not state.skills_vector:
             return []
 
+        def _as_label(s) -> str:
+            # A skill may be a plain string or a dict (e.g. {"preferredLabel": ...}).
+            # Always coerce to a string label — downstream context building does
+            # ', '.join(skills), which raises if any item is a dict.
+            if isinstance(s, dict):
+                return s.get("preferredLabel") or s.get("name") or s.get("label") or str(s)
+            return str(s)
+
         # Handle different possible structures
         if isinstance(state.skills_vector, dict):
             # Could be {"skill_name": proficiency_level} or {"skills": [...]}
             if "skills" in state.skills_vector:
-                return state.skills_vector["skills"]
+                skills = state.skills_vector["skills"]
+                return [_as_label(s) for s in skills] if isinstance(skills, list) else []
             elif "top_skills" in state.skills_vector:
                 # Handle ExperienceEntity-like structure
                 skills = state.skills_vector.get("top_skills", [])
                 if isinstance(skills, list) and skills:
                     # Extract skill names
-                    return [s.get("preferredLabel", s.get("name", str(s))) if isinstance(s, dict) else str(s) for s in skills]
+                    return [_as_label(s) for s in skills]
             else:
                 # Assume keys are skill names
                 return list(state.skills_vector.keys())
         elif isinstance(state.skills_vector, list):
-            return state.skills_vector
+            return [_as_label(s) for s in state.skills_vector]
 
         return []

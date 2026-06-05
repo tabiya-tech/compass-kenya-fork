@@ -443,8 +443,13 @@ class RecommendationInterface:
                 return _compass_result_to_node2vec(result)
 
             except Exception as e:
-                # error (not warning) so prod Sentry alerting fires on a real outage.
-                logger.error(f"MatchingService failed for {youth_id}, trying fallbacks: {e}")
+                # error + exc_info so the existing Sentry LoggingIntegration (event_level=ERROR)
+                # raises an actionable event WITH the traceback. The agent otherwise returns a
+                # friendly "try again" message, so this log is the only signal engineers get.
+                logger.error(
+                    f"[matching-failure] MatchingService failed for {youth_id}, trying fallbacks: {e}",
+                    exc_info=True,
+                )
 
         # Try Node2Vec client (legacy/local)
         if self._node2vec_client and NODE2VEC_AVAILABLE:
@@ -462,14 +467,16 @@ class RecommendationInterface:
                 return Node2VecRecommendations.from_jasmin_output(raw_output)
 
             except Exception as e:
-                logger.error(f"Node2Vec failed for {youth_id}: {e}")
+                logger.error(f"[matching-failure] Node2Vec failed for {youth_id}: {e}", exc_info=True)
 
         # A real backend was configured but every attempt failed. Return an EMPTY result
         # rather than fake stubs — the agent's no-recommendations path tells the user
         # honestly and retries the backend on the next turn.
         if backend_configured:
+            # Summary alert event (Sentry via LoggingIntegration). The per-backend
+            # exceptions above carry the tracebacks; this marks the user-facing impact.
             logger.error(
-                f"All configured recommendation backends failed for {youth_id}; "
+                f"[matching-failure] All configured recommendation backends failed for {youth_id}; "
                 f"returning empty recommendations (no fake stubs shown to the user)"
             )
             return Node2VecRecommendations(youth_id=youth_id)
