@@ -419,6 +419,22 @@ class OpportunityRecommendation(BaseModel):
         description="Employment contract type"
     )
 
+    @field_validator("contract_type", mode="before")
+    @classmethod
+    def _normalize_contract_type(cls, v):
+        """Normalize the matching service's contract_type to our literal set.
+
+        The matching gateway returns human-readable values like "Full-time" /
+        "Part-time", which don't match our snake_case literals. Normalize case and
+        separators; an unrecognized value becomes None rather than failing the whole
+        OpportunityRecommendation (one cosmetic field must not drop all recommendations).
+        """
+        if not isinstance(v, str) or not v.strip():
+            return None
+        key = v.strip().lower().replace("-", "_").replace(" ", "_")
+        allowed = {"full_time", "part_time", "internship", "contract", "freelance", "commission"}
+        return key if key in allowed else None
+
     # Optional metadata (from DB3 - jobs database, may not be available initially)
     employer: Optional[str] = Field(
         default=None,
