@@ -48,7 +48,7 @@ class IntroPhaseHandler(BasePhaseHandler):
         """
         # Generate recommendations if not already set
         if state.recommendations is None:
-            state.recommendations = await self._recommendation_interface.generate_recommendations(
+            recommendations = await self._recommendation_interface.generate_recommendations(
                 youth_id=state.youth_id,
                 city=state.city,
                 province=state.province,
@@ -58,13 +58,34 @@ class IntroPhaseHandler(BasePhaseHandler):
                 top_10_bws=state.top_10_bws,
                 education_experiences=state.education_experiences,
             )
+
+            # An empty result (matching service returned nothing, or had a transient
+            # issue) must NOT be cached: leaving state.recommendations as None means the
+            # next user turn re-enters this branch and calls the matching service again,
+            # rather than freezing on a "no recommendations" screen. Stay in INTRO and
+            # invite the user to try again so the retry actually happens.
+            if recommendations.is_empty():
+                self.logger.warning(
+                    f"No recommendations returned for {state.youth_id}; staying in INTRO to retry on next turn"
+                )
+                return ConversationResponse(
+                    reasoning="Matching service returned no recommendations; not caching so the next turn retries",
+                    message=(
+                        "I wasn't able to pull up matching options for you just yet — this can "
+                        "happen while our job database is updating. Send me a message to try again, "
+                        "or check back a little later and I'll have a fresh set for you."
+                    ),
+                    finished=False,
+                ), []
+
+            state.recommendations = recommendations
             self.logger.info(
                 f"Generated recommendations for {state.youth_id}: "
                 f"{len(state.recommendations.occupation_recommendations)} occupations, "
                 f"{len(state.recommendations.opportunity_recommendations)} opportunities, "
                 f"{len(state.recommendations.skillstraining_recommendations)} trainings"
             )
-        
+
         # Build intro message — ask up front whether they want career paths, actual job
         # openings, or both, so everyone can reach jobs quickly without having to ask.
         intro_message = """Great! Based on what you've told me, I've got some options for you.
