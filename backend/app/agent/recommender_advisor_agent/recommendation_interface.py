@@ -407,6 +407,14 @@ class RecommendationInterface:
         Returns:
             Node2VecRecommendations object (in agent format)
         """
+        # Whether a real recommendation backend is configured. Stub recommendations are a
+        # LOCAL-DEV-ONLY convenience and must never be shown to real users: if a backend is
+        # configured but fails, we return an empty result (which the agent surfaces honestly
+        # via its no-recommendations retry path) rather than masking the outage with fake data.
+        backend_configured = bool(self._matching_service) or bool(
+            self._node2vec_client and NODE2VEC_AVAILABLE
+        )
+
         # Try MatchingService first (deployed service, v1 or v2)
         if self._matching_service:
             try:
@@ -435,7 +443,8 @@ class RecommendationInterface:
                 return _compass_result_to_node2vec(result)
 
             except Exception as e:
-                logger.warning(f"MatchingService failed, trying fallbacks: {e}")
+                # error (not warning) so prod Sentry alerting fires on a real outage.
+                logger.error(f"MatchingService failed for {youth_id}, trying fallbacks: {e}")
 
         # Try Node2Vec client (legacy/local)
         if self._node2vec_client and NODE2VEC_AVAILABLE:
@@ -453,10 +462,20 @@ class RecommendationInterface:
                 return Node2VecRecommendations.from_jasmin_output(raw_output)
 
             except Exception as e:
-                logger.warning(f"Node2Vec failed, using stubs: {e}")
+                logger.error(f"Node2Vec failed for {youth_id}: {e}")
 
-        # Return stub recommendations for development
-        logger.info(f"Using stub recommendations for {youth_id}")
+        # A real backend was configured but every attempt failed. Return an EMPTY result
+        # rather than fake stubs — the agent's no-recommendations path tells the user
+        # honestly and retries the backend on the next turn.
+        if backend_configured:
+            logger.error(
+                f"All configured recommendation backends failed for {youth_id}; "
+                f"returning empty recommendations (no fake stubs shown to the user)"
+            )
+            return Node2VecRecommendations(youth_id=youth_id)
+
+        # No backend configured at all — local development. Stubs are safe here only.
+        logger.info(f"No recommendation backend configured; using stub recommendations for {youth_id}")
         return self.get_stub_recommendations(youth_id)
     
     def get_stub_recommendations(self, youth_id: str) -> Node2VecRecommendations:
