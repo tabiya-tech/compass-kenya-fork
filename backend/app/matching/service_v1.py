@@ -1,4 +1,5 @@
-from typing import Optional, List
+import logging
+from typing import Optional, List, Any
 from pydantic import BaseModel, Field, RootModel
 
 from app.matching.client import MatchingServiceClient
@@ -223,10 +224,15 @@ def _to_compass_skill_gap(gap: SkillGapRecommendation) -> CompassSkillGap:
 class MatchingServiceV1(MatchingService):
     def __init__(self, client: MatchingServiceClient):
         self._client = client
+        self._logger = logging.getLogger(self.__class__.__name__)
 
     @property
     def algorithm_version(self) -> MatchingAlgorithmVersion:
         return "v1"
+
+    def _assert_field_not_empty(self, field_name: str, value: Optional[Any]):
+        if value is None:
+            self._logger.warning(f"None value for field '{field_name}'")
 
     async def generate_recommendations(self,
                                        youth_id: str,
@@ -237,6 +243,11 @@ class MatchingServiceV1(MatchingService):
                                        any_post_secondary_educ: Optional[int] = None,
                                        number_post_secondary_educ: Optional[int] = None,
                                        total_duration_postsec: Optional[float] = None) -> CompassMatchingResult:
+        self._assert_field_not_empty("city", city)
+        self._assert_field_not_empty("province", province)
+        self._assert_field_not_empty("any_post_secondary_educ", any_post_secondary_educ)
+        self._assert_field_not_empty("number_post_secondary_educ", number_post_secondary_educ)
+        self._assert_field_not_empty("total_duration_postsec", total_duration_postsec)
         request = MatchingRequest(
             user_id=youth_id,
             city=city or "",

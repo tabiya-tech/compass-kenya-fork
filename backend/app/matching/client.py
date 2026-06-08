@@ -1,4 +1,5 @@
 import logging
+import json as _json
 from typing import Generic, TypeVar
 
 import httpx
@@ -43,8 +44,7 @@ class MatchingServiceClient:
             request.user_id, len(_bws), len(_top), _top[:3],
         )
         # Full payload at DEBUG only — contains skills/location, keep out of INFO logs.
-        import json as _json
-        self._logger.debug("[bws-payload] full: %s", _json.dumps(request_json[0], default=str))
+        self._logger.info("match.v1.request=%s", request.model_dump_json(indent=2))
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(
@@ -60,6 +60,7 @@ class MatchingServiceClient:
                 response.raise_for_status()
 
                 result = response.json()
+                self._logger.info("match.v1.response=%s", result)
 
                 self._logger.info(
                     f"Matching service returned successfully for user {request.user_id} "
