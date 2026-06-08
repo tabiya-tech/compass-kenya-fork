@@ -69,5 +69,21 @@
       "unseenUnpaid": "¿Qué creés que es más importante al ayudar en la comunidad o cuidar a otras personas?",
       "education": "¿En qué área de tus estudios te sientes más seguro/a para aplicar en un entorno laboral?"
     }
+  },
+  "preferenceElicitation": {
+    "experienceQuestionsIntro": "Ahora me gustaría entender qué es lo más importante para ti en un trabajo, cosas como el salario, el equilibrio entre la vida laboral y personal, la estabilidad laboral y el crecimiento profesional.",
+    "fallbackQuestionNoExperience": "Cuéntame sobre una tarea de trabajo que hayas disfrutado mucho: ¿qué la hizo satisfactoria?",
+    "fallbackQuestionWithCompany": "Mencionaste que trabajaste en {company}. ¿Qué fue lo que más disfrutaste de ese trabajo?",
+    "fallbackQuestionWithExperience": "Mencionaste que trabajaste como {experience_title}. ¿Qué fue lo que más disfrutaste de ese trabajo?",
+    "fallbackQuestionGeneric": "Cuéntame sobre tu experiencia laboral más reciente. ¿Qué fue lo que más disfrutaste de ella?",
+    "vignetteChoosePrompt": "¿Cuál preferirías y por qué?",
+    "gateFallbackQuestion1": "¿Qué es más importante para ti: un salario alto con menos estabilidad, o un salario moderado con buena estabilidad laboral?",
+    "gateFallbackQuestion2": "¿Cómo te sientes trabajando en equipo frente a trabajar de forma independiente la mayor parte del tiempo?",
+    "gateFallbackQuestion3": "Si tuvieras que elegir, ¿preferirías un trabajo desafiante y de ritmo rápido, o uno estable y predecible?",
+    "wrapupMessage": "¡Genial! He aprendido mucho sobre tus preferencias.\n\nEsto es lo que entiendo sobre lo que te importa en un trabajo:\n\n{summary}\n\nEsto me ayudará a sugerirte oportunidades que sean una buena opción para ti. ¿Te parece correcto?",
+    "alreadyComplete": "Ya he registrado tus preferencias. ¡Pasemos a encontrar oportunidades para ti!",
+    "errorRetry": "Estoy teniendo algunos problemas en este momento. ¿Podrías intentarlo de nuevo?",
+    "followUpFallback": "¿Podrías contarme más sobre tu elección?",
+    "followUpFallbackNoVignette": "¿Podrías contarme un poco más sobre por qué elegiste esa opción?"
   }
 }

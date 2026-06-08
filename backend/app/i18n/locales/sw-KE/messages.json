@@ -69,5 +69,21 @@
       "unseenUnpaid": "Unafikiri ni nini muhimu zaidi unaposaidia jamii au kutunza wengine?",
       "education": "Ni eneo gani la masomo yako unalojisikia kuwa na uwezo zaidi wa kutumia katika mazingira ya kazi?"
     }
+  },
+  "preferenceElicitation": {
+    "experienceQuestionsIntro": "Sasa ningependa kuelewa kinachokuhusu zaidi katika kazi - mambo kama mshahara, uwiano kati ya kazi na maisha, usalama wa kazi, na ukuaji wa kikazi.",
+    "fallbackQuestionNoExperience": "Nieleze kuhusu kazi fulani uliyofurahia sana - ni nini kilichoifanya iwe ya kuridhisha?",
+    "fallbackQuestionWithCompany": "Ulitaja kuwa ulifanya kazi katika {company}. Ni nini ulichofurahia zaidi kuhusu kazi hiyo?",
+    "fallbackQuestionWithExperience": "Ulitaja kuwa ulifanya kazi kama {experience_title}. Ni nini ulichofurahia zaidi kuhusu kazi hiyo?",
+    "fallbackQuestionGeneric": "Nieleze kuhusu kazi yako ya hivi karibuni zaidi. Ni nini ulichofurahia zaidi kuihusu?",
+    "vignetteChoosePrompt": "Ungependelea ipi, na kwa nini?",
+    "gateFallbackQuestion1": "Ni kipi muhimu zaidi kwako — mshahara mkubwa wenye uthabiti mdogo, au mshahara wa wastani wenye usalama mkubwa wa kazi?",
+    "gateFallbackQuestion2": "Unajisikiaje kufanya kazi katika timu ikilinganishwa na kufanya kazi peke yako kwa muda mwingi?",
+    "gateFallbackQuestion3": "Ungelazimika kuchagua, ungependelea kazi yenye changamoto na kasi, au yenye utulivu na inayotabirika?",
+    "wrapupMessage": "Vizuri! Nimejifunza mengi kuhusu mapendeleo yako.\n\nHaya ndiyo ninayoelewa kuhusu kinachokuhusu katika kazi:\n\n{summary}\n\nHii itanisaidia kukupendekezea fursa zinazokufaa. Je, hii inaonekana sawa?",
+    "alreadyComplete": "Tayari nimerekodi mapendeleo yako. Tuendelee kutafuta fursa kwa ajili yako!",
+    "errorRetry": "Nina matatizo fulani kwa sasa. Tafadhali unaweza kujaribu tena?",
+    "followUpFallback": "Unaweza kunieleza zaidi kuhusu chaguo lako?",
+    "followUpFallbackNoVignette": "Unaweza kunieleza zaidi kwa nini ulichagua chaguo hilo?"
   }
 }
