@@ -69,5 +69,21 @@
       "unseenUnpaid": "What do you think is most important when helping out in the community or caring for others?",
       "education": "What area of your studies are you most confident applying in a work setting?"
     }
+  },
+  "preferenceElicitation": {
+    "experienceQuestionsIntro": "Now I'd like to understand what matters most to you in a job - things like salary, work-life balance, job security, and career growth.",
+    "fallbackQuestionNoExperience": "Tell me about a work task you really enjoyed - what made it satisfying?",
+    "fallbackQuestionWithCompany": "You mentioned working at {company}. What did you enjoy most about that work?",
+    "fallbackQuestionWithExperience": "You mentioned working as {experience_title}. What did you enjoy most about that work?",
+    "fallbackQuestionGeneric": "Tell me about your most recent work experience. What did you enjoy most about it?",
+    "vignetteChoosePrompt": "Which would you prefer, and why?",
+    "gateFallbackQuestion1": "What's more important to you — high pay with less stability, or moderate pay with strong job security?",
+    "gateFallbackQuestion2": "How do you feel about working in a team versus working independently most of the time?",
+    "gateFallbackQuestion3": "If you had to choose, would you prefer a job that's challenging and fast-paced, or one that's steady and predictable?",
+    "wrapupMessage": "Great! I've learned a lot about your preferences.\n\nHere's what I understand about what matters to you in a job:\n\n{summary}\n\nThis will help me suggest opportunities that are a good fit for you. Does this sound about right?",
+    "alreadyComplete": "I've already recorded your preferences. Let's move on to finding opportunities for you!",
+    "errorRetry": "I'm having some trouble right now. Could you please try again?",
+    "followUpFallback": "Could you tell me more about your choice?",
+    "followUpFallbackNoVignette": "Could you tell me a bit more about why you chose that option?"
   }
 }

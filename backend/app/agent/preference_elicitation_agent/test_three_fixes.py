@@ -18,6 +18,7 @@ from app.agent.preference_elicitation_agent.agent import (
 )
 from app.agent.preference_elicitation_agent import bws_utils
 from app.agent.llm_caller import LLMCaller
+from app.i18n.types import Locale
 
 
 class TestLocationAgnosticVignettes:
@@ -94,7 +95,12 @@ class TestBWSFindingsInSummary:
         agent._state.preference_vector = PreferenceVector()
         agent._state.bws_phase_complete = bws_complete
         agent._state.top_10_bws = top_bws
-        agent._conversation_llm = MagicMock()
+        # The conversation LLM is now built lazily per locale via _get_conversation_llm(),
+        # which reads from this memoization dict. Pre-seed it for the test locale (set to
+        # EN_US by the package conftest) so the summary path uses our mock instead of
+        # attempting a real build.
+        agent._llm_config = MagicMock()
+        agent._conversation_llm_by_locale = {Locale.EN_US: MagicMock()}
         return agent
 
     @pytest.mark.asyncio
