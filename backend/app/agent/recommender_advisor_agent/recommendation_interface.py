@@ -26,6 +26,7 @@ from app.agent.recommender_advisor_agent.types import (
     SkillsTrainingRecommendation,
 )
 from app.agent.preference_elicitation_agent.types import PreferenceVector
+from app.matching.service import MatchingService
 
 logger = logging.getLogger(__name__)
 
@@ -367,7 +368,7 @@ class RecommendationInterface:
     so the agent doesn't need to know about the implementation.
     """
 
-    def __init__(self, matching_service: Optional[Any] = None, node2vec_client: Optional[Any] = None):
+    def __init__(self, matching_service: Optional[MatchingService] = None, node2vec_client: Optional[Any] = None):
         """
         Initialize the recommendation interface.
 
@@ -423,6 +424,7 @@ class RecommendationInterface:
                     f"(version={self._matching_service.algorithm_version})"
                 )
                 any_educ, num_educ, total_dur = _compute_education_fields(education_experiences or [])
+                logger.info(f"any_doc={any_educ}, num_doc={num_educ}, total_dur={total_dur} years")
                 result = await self._matching_service.generate_recommendations(
                     youth_id=youth_id,
                     city=city,
@@ -450,11 +452,13 @@ class RecommendationInterface:
                     f"[matching-failure] MatchingService failed for {youth_id}, trying fallbacks: {e}",
                     exc_info=True,
                 )
+        else:
+            logger.error("Matching service is not configured properly")
 
         # Try Node2Vec client (legacy/local)
         if self._node2vec_client and NODE2VEC_AVAILABLE:
             try:
-                logger.info(f"Generating recommendations for {youth_id} via Node2Vec (legacy)")
+                logger.warning(f"Generating recommendations for {youth_id} via Node2Vec (legacy)")
                 raw_output = await self._node2vec_client.generate_recommendations(
                     youth_id=youth_id,
                     preference_vector=preference_vector,
