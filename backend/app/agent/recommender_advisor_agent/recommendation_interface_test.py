@@ -102,3 +102,108 @@ def test_occupation_demand_reaches_agent_model_via_fallback():
     assert occ.demand_label == "High Expected Demand"
     assert occ.labor_demand_category == "high"
     assert occ.labor_demand_score == 0.9
+
+
+# --- _to_matching_skills_vector: agent skills dict -> matching-service SkillsVector ---
+import pytest
+
+from app.agent.recommender_advisor_agent.recommendation_interface import (
+    _to_matching_skills_vector,
+)
+
+
+@pytest.mark.parametrize(
+    "skills_vector",
+    [
+        None,                  # missing vector entirely
+        {},                    # falsy dict
+        {"skills": []},        # present but no skills
+        {"skills": None},      # "skills" key present but null
+        {"other": "noise"},    # dict without a "skills" key
+    ],
+    ids=["none", "empty_dict", "empty_skills_list", "skills_none", "no_skills_key"],
+)
+def test_empty_or_missing_skills_returns_empty_vector(skills_vector):
+    """No usable skills -> a valid, empty SkillsVector (never None, never a crash)."""
+    out = _to_matching_skills_vector(skills_vector)
+    assert out.top_skills == []
+
+
+def test_skill_with_all_fields_is_converted():
+    out = _to_matching_skills_vector({
+        "skills": [
+            {"preferred_label": "Welding", "origin_uuid": "origin-1", "proficiency": 0.9},
+        ]
+    })
+    assert len(out.top_skills) == 1
+    skill = out.top_skills[0]
+    assert skill.preferred_label == "Welding"
+    assert skill.origin_uuid == "origin-1"
+    assert skill.proficiency == 0.9
+
+
+def test_skill_without_preferred_label_is_dropped():
+    out = _to_matching_skills_vector({
+        "skills": [
+            {"origin_uuid": "origin-1", "proficiency": 0.9},          # no preferred_label -> dropped
+            {"preferred_label": "Welding", "origin_uuid": "o2", "proficiency": 0.8},
+        ]
+    })
+    assert [s.preferred_label for s in out.top_skills] == ["Welding"]
+
+
+def test_origin_uuid_falls_back_to_uuid_when_missing():
+    """When origin_uuid is absent, the skill's `uuid` is used as the origin identifier."""
+    out = _to_matching_skills_vector({
+        "skills": [
+            {"preferred_label": "Plumbing", "uuid": "fallback-uuid", "proficiency": 0.7},
+        ]
+    })
+    assert len(out.top_skills) == 1
+    assert out.top_skills[0].origin_uuid == "fallback-uuid"
+
+
+def test_skill_without_any_identifier_is_dropped_not_crashed():
+    """Edge case: a labelled skill with neither origin_uuid nor uuid must be dropped,
+    not raise a pydantic ValidationError that takes down the whole conversion."""
+    out = _to_matching_skills_vector({
+        "skills": [
+            {"preferred_label": "Ghost Skill", "proficiency": 0.6},   # no origin_uuid, no uuid
+            {"preferred_label": "Real Skill", "origin_uuid": "o1", "proficiency": 0.6},
+        ]
+    })
+    assert [s.preferred_label for s in out.top_skills] == ["Real Skill"]
+
+
+def test_missing_proficiency_defaults_to_half():
+    out = _to_matching_skills_vector({
+        "skills": [
+            {"preferred_label": "Carpentry", "origin_uuid": "o1"},           # no proficiency key
+        ]
+    })
+    assert out.top_skills[0].proficiency == 0.5
+
+
+def test_falsy_proficiency_defaults_to_half():
+    """0 / 0.0 proficiency is treated as 'not provided' and defaults to 0.5 (current contract)."""
+    out = _to_matching_skills_vector({
+        "skills": [
+            {"preferred_label": "Carpentry", "origin_uuid": "o1", "proficiency": 0},
+        ]
+    })
+    assert out.top_skills[0].proficiency == 0.5
+
+
+def test_mixed_batch_converts_keepers_and_drops_invalid():
+    out = _to_matching_skills_vector({
+        "skills": [
+            {"preferred_label": "Keep A", "origin_uuid": "a", "proficiency": 0.9},
+            {"origin_uuid": "b", "proficiency": 0.9},                 # no label -> drop
+            {"preferred_label": "Keep B", "uuid": "c"},               # uuid fallback + default prof
+            {"preferred_label": "Drop C", "proficiency": 0.5},        # no id at all -> drop
+        ]
+    })
+    assert [(s.preferred_label, s.origin_uuid, s.proficiency) for s in out.top_skills] == [
+        ("Keep A", "a", 0.9),
+        ("Keep B", "c", 0.5),
+    ]

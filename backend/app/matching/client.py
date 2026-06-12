@@ -44,7 +44,7 @@ class MatchingServiceClient:
             request.user_id, len(_bws), len(_top), _top[:3],
         )
         # Full payload at DEBUG only — contains skills/location, keep out of INFO logs.
-        self._logger.info("match.v1.request=%s", request.model_dump_json(indent=2))
+        self._logger.info("match.v1.request=%s", request.model_dump_json())
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(
