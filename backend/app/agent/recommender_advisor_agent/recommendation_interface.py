@@ -13,6 +13,8 @@ from datetime import datetime
 from typing import Any, Optional
 import logging
 
+from pydantic import BaseModel
+
 from app.matching.matching_types import (
     CompassMatchingResult,
     PreferenceVector as MatchingPreferenceVector,
@@ -269,18 +271,43 @@ def _to_matching_skills_vector(skills_vector: Optional[dict]) -> MatchingSkillsV
     the matching service expects `{"top_skills": [Skill(preferred_label, origin_uuid, proficiency)]}`.
     Entries missing the required identifiers are dropped.
     """
-    if not skills_vector:
+
+    if not skills_vector or not skills_vector.get("skills"):
+        logger.warning("empty skills vector to calculate matchings for")
         return MatchingSkillsVector(top_skills=[])
+
+    top_skills: list[MatchingSkill] = []
+    for skill in skills_vector.get("skills") or []:
+        if not skill.get("preferred_label"):
+            logger.warning(f"Skill does not have preferred label {skill.__str__()}")
+            continue
+
+        _origin_uuid = skill.get("origin_uuid")
+        if not skill.get("origin_uuid"):
+            _origin_uuid = skill.get("uuid")
+            logger.warning(f"Skill does not have origin uuid {skill.__str__()}")
+
+        # MatchingSkill.origin_uuid is a required str: a skill with neither origin_uuid
+        # nor uuid cannot be constructed. Drop it (as the docstring promises) instead of
+        # letting the pydantic ValidationError crash the whole conversion.
+        if not _origin_uuid:
+            logger.warning(f"Skill has no origin uuid or uuid, dropping it {skill.__str__()}")
+            continue
+
+        if not skill.get("proficiency"):
+            skill_proficiency = 0.5
+            logger.warning(f"Skill does not have proficiency {skill.__str__()}")
+        else:
+            skill_proficiency = skill.get("proficiency")
+
+        top_skills.append(MatchingSkill(
+            proficiency=skill_proficiency,
+            origin_uuid=_origin_uuid,
+            preferred_label=skill.get("preferred_label"),
+        ))
+
     return MatchingSkillsVector(
-        top_skills=[
-            MatchingSkill(
-                preferred_label=s["preferred_label"],
-                origin_uuid=s["origin_uuid"],
-                proficiency=float(s.get("proficiency", 0.5)),
-            )
-            for s in (skills_vector.get("skills") or [])
-            if s.get("preferred_label") and s.get("origin_uuid")
-        ]
+        top_skills=top_skills
     )
 
 
