@@ -205,7 +205,7 @@
         "confirmation": "Una uhakika unataka kuanza mazungumzo mapya?"
       },
       "refreshRecommendations": {
-        "tooltip": "Pata mapendekezo mapya"
+        "label": "Onyesha mapendekezo upya"
       },
       "refreshConfirmationDialog": {
         "title": "Una uhakika ungependa kupaisha upya?",

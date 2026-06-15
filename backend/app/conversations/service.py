@@ -56,7 +56,8 @@ class IConversationService(ABC):
                    filter_pii: bool,
                    city: str | None = None,
                    province: str | None = None,
-                   discuss_recommendations: bool = True) -> ConversationResponse:
+                   discuss_recommendations: bool = True,
+                   is_artificial: bool = False) -> ConversationResponse:
         # TODO: discuss filter pii and clear_memory
         """
         Get a message from the user and return a response from Compass, save the message and response into the application state
@@ -151,14 +152,15 @@ class ConversationService(IConversationService):
                    filter_pii: bool,
                    city: str | None = None,
                    province: str | None = None,
-                   discuss_recommendations: bool = True) -> ConversationResponse:
+                   discuss_recommendations: bool = True,
+                   is_artificial: bool = False) -> ConversationResponse:
         if clear_memory:
             await self._application_state_metrics_recorder.delete_state(session_id)
         if filter_pii:
             user_input = await sensitive_filter.obfuscate(user_input)
 
         # set the sent_at for the user input
-        user_input = AgentInput(message=user_input, sent_at=datetime.now(timezone.utc))
+        user_input = AgentInput(message=user_input, sent_at=datetime.now(timezone.utc), is_artificial=is_artificial)
 
         state = await self._application_state_metrics_recorder.get_state(session_id, city=city, province=province)
 
@@ -306,6 +308,7 @@ class ConversationService(IConversationService):
             filter_pii=False,
             city=city,
             province=province,
+            is_artificial=True,
         )
 
     def _should_save_preference_vector(self, state: ApplicationState) -> bool:

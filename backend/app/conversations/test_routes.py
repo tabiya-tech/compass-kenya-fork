@@ -43,7 +43,8 @@ def _create_test_client_with_mocks(auth) -> TestClientWithMocks:
     # mock the conversation service
     class MockConversationService(IConversationService):
         async def send(self, user_id: str, session_id: int, user_input: str, clear_memory: bool, filter_pii: bool,
-                       city: str | None = None, province: str | None = None, discuss_recommendations: bool = True):
+                       city: str | None = None, province: str | None = None, discuss_recommendations: bool = True,
+                       is_artificial: bool = False):
             raise NotImplementedError
 
         async def get_history_by_session_id(self, user_id: str, session_id: int):

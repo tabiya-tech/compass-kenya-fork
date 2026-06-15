@@ -16,7 +16,7 @@ import {
   parseConversationPhase,
 } from "./util";
 import { useSnackbar } from "src/theme/SnackbarProvider/SnackbarProvider";
-import { Box, Fab, Tooltip, useTheme } from "@mui/material";
+import { Box, Fab, useTheme } from "@mui/material";
 import AutorenewIcon from "@mui/icons-material/Autorenew";
 import debounce from "lodash.debounce";
 import ChatHeader from "./ChatHeader/ChatHeader";
@@ -1185,19 +1185,39 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
             >
               <ChatList messages={messages} />
               {currentPhase.phase === ConversationPhase.RECOMMENDATION && (
-                <Tooltip title={t("chat.chat.refreshRecommendations.tooltip")} placement="left">
-                  <span style={{ position: "sticky", bottom: theme.spacing(2), float: "right", display: "block" }}>
-                    <Fab
-                      size="small"
-                      color="primary"
-                      disabled={aiIsTyping || isRefreshingRecommendations}
-                      onClick={() => activeSessionId && handleRefreshRecommendations(activeSessionId)}
-                      aria-label={t("chat.chat.refreshRecommendations.tooltip")}
-                    >
-                      <AutorenewIcon />
-                    </Fab>
-                  </span>
-                </Tooltip>
+                <Box
+                  sx={{
+                    position: "sticky",
+                    bottom: theme.spacing(2),
+                    display: "flex",
+                    justifyContent: "flex-end",
+                    pointerEvents: "none",
+                  }}
+                >
+                  <Fab
+                    variant="extended"
+                    size="small"
+                    color="primary"
+                    disabled={aiIsTyping || isRefreshingRecommendations}
+                    onClick={() => activeSessionId && handleRefreshRecommendations(activeSessionId)}
+                    aria-label={t("chat.chat.refreshRecommendations.label")}
+                    sx={{
+                      pointerEvents: "auto",
+                      textTransform: "none",
+                      fontWeight: 500,
+                      fontSize: { xs: "0.75rem", md: "0.8125rem" },
+                      paddingX: { xs: 1.25, md: 1.5 },
+                      height: { xs: 32, md: 34 },
+                      minHeight: 0,
+                    }}
+                  >
+                    <AutorenewIcon
+                      fontSize="small"
+                      sx={{ marginRight: 0.5, fontSize: { xs: "1rem", md: "1.125rem" } }}
+                    />
+                    {t("chat.chat.refreshRecommendations.label")}
+                  </Fab>
+                </Box>
               )}
             </Box>
             {showBackdrop && <InactiveBackdrop isShown={showBackdrop} />}
