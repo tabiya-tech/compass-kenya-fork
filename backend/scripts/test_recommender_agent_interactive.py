@@ -17,10 +17,44 @@ import json
 from pathlib import Path
 from datetime import timedelta
 from typing import List, Optional
-from dotenv import load_dotenv
+# Load environment variables from a .env file. python-dotenv is the convenient path, but it's
+# only an optional dependency for this dev script - if it isn't installed (e.g. the poetry env
+# wasn't synced; run `poetry install` to fix), fall back to a minimal built-in parser so the
+# script still runs instead of crashing with "No module named 'dotenv'".
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ModuleNotFoundError:
+    import os
 
-# Load environment variables from .env file
-load_dotenv()
+    def load_dotenv(dotenv_path: str = ".env") -> bool:
+        """Minimal .env loader used when python-dotenv isn't installed.
+
+        Mirrors python-dotenv's default of NOT overriding variables already set in the
+        environment. Install the real package with `poetry install` for full behaviour.
+        """
+        path = Path(dotenv_path)
+        if not path.exists():
+            # Fall back to the backend root (this script lives in backend/scripts/).
+            path = Path(__file__).resolve().parent.parent / ".env"
+        if not path.exists():
+            return False
+        for raw in path.read_text().splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            if line.startswith("export "):
+                line = line[len("export "):]
+            key, _, value = line.partition("=")
+            os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+        return True
+
+    print(
+        "[warn] python-dotenv not installed; using a minimal built-in .env loader. "
+        "Run `poetry install` to install the real package.",
+        file=sys.stderr,
+    )
+    load_dotenv()
 
 # Rich imports
 from rich.console import Console
