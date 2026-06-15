@@ -152,7 +152,8 @@
         "experiencesFetchFailed": "Failed to retrieve experiences",
         "logoutSuccess": "Successfully logged out",
         "startConversationFailed": "Failed to start new conversation",
-        "startConversationSuccess": "New conversation started"
+        "startConversationSuccess": "New conversation started",
+        "refreshRecommendationsFailed": "Failed to refresh recommendations"
       },
       "backdrop": {
         "loggingOut": "Logging you out, wait a moment..."
@@ -161,6 +162,9 @@
         "title": "Start New Conversation?",
         "content": "Once you start a new conversation, all messages from the current conversation will be lost forever.",
         "confirmation": "Are you sure you want to start a new conversation?"
+      },
+      "refreshRecommendations": {
+        "tooltip": "Get new recommendations"
       },
       "refreshConfirmationDialog": {
         "title": "Are you sure you would like to refresh?",

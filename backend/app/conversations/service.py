@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from app.agent.agent_director.abstract_agent_director import ConversationPhase, CounselingSubPhase
 from app.agent.agent_director.llm_agent_director import LLMAgentDirector
+from app.agent.recommender_advisor_agent.types import ConversationPhase as RecommenderConversationPhase
 from app.conversations.phase_state_machine import JourneyPhase, PhaseDataStatus, determine_start_phase
 from app.agent.agent_types import AgentInput
 from app.agent.explore_experiences_agent_director import DiveInPhase
@@ -78,6 +79,21 @@ class IConversationService(ABC):
         :param user_id: str - the id of the requesting user
         :param session_id: int - id for the conversation session
         :return: ConversationResponse - an object containing a list of messages and some metadata about the current conversation
+        :raises Exception: if any error occurs
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def refresh_recommendations(self, user_id: str, session_id: int,
+                                      city: str | None = None, province: str | None = None) -> ConversationResponse:
+        """
+        Clear cached recommendations and re-run matching, then return the agent's response
+        with the fresh results. Preserves all existing history and state.
+        :param user_id: str - the id of the user
+        :param session_id: int - id for the conversation session
+        :param city: str | None - city of the user
+        :param province: str | None - province/state of the user
+        :return: ConversationResponse with the agent's fresh recommendation message
         :raises Exception: if any error occurs
         """
         raise NotImplementedError()
@@ -271,6 +287,25 @@ class ConversationService(IConversationService):
             conversation_conducted_at=state.agent_director_state.conversation_conducted_at,
             experiences_explored=experiences_explored,
             current_phase=get_current_conversation_phase_response(state, self._logger)
+        )
+
+    async def refresh_recommendations(self, user_id: str, session_id: int,
+                                      city: str | None = None, province: str | None = None) -> ConversationResponse:
+        state = await self._application_state_metrics_recorder.get_state(session_id, city=city, province=province)
+        # Clear cached recommendations so the intro handler re-runs matching
+        state.recommender_advisor_agent_state.recommendations = None
+        state.recommender_advisor_agent_state.conversation_phase = RecommenderConversationPhase.INTRO
+        await self._application_state_metrics_recorder.save_state(state, user_id)
+        # Send an empty message — the recommender INTRO handler fires, fetches fresh
+        # results from the matching service, and returns the response.
+        return await self.send(
+            user_id=user_id,
+            session_id=session_id,
+            user_input="",
+            clear_memory=False,
+            filter_pii=False,
+            city=city,
+            province=province,
         )
 
     def _should_save_preference_vector(self, state: ApplicationState) -> bool:

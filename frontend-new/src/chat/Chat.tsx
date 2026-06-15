@@ -16,7 +16,9 @@ import {
   parseConversationPhase,
 } from "./util";
 import { useSnackbar } from "src/theme/SnackbarProvider/SnackbarProvider";
-import { Box, useTheme } from "@mui/material";
+import { Box, Fab, Tooltip, useTheme } from "@mui/material";
+import AutorenewIcon from "@mui/icons-material/Autorenew";
+import debounce from "lodash.debounce";
 import ChatHeader from "./ChatHeader/ChatHeader";
 import ChatMessageField from "./ChatMessageField/ChatMessageField";
 import { useNavigate } from "react-router-dom";
@@ -126,6 +128,7 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
   const [lastActivityTime, setLastActivityTime] = React.useState<number>(Date.now());
   const [showRefreshConfirmDialog, setShowRefreshConfirmDialog] = React.useState<boolean>(false);
   const [newConversationDialog, setNewConversationDialog] = React.useState<boolean>(false);
+  const [isRefreshingRecommendations, setIsRefreshingRecommendations] = React.useState<boolean>(false);
   const [exploredExperiencesNotification, setExploredExperiencesNotification] = useState<boolean>(false);
   const newSessionEnabled = getNewSessionEnabled();
   const allowRefreshRef = useRef<boolean>(false);
@@ -890,6 +893,38 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
     [addMessageToChat, setAiIsTyping, showSkillsRanking, sendMessage, newSessionEnabled]
   );
 
+  const handleRefreshRecommendations = useMemo(
+    () =>
+      debounce(
+        async (sessionId: number) => {
+          setIsRefreshingRecommendations(true);
+          setAiIsTyping(true);
+          try {
+            const response = await ChatService.getInstance().refreshRecommendations(sessionId);
+            response.messages.forEach((messageItem) => {
+              addMessageToChat(
+                generateCompassMessage(
+                  messageItem.message_id,
+                  messageItem.message,
+                  messageItem.sent_at,
+                  messageItem.reaction
+                )
+              );
+            });
+            setCurrentPhase((_prev) => parseConversationPhase(response.current_phase, _prev));
+          } catch (e) {
+            enqueueSnackbar(t("chat.chat.notifications.refreshRecommendationsFailed"), { variant: "error" });
+          } finally {
+            setIsRefreshingRecommendations(false);
+            setAiIsTyping(false);
+          }
+        },
+        2000,
+        { leading: true, trailing: false }
+      ),
+    [addMessageToChat, enqueueSnackbar, setAiIsTyping, t]
+  );
+
   const handleConfirmNewConversation = useCallback(async () => {
     setNewConversationDialog(false);
     setExploredExperiencesNotification(false);
@@ -1145,8 +1180,25 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
                 total={currentPhase.total}
               />
             </Box>
-            <Box sx={{ flex: 1, overflowY: "auto", paddingX: theme.spacing(theme.tabiyaSpacing.lg) }}>
+            <Box
+              sx={{ flex: 1, overflowY: "auto", paddingX: theme.spacing(theme.tabiyaSpacing.lg), position: "relative" }}
+            >
               <ChatList messages={messages} />
+              {currentPhase.phase === ConversationPhase.RECOMMENDATION && (
+                <Tooltip title={t("chat.chat.refreshRecommendations.tooltip")} placement="left">
+                  <span style={{ position: "sticky", bottom: theme.spacing(2), float: "right", display: "block" }}>
+                    <Fab
+                      size="small"
+                      color="primary"
+                      disabled={aiIsTyping || isRefreshingRecommendations}
+                      onClick={() => activeSessionId && handleRefreshRecommendations(activeSessionId)}
+                      aria-label={t("chat.chat.refreshRecommendations.tooltip")}
+                    >
+                      <AutorenewIcon />
+                    </Fab>
+                  </span>
+                </Tooltip>
+              )}
             </Box>
             {showBackdrop && <InactiveBackdrop isShown={showBackdrop} />}
             <Box sx={{ flexShrink: 0, padding: theme.tabiyaSpacing.lg, paddingTop: theme.tabiyaSpacing.xs }}>

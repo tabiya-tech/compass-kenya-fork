@@ -355,9 +355,9 @@ class RecommenderAdvisorAgent(Agent):
             self.logger.exception("Error in recommender advisor agent: %s", str(e))
             return self._create_error_response(agent_start_time)
 
-        # Only trust finished=True from the COMPLETE phase — all other phases must not terminate
-        if response.finished and self._state.conversation_phase != ConversationPhase.COMPLETE:
-            response.finished = False
+        # The recommender never signals finished=True to the director — the conversation
+        # should never end here. Users should always be able to come back and keep talking.
+        response.finished = False
 
         # Create output
         return AgentOutputWithReasoning(

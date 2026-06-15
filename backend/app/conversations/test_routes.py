@@ -49,6 +49,10 @@ def _create_test_client_with_mocks(auth) -> TestClientWithMocks:
         async def get_history_by_session_id(self, user_id: str, session_id: int):
             raise NotImplementedError
 
+        async def refresh_recommendations(self, user_id: str, session_id: int,
+                                          city: str | None = None, province: str | None = None):
+            raise NotImplementedError
+
     _instance_conversation_service = MockConversationService()
 
     def _mocked_conversation_service() -> IConversationService:
@@ -534,3 +538,4 @@ class TestConversationsRoutes:
 
         # AND the user preferences repository was called with the correct user_id
         get_user_preferences_spy.assert_called_once_with(mocked_user.user_id)
+
