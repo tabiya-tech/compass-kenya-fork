@@ -152,7 +152,8 @@
         "experiencesFetchFailed": "No se pudieron obtener las experiencias",
         "logoutSuccess": "Sesión cerrada correctamente.",
         "startConversationFailed": "Error al iniciar nueva conversación",
-        "startConversationSuccess": "Nueva conversación iniciada"
+        "startConversationSuccess": "Nueva conversación iniciada",
+        "refreshRecommendationsFailed": "Error al actualizar las recomendaciones"
       },
       "backdrop": {
         "loggingOut": "Cerrando tu sesión, espera un momento..."
@@ -161,6 +162,9 @@
         "title": "¿Iniciar nueva conversación?",
         "content": "Una vez que inicies una nueva conversación, todos los mensajes de la conversación actual se perderán para siempre.",
         "confirmation": "¿Estás seguro de que deseas iniciar una nueva conversación?"
+      },
+      "refreshRecommendations": {
+        "tooltip": "Obtener nuevas recomendaciones"
       },
       "refreshConfirmationDialog": {
         "title": "¿Estás seguro de que quieres actualizar?",

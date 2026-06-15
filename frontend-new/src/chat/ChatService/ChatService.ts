@@ -67,6 +67,36 @@ export default class ChatService {
     return messageResponse;
   }
 
+  public async refreshRecommendations(sessionId: number): Promise<ConversationResponse> {
+    const serviceName = "ChatService";
+    const serviceFunction = "refreshRecommendations";
+    const method = "POST";
+    const url = `${this.chatEndpointUrl}/${sessionId}/refresh-recommendations`;
+    const errorFactory = getRestAPIErrorFactory(serviceName, serviceFunction, method, url);
+
+    const response = await customFetch(url, {
+      method: method,
+      headers: { "Content-Type": "application/json" },
+      expectedStatusCode: StatusCodes.CREATED,
+      serviceName,
+      serviceFunction,
+      failureMessage: `Failed to refresh recommendations for session id ${sessionId}`,
+      expectedContentType: "application/json",
+    });
+
+    const responseBody = await response.text();
+    try {
+      return JSON.parse(responseBody);
+    } catch (e: any) {
+      throw errorFactory(
+        response.status,
+        ErrorConstants.ErrorCodes.INVALID_RESPONSE_BODY,
+        "Response did not contain valid JSON",
+        { responseBody, error: e }
+      );
+    }
+  }
+
   public async getChatHistory(sessionId: number): Promise<ConversationResponse> {
     const serviceName = "ChatService";
     const serviceFunction = "getChatHistory";

@@ -101,8 +101,9 @@ def mock_context():
 
 class TestFinishedGuard:
     """
-    agent.execute() must strip finished=True from any handler response unless
-    state.conversation_phase is COMPLETE when the handler returns.
+    agent.execute() must strip finished=True from any handler response.
+    The recommender never signals termination — the conversation continues indefinitely
+    so users can always come back, ask follow-up questions, or refresh recommendations.
     """
 
     @pytest.fixture
@@ -151,7 +152,7 @@ class TestFinishedGuard:
         assert output.finished is False
 
     @pytest.mark.asyncio
-    async def test_allows_finished_true_from_complete_phase(self, agent, mock_context):
+    async def test_blocks_finished_true_from_complete_phase(self, agent, mock_context):
         # GIVEN agent is in COMPLETE (wrapup handler already ran, set phase to COMPLETE)
         state = _make_state(phase=ConversationPhase.COMPLETE)
         agent.set_state(state)
@@ -165,8 +166,8 @@ class TestFinishedGuard:
             mock_context,
         )
 
-        # THEN finished propagates — legitimate termination allowed
-        assert output.finished is True
+        # THEN finished is blocked even from COMPLETE — the conversation never truly ends
+        assert output.finished is False
 
 
 # ---------------------------------------------------------------------------

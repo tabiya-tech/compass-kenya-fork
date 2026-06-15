@@ -193,7 +193,8 @@
         "experiencesFetchFailed": "Imeshindikana kupata uzoefu",
         "logoutSuccess": "Umetoka kwa mafanikio",
         "startConversationFailed": "Imeshindikana kuanza mazungumzo mapya",
-        "startConversationSuccess": "Mazungumzo mapya yameanza"
+        "startConversationSuccess": "Mazungumzo mapya yameanza",
+        "refreshRecommendationsFailed": "Imeshindikana kuonyesha mapendekezo mapya"
       },
       "backdrop": {
         "loggingOut": "Tunakutoa nje, subiri kidogo..."
@@ -202,6 +203,9 @@
         "title": "Anza Mazungumzo Mapya?",
         "content": "Unapoanza mazungumzo mapya, ujumbe wote wa mazungumzo ya sasa utapotea milele.",
         "confirmation": "Una uhakika unataka kuanza mazungumzo mapya?"
+      },
+      "refreshRecommendations": {
+        "tooltip": "Pata mapendekezo mapya"
       },
       "refreshConfirmationDialog": {
         "title": "Una uhakika ungependa kupaisha upya?",

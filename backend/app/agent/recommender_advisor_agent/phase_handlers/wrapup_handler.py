@@ -82,12 +82,18 @@ class WrapupPhaseHandler(BasePhaseHandler):
         context: ConversationContext
     ) -> tuple[ConversationResponse, list[LLMStats]]:
         """
-        Handle session completion (final message).
+        Handle messages after the session is complete.
+        The conversation never truly ends — users can always come back to ask follow-up
+        questions, explore new recommendations, or revisit earlier topics.
         """
         return ConversationResponse(
-            reasoning="Session complete",
-            message="Great talking with you! Good luck with your next steps. Remember - persistence beats perfection. You've got this! 🚀",
-            finished=True
+            reasoning="Session complete but user is continuing the conversation",
+            message=(
+                "We've wrapped up your career exploration session, but I'm still here! "
+                "Feel free to ask follow-up questions, explore other recommendations, "
+                "or revisit anything we discussed. What's on your mind?"
+            ),
+            finished=False
         ), []
     
     def _build_session_summary(self, state: RecommenderAdvisorAgentState) -> str:

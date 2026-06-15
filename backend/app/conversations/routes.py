@@ -172,6 +172,36 @@ def add_conversation_routes(app: FastAPI, authentication: Authentication):
             logger.exception(e)
             raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Oops! something went wrong")
 
+    @conversation_router.post(path="/refresh-recommendations", status_code=HTTPStatus.CREATED,
+                              response_model=ConversationResponse,
+                              responses={HTTPStatus.FORBIDDEN: {"model": HTTPErrorResponse},
+                                         HTTPStatus.INTERNAL_SERVER_ERROR: {"model": HTTPErrorResponse}},
+                              description="Re-run matching and return fresh recommendations without affecting history.")
+    async def _refresh_recommendations(session_id: Annotated[
+        int, Path(description="The session id.", examples=[123])],
+                                       user_info: UserInfo = Depends(authentication.get_user_info()),
+                                       user_preferences_repository=Depends(get_user_preferences_repository),
+                                       service: IConversationService = Depends(get_conversation_service)):
+        user_id = user_info.user_id
+        session_id_ctx_var.set(session_id)
+        user_id_ctx_var.set(user_id)
+        try:
+            current_user_preferences = await user_preferences_repository.get_user_preference_by_user_id(user_id)
+            if current_user_preferences is None or session_id not in current_user_preferences.sessions:
+                raise UnauthorizedSessionAccessError(user_id, session_id)
+            return await service.refresh_recommendations(
+                user_id,
+                session_id,
+                city=current_user_preferences.city,
+                province=current_user_preferences.province,
+            )
+        except UnauthorizedSessionAccessError as e:
+            logger.warning(str(e))
+            raise HTTPException(status_code=HTTPStatus.FORBIDDEN, detail=NO_PERMISSION_FOR_SESSION)
+        except Exception as e:  # pylint: disable=broad-except
+            logger.exception("Error refreshing recommendations for session %s: %s", session_id, e)
+            raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail=UNEXPECTED_FAILURE_MESSAGE)
+
     ############################################
     # Add the reaction routes
     ############################################

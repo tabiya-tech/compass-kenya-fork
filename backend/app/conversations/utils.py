@@ -6,6 +6,7 @@ from app.agent.explore_experiences_agent_director import DiveInPhase
 from app.agent.agent_director.abstract_agent_director import ConversationPhase
 from app.conversations.phase_state_machine import JourneyPhase
 from app.agent.explore_experiences_agent_director import ConversationPhase as CounselingConversationPhase
+from app.agent.agent_director.abstract_agent_director import CounselingSubPhase
 from app.application_state import ApplicationState
 from app.conversation_memory.conversation_memory_types import ConversationHistory, ConversationContext
 from app.conversations.types import ConversationMessage, ConversationMessageSender, MessageReaction, \
@@ -167,7 +168,15 @@ def get_current_conversation_phase_response(state: ApplicationState, logger: Log
         #    2. Counseling phase.
         ##############################
         counseling_phase = state.explore_experiences_director_state.conversation_phase
-        if counseling_phase == CounselingConversationPhase.COLLECT_EXPERIENCES:
+        if state.agent_director_state.counseling_sub_phase == CounselingSubPhase.RECOMMENDER_ADVISOR:
+            ##############################
+            #    2.4 Recommender/Advisor phase.
+            ##############################
+            current_phase = CurrentConversationPhaseResponse.RECOMMENDATION
+            current_phase_percentage = RECOMMENDATION_PERCENTAGE
+            current = None
+            total = None
+        elif counseling_phase == CounselingConversationPhase.COLLECT_EXPERIENCES:
             ##############################
             #    2.1 Collecting/Discovering experiences phase.
             ##############################
