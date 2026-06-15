@@ -301,22 +301,29 @@ IMPORTANT:
             )
         ]
 
-        prompt = f"""
-The user has been exploring career recommendations and we're now in action planning.
+        # Prepend the activation toolkit + plan-making guidance (BASE + ACTION_PLANNING_PROMPT)
+        # so the action phase actually deploys the toolkit, grounded in the user's own data.
+        from app.agent.recommender_advisor_agent.prompts import (
+            ACTION_PLANNING_PROMPT,
+            build_context_block,
+        )
 
-Current focus: {focus_title}
+        skills_list = self._extract_skills_list(state)
+        pref_vec_dict = state.preference_vector.model_dump() if state.preference_vector else {}
+        conv_history = ConversationHistoryFormatter.format_to_string(context)
+        recs_summary = self._build_recommendations_summary(state)
+        context_block = build_context_block(
+            skills=skills_list,
+            preference_vector=pref_vec_dict,
+            recommendations_summary=recs_summary,
+            conversation_history=conv_history,
+            country_of_user=state.country_of_user,
+        )
 
-Generate a response that:
-1. Acknowledges their interest
-2. Offers specific next steps they could take:
-   - Apply to a job posting
-   - Enroll in relevant training
-   - Research the field more
-   - Connect with people in the field
-3. Asks for a commitment with a timeline ("When will you...?" or "Would you like to do X this week?")
-4. Keep it supportive and action-oriented, but not pushy
+        prompt = context_block + ACTION_PLANNING_PROMPT + f"""
 
-If they haven't shown clear interest yet, first try to understand what's holding them back.
+## CURRENT FOCUS
+{focus_title}
 
 IMPORTANT - Stay focused on core mission:
 - Your role is to provide career guidance and recommend next steps

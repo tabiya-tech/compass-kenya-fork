@@ -101,25 +101,22 @@ class SkillsPivotPhaseHandler(BasePhaseHandler):
             # No training recommendations - explore why they rejected everything
             return await self._handle_no_trainings(user_input, state, context)
 
-        # Check if this is FOLLOW-UP to educational guidance (user responding to binary choice)
-        # If pending occupation exists AND guidance was already shown, this is a follow-up
-        # Handle this FIRST before intent classification (binary choice is very specific context)
-        if state.pending_out_of_list_occupation and state.educational_guidance_shown:
-            return await self._handle_educational_guidance_followup(
-                user_input=user_input,
-                state=state,
-                context=context,
-                trainings=trainings
+        # Change 2d: the agent never builds training paths for off-list occupations. The old
+        # off-list-in-skills-pivot branches (educational-guidance gap analysis and its
+        # follow-up) are removed. If a stale `pending_out_of_list_occupation` marker leaks in
+        # here (e.g. the user mentioned an off-list occupation earlier, then later rejected
+        # enough occupations to land in the legitimate skills pivot), clear it and proceed with
+        # the normal training conversation rather than planning toward the off-list occupation.
+        # _handle_out_of_list_occupation_gap_analysis / _handle_educational_guidance_followup
+        # are now unreachable.
+        if state.pending_out_of_list_occupation:
+            self.logger.info(
+                f"Clearing stale off-list marker '{state.pending_out_of_list_occupation}' on "
+                f"skills-pivot entry (no off-list training planning, per Change 2d)"
             )
-
-        # Check if this is FIRST TIME for out-of-list occupation (user just persisted)
-        if state.pending_out_of_list_occupation and not state.educational_guidance_shown:
-            return await self._handle_out_of_list_occupation_gap_analysis(
-                user_input=user_input,
-                state=state,
-                context=context,
-                trainings=trainings
-            )
+            state.pending_out_of_list_occupation = None
+            state.pending_out_of_list_occupation_entity = None
+            state.educational_guidance_shown = False
 
         # If user has responded (not initial presentation), detect their intent
         # This enables phase transitions and seamless conversation flow
@@ -458,7 +455,10 @@ You previously provided educational career path guidance for "{requested_occupat
         all_llm_stats: list[LLMStats] = []
 
         # Import here to avoid circular dependency
-        from app.agent.recommender_advisor_agent.prompts import build_context_block
+        from app.agent.recommender_advisor_agent.prompts import (
+            build_context_block,
+            SKILLS_UPGRADE_PIVOT_PROMPT,
+        )
         from app.conversation_memory.conversation_formatter import ConversationHistoryFormatter
         from app.agent.simple_llm_agent.prompt_response_template import get_json_response_instructions
 
@@ -482,7 +482,9 @@ You previously provided educational career path guidance for "{requested_occupat
             for trn in trainings
         ])
 
-        prompt = context_block + f"""
+        # Prepend BASE + skills-pivot guidance so the activation toolkit (and Change 9's
+        # "treat a chosen training like an accepted occupation") is in force here.
+        prompt = context_block + SKILLS_UPGRADE_PIVOT_PROMPT + f"""
 ## TRAINING DISCUSSION & RECOMMENDATIONS
 
 The user is in the SKILLS_UPGRADE_PIVOT phase. They may have rejected some occupations or are exploring alternative paths.

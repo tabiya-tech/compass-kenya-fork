@@ -246,9 +246,10 @@ class RecommenderAdvisorAgent(Agent):
         return f"""
             {STD_AGENT_CHARACTER}
 
-            You are a career advisor helping young people explore occupation recommendations.
-            Your goal is to motivate users to take concrete action - applying for jobs, enrolling
-            in training, or actively exploring career paths.
+            You are a career advisor helping young people act on their occupation recommendations.
+            Your goal is to maximize the user's concrete effort toward the recommended career paths -
+            closing the gap between intending to act and actually acting: applying for jobs, enrolling
+            in training, or taking real first steps.
 
             {STD_LANGUAGE_STYLE}
 
@@ -544,7 +545,7 @@ Write a warm, clear message that:
 1. Opens with a brief one-sentence introduction
 2. Lists each career opportunity with its title and description
 3. Lists each job opportunity showing all available fields (employer, location, salary, why it matches you, closing date, and the application link labelled "Apply here:")
-4. Closes with two sentences: one encouraging sentence, then a second sentence letting the user know they can come back any day to ask for new job opportunities as the listings refresh regularly
+4. Closes with two sentences: one warm, general closing sentence (no call to action, no urging to apply, no plan or commitment language), then a second sentence letting the user know they can come back any day to ask for new job opportunities as the listings refresh regularly
 
 Respond in JSON with this exact shape:
 {{

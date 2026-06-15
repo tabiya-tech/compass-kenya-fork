@@ -135,10 +135,11 @@ class BasePhaseHandler(ABC):
         """
         Handle case where user mentioned an occupation not in our recommendations.
 
-        Uses LLM to generate a contextual, conversational response that:
-        1. Acknowledges we found the occupation
-        2. Explains why it wasn't in recommendations (if possible)
-        3. Offers choices: explore it anyway, understand alternatives, or see similar options
+        Uses LLM to generate a contextual, conversational response that (per Change 2d):
+        1. Acknowledges their interest genuinely
+        2. Gives an honest, grounded assessment of the gap
+        3. Is transparent about scope (no plans/training for off-list) and invites them back
+           to the recommendations - it does NOT offer to "explore it anyway"
 
         This is a shared method used by all phase handlers.
 
@@ -157,7 +158,10 @@ class BasePhaseHandler(ABC):
         self.logger.info(f"Generating LLM response for out-of-list occupation: {found_occupation.preferredLabel}")
 
         # Import here to avoid circular dependency
-        from app.agent.recommender_advisor_agent.prompts import build_context_block
+        from app.agent.recommender_advisor_agent.prompts import (
+            build_context_block,
+            BASE_RECOMMENDER_PROMPT,
+        )
 
         # Build context for LLM
         skills_list = self._extract_skills_list(state)
@@ -172,8 +176,10 @@ class BasePhaseHandler(ABC):
             country_of_user=state.country_of_user
         )
 
-        # Build prompt for handling out-of-list occupation
-        prompt = context_block + f"""
+        # Prepend BASE so the "HANDLING USER-SUGGESTED OCCUPATIONS & JOB OPENINGS" protocol
+        # (Change 2d) governs this response: honest assessment + transparent scope, NOT an
+        # offer to build plans for the off-list occupation.
+        prompt = context_block + BASE_RECOMMENDER_PROMPT + f"""
 ## OUT-OF-LIST OCCUPATION REQUEST
 
 **USER REQUEST**: The user mentioned "{found_occupation.preferredLabel}" which is NOT in our top recommendations.
@@ -184,27 +190,20 @@ class BasePhaseHandler(ABC):
 - Description: {found_occupation.description or 'No description available'}
 
 **YOUR TASK**:
-The user wants to explore "{found_occupation.preferredLabel}", but it's not among our top recommendations based on their skills and preferences.
+Follow the "HANDLING USER-SUGGESTED OCCUPATIONS & JOB OPENINGS" protocol above for
+"{found_occupation.preferredLabel}":
+1. **Acknowledge their interest genuinely** - it's real information about what they value.
+2. **Give an honest, grounded assessment** of the gap: compare their skills/preferences (above)
+   to what this occupation needs; state market reality if you know it, say so plainly if you
+   don't. Don't exaggerate the negatives, don't soften real ones.
+3. **Be transparent about your scope**: you help them act on the recommended paths; you do NOT
+   build action plans, training paths, or research steps for off-list occupations. If they want
+   to pursue it on their own, that's their call, said respectfully.
+4. **Invite them back** to the recommendations without pressure - point to any recommended path
+   that genuinely shares what draws them to "{found_occupation.preferredLabel}".
 
-Generate a response that:
-1. **Acknowledges** you found this occupation in our database
-2. **Briefly explains** why it likely wasn't in the top recommendations:
-   - Check if their skills seem relevant (you have their skills list above)
-   - Consider if it matches their preferences
-   - You can infer general market demand if you have knowledge of this occupation
-   - Be honest but not discouraging
-3. **Offers a choice**:
-   - "Would you like to explore {found_occupation.preferredLabel} anyway?" (respect their autonomy)
-   - "Would you like to understand why I recommended these alternatives instead?"
-   - "There might be similar occupations in my recommendations - want to see if any overlap?"
-
-**TONE GUIDELINES**:
-- Be conversational and natural, not robotic
-- Don't make them feel bad for asking about this occupation
-- Frame it as expanding their options, not shutting them down
-- Acknowledge their interest: "I can see why {found_occupation.preferredLabel} appeals to you"
-- Be truthful but supportive
-- Respect their autonomy - if they want to explore it, that's valid
+Do NOT offer to "explore {found_occupation.preferredLabel} anyway", and do NOT promise to plan
+or build steps toward it.
 
 **CRITICAL**:
 - Your response must be a JSON object matching ConversationResponse schema
@@ -234,7 +233,7 @@ Generate a response that:
             # Fallback to basic acknowledgment
             return ConversationResponse(
                 reasoning=f"User mentioned {found_occupation.preferredLabel} (not in recommendations), LLM failed - using fallback",
-                message=f"I found {found_occupation.preferredLabel} in our database. While it wasn't among my top recommendations based on your profile, I'm happy to explore it with you if you're interested. Would you like to learn more about it, or hear why I suggested the alternatives instead?",
+                message=f"I can see why {found_occupation.preferredLabel} interests you. It wasn't among my recommendations because those are built on your current skills and the local job market - that's where I can genuinely help you take the next step. Would you like to look at which of the recommended paths comes closest to what draws you to it?",
                 finished=False
             ), all_llm_stats
 
@@ -248,9 +247,10 @@ Generate a response that:
         """
         Handle when user requests an occupation outside our recommendations.
 
-        Flow:
-        1. First request: Explain why it's not recommended, offer controlled binary choice
-        2. If user persists: Transition to SKILLS_UPGRADE_PIVOT for gap analysis
+        Flow (per Change 2d - the agent stays on-list and never plans toward off-list goals):
+        1. First request: honest assessment + transparent scope, invite back to recommendations
+        2. If user persists: restate scope once and offer a choice (keep exploring the
+           recommended paths, or wrap up) - NO pivot to off-list training/gap analysis
 
         No vector search needed - we use LLM to explain why based on current recommendations.
 
@@ -278,28 +278,30 @@ Generate a response that:
             is_persistence = False
 
         if is_persistence:
-            # User is persisting → Transition to SKILLS_UPGRADE_PIVOT for gap analysis
+            # Change 2d: the agent stays ON-LIST. On persistence it does NOT build plans or
+            # training for the off-list occupation - it restates its scope once and offers a
+            # clear choice (keep exploring the recommended paths, or wrap up). The previous
+            # behaviour (pivot to SKILLS_UPGRADE_PIVOT gap analysis for the off-list occupation)
+            # is intentionally removed; _handle_out_of_list_occupation_gap_analysis in
+            # skills_pivot_handler is now unreachable from this path.
+            occupation_name = state.pending_out_of_list_occupation
             self.logger.info(
-                f"User persisting on out-of-list occupation '{state.pending_out_of_list_occupation}' "
-                f"→ Transitioning to SKILLS_UPGRADE_PIVOT for gap analysis"
+                f"User persisting on out-of-list occupation '{occupation_name}' "
+                f"→ restating scope and offering choice (no off-list planning, per Change 2d)"
             )
 
-            from app.agent.recommender_advisor_agent.types import ConversationPhase
+            # Clear the pending marker so we don't loop on the same occupation.
+            state.pending_out_of_list_occupation = None
+            state.pending_out_of_list_occupation_entity = None
 
-            state.conversation_phase = ConversationPhase.SKILLS_UPGRADE_PIVOT
-            state.pivoted_to_training = True
-
-            # Immediately delegate to skills_pivot_handler for seamless experience
-            if self._skills_pivot_handler:
-                self.logger.info("Immediately invoking skills_pivot_handler for seamless experience")
-                return await self._skills_pivot_handler.handle(user_input, state, context)
-
-            # Fallback: just return transition message (requires another user turn)
-            occupation_name = state.pending_out_of_list_occupation
             return ConversationResponse(
-                reasoning=f"User persisted on '{occupation_name}', pivoting to skills gap analysis (no handler available)",
-                message=f"I understand {occupation_name} is important to you. "
-                        f"Let me help you understand what it would take to pursue this path and show you relevant training options.",
+                reasoning=f"User persisted on off-list '{occupation_name}'; restating scope and "
+                          f"offering choice (continue with recommendations or wrap up) per Change 2d",
+                message=f"I hear you - {occupation_name} clearly matters to you, and pursuing it "
+                        f"on your own is completely your call. What I can genuinely help with is "
+                        f"acting on the paths built from your skills and the local job market, so "
+                        f"I won't build a plan for {occupation_name} here. Would you like to keep "
+                        f"exploring the recommended paths together, or wrap up for now?",
                 finished=False
             ), all_llm_stats
 
@@ -419,8 +421,9 @@ OR
         """
         Use LLM to explain why requested occupation isn't in recommendations.
 
-        Compares user's skills/preferences with what the occupation likely requires,
-        then offers controlled binary choice.
+        Compares user's skills/preferences with what the occupation likely requires, then
+        (per Change 2d) gives an honest assessment, is transparent about scope, and invites
+        the user back to the recommendations - no "binary choice to explore it anyway".
 
         Args:
             requested_occupation_name: Occupation user mentioned (e.g., "DJ")
@@ -434,7 +437,10 @@ OR
         all_llm_stats: list[LLMStats] = []
 
         # Import here to avoid circular dependency
-        from app.agent.recommender_advisor_agent.prompts import build_context_block
+        from app.agent.recommender_advisor_agent.prompts import (
+            build_context_block,
+            BASE_RECOMMENDER_PROMPT,
+        )
 
         # Build context for LLM
         skills_list = self._extract_skills_list(state)
@@ -450,48 +456,38 @@ OR
             country_of_user=state.country_of_user
         )
 
-        # Build prompt for explaining why occupation is not recommended
-        prompt = context_block + f"""
+        # Prepend BASE so the off-list protocol (Change 2d) governs this response: honest
+        # assessment + transparent scope, NOT a "binary choice to explore it anyway".
+        prompt = context_block + BASE_RECOMMENDER_PROMPT + f"""
 ## OUT-OF-RECOMMENDATIONS REQUEST
 
 The user asked about **"{requested_occupation_name}"** which is NOT in our top recommendations.
 
 **YOUR TASK**:
-Generate a response that:
+Follow the "HANDLING USER-SUGGESTED OCCUPATIONS & JOB OPENINGS" protocol above for
+"{requested_occupation_name}":
 
-1. **Acknowledges their interest** (1 sentence)
-   - "I understand {requested_occupation_name} interests you."
+1. **Acknowledge their interest genuinely** - it's real information about what they value.
 
-2. **Briefly explains why it's not in the top recommendations** (2-3 sentences max)
-   - Compare their current skills to what {requested_occupation_name} likely requires
-   - Consider if it matches their stated preferences (stable income, etc.)
-   - You can use your knowledge of {requested_occupation_name} to infer skill/market gaps
-   - Be honest but respectful - don't discourage them
+2. **Give an honest, grounded assessment** of why it's not a recommended path: compare their
+   skills/preferences (above) to what "{requested_occupation_name}" needs; state market reality
+   if you know it, say so plainly if you don't. Honest but not discouraging.
 
-3. **Offer controlled binary choice** (1 sentence) - CRITICAL: Must be a clear either/or choice
-   - "Would you still like to explore {requested_occupation_name}, or shall we dive deeper into these recommendations?"
-   - OR "Would you like to see what it would take to pursue {requested_occupation_name}, or explore why I recommended these alternatives?"
+3. **Be transparent about your scope**: you help them act on the recommended paths; you do NOT
+   build action plans, training paths, or research steps for off-list occupations. If they want
+   to pursue it independently, that's their call - say so respectfully.
 
-**TONE**:
-- Conversational and supportive, not robotic
-- Respectful of their autonomy
-- Honest about gaps but not discouraging
-- Total length: 4-6 sentences maximum
+4. **Invite them back** to the recommendations without pressure - point to a recommended path
+   that genuinely shares what draws them to "{requested_occupation_name}", if one does.
 
-**CRITICAL REQUIREMENTS**:
-- End with a BINARY CHOICE question (not open-ended)
-- Do NOT ask "What appeals to you about DJ?" (too open-ended, allows derailing)
-- Do NOT offer 3+ options (keeps it simple)
+Do NOT offer a "binary choice to explore {requested_occupation_name} anyway", and do NOT
+promise to plan, train for, or build steps toward it.
+
+**REQUIREMENTS**:
+- Conversational and supportive; 4-6 sentences maximum
 - Response must be JSON matching ConversationResponse schema
 - Set `finished` to `false`
 - NEVER provide contact information, specific URLs, or addresses - focus only on career guidance
-
-**REQUIRED OUTPUT FORMAT** (JSON):
-{{
-    "reasoning": "User requested DJ which requires different skills than their electrical background and has variable income",
-    "message": "I understand DJ interests you. However, it requires music production and sound engineering skills, which are quite different from your current electrical and manual labor experience. Also, DJ work typically has irregular income, which may not align with your preference for stability. Would you still like to explore what it takes to become a DJ, or shall we dive deeper into these recommendations?",
-    "finished": false
-}}
 
 """ + get_json_response_instructions()
 
@@ -516,9 +512,9 @@ Generate a response that:
             # Fallback to simple template
             return ConversationResponse(
                 reasoning=f"User requested '{requested_occupation_name}' outside recommendations, LLM failed - using fallback",
-                message=f"I understand you're interested in {requested_occupation_name}. "
-                        f"It wasn't in my top recommendations because your current skills and preferences align better with the options I showed you. "
-                        f"Would you still like to explore {requested_occupation_name}, or shall we dive deeper into these recommendations?",
+                message=f"I can see why {requested_occupation_name} interests you. "
+                        f"It wasn't in my recommendations because those are built on your current skills and the local job market - that's where I can genuinely help you take a next step. "
+                        f"Want to look at which of the recommended paths comes closest to what draws you to it?",
                 finished=False
             ), all_llm_stats
 
