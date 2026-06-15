@@ -86,9 +86,11 @@ class IntroPhaseHandler(BasePhaseHandler):
                 f"{len(state.recommendations.skillstraining_recommendations)} trainings"
             )
 
-        # Build intro message — ask up front whether they want career paths, actual job
-        # openings, or both, so everyone can reach jobs quickly without having to ask.
-        intro_message = """Great! Based on what you've told me, I've got some options for you.
+        # Build intro message — set the activation-arm destination (one concrete next step)
+        # up front, low-pressure, then ask whether they want career paths, actual job openings,
+        # or both. The final question is the deterministic view-selector that PRESENT parses;
+        # keep it last and unchanged.
+        intro_message = """Great — based on what you've told me, I've got some options for you. We'll look at them together, talk through what fits, and by the end aim to land on one small next step you could actually take — no pressure, exploring is the first step.
 
             Would you like to see career paths to consider, actual job openings you could apply to right now, or both?
         """

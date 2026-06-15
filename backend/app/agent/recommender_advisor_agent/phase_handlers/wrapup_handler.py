@@ -105,8 +105,24 @@ class WrapupPhaseHandler(BasePhaseHandler):
             action_display = commitment.action_type.value.replace("_", " ").title()
             timeline_display = commitment.commitment_level.value.replace("_", " ").title()
 
-            parts.append(f"\n**Next step:** {action_display}")
-            parts.append(f"\n**Timeline:** {timeline_display}")
+            # Change 10a: restate the plan in the user's own terms (when + where + how + the
+            # if-then backup) when we captured it; otherwise fall back to the action/timeline
+            # summary and gently flag that the concrete details weren't pinned down.
+            plan_bits = [b for b in (
+                commitment.plan_when,
+                commitment.plan_where,
+                commitment.plan_how,
+            ) if b]
+            if plan_bits:
+                plan_line = ", ".join(plan_bits)
+                if commitment.plan_backup:
+                    plan_line += f" — and if that doesn't work, {commitment.plan_backup}"
+                parts.append(f"\n**Your plan:** {plan_line}")
+                parts.append(f"\n**Timeline:** {timeline_display}")
+            else:
+                parts.append(f"\n**Next step:** {action_display}")
+                parts.append(f"\n**Timeline:** {timeline_display}")
+                parts.append("\n(We didn't lock in the exact day and how yet — worth deciding that as your very next step.)")
 
             if commitment.barriers_mentioned:
                 parts.append(f"\n**Potential barriers:** {', '.join(commitment.barriers_mentioned)}")

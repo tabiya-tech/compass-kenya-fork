@@ -214,6 +214,11 @@ class RecommenderAdvisorAgentState(BaseModel):
         default=None,
         description="User's final action commitment"
     )
+    action_planning_nudges: int = Field(
+        default=0,
+        description="How many times we've stayed in ACTION_PLANNING to elicit a more concrete "
+                    "plan (when/where/how/if-then). Caps the nudging so we never interrogate."
+    )
     
     # === LABOR DEMAND CONTEXT ===
     labor_demand_data: dict[str, dict[str, Any]] = Field(

@@ -41,6 +41,10 @@ class ActionPhaseHandler(BasePhaseHandler):
     - Route user choices from ConcernsHandler menu
     """
 
+    # Max times we hold a committed-but-vague user in ACTION_PLANNING to elicit a concrete
+    # plan (when/how) before accepting whatever exists. Prevents interrogation loops.
+    MAX_PLAN_NUDGES = 2
+
     def __init__(
         self,
         conversation_llm: GeminiGenerativeLLM,
@@ -169,26 +173,46 @@ class ActionPhaseHandler(BasePhaseHandler):
             all_llm_stats.extend(llm_stats)
             return response, all_llm_stats
 
-        # If user made a commitment, record it
+        # If user made a commitment, record it (merging plan slots across turns - a user may
+        # give the day on one turn and the method on the next).
         if extraction.has_commitment and extraction.action_type:
             try:
                 action_type = ActionType(extraction.action_type)
                 commitment_level = CommitmentLevel(extraction.commitment_level or "interested")
-                
+
+                prev = state.action_commitment
+                plan_when = extraction.plan_when or (prev.plan_when if prev else None)
+                plan_where = extraction.plan_where or (prev.plan_where if prev else None)
+                plan_how = extraction.plan_how or (prev.plan_how if prev else None)
+                plan_backup = extraction.plan_backup or (prev.plan_backup if prev else None)
+
                 commitment = ActionCommitment(
                     recommendation_id=state.current_focus_id or "unknown",
                     recommendation_type=state.current_recommendation_type,
                     recommendation_title=self._get_focus_title(state),
                     action_type=action_type,
                     commitment_level=commitment_level,
-                    barriers_mentioned=extraction.barriers_mentioned
+                    barriers_mentioned=extraction.barriers_mentioned,
+                    plan_when=plan_when,
+                    plan_where=plan_where,
+                    plan_how=plan_how,
+                    plan_backup=plan_backup,
                 )
                 state.set_action_commitment(commitment)
 
-                # Strong commitment → delegate immediately to wrapup handler
-                if commitment_level in [CommitmentLevel.WILL_DO_THIS_WEEK, CommitmentLevel.WILL_DO_THIS_MONTH]:
+                # The user leaves ACTION_PLANNING only once the plan is concrete enough -
+                # a commitment alone ("I'll apply this week") is NOT a plan. Require at least
+                # a WHEN and a HOW. The nudge cap prevents interrogation: after
+                # MAX_PLAN_NUDGES attempts we accept whatever plan exists and move on.
+                strong = commitment_level in [CommitmentLevel.WILL_DO_THIS_WEEK, CommitmentLevel.WILL_DO_THIS_MONTH]
+                plan_concrete = bool(plan_when) and bool(plan_how)
+
+                if strong and (plan_concrete or state.action_planning_nudges >= self.MAX_PLAN_NUDGES):
                     state.conversation_phase = ConversationPhase.WRAPUP
-                    self.logger.info("User made strong commitment, delegating to wrapup handler")
+                    self.logger.info(
+                        f"Strong commitment with {'concrete' if plan_concrete else 'partial'} "
+                        f"plan (nudges={state.action_planning_nudges}) → wrapup"
+                    )
 
                     # Immediately invoke wrapup handler for seamless transition
                     if self._wrapup_handler:
@@ -196,10 +220,22 @@ class ActionPhaseHandler(BasePhaseHandler):
 
                     # Fallback if no wrapup handler
                     return ConversationResponse(
-                        reasoning="User made strong commitment, moving to wrapup (no handler available)",
+                        reasoning="User made strong commitment with a plan, moving to wrapup (no handler available)",
                         message=self._build_commitment_acknowledgment(commitment),
                         finished=False
                     ), all_llm_stats
+
+                if strong and not plan_concrete:
+                    # Committed but vague - stay in ACTION_PLANNING and elicit the missing plan
+                    # slot(s). The plan-making sequence in ACTION_PLANNING_PROMPT does the asking.
+                    state.action_planning_nudges += 1
+                    self.logger.info(
+                        f"Strong commitment but plan not concrete (when={bool(plan_when)}, "
+                        f"how={bool(plan_how)}); nudging for specifics (nudge {state.action_planning_nudges})"
+                    )
+                    response, llm_stats = await self._generate_action_prompt(user_input, state, context)
+                    all_llm_stats.extend(llm_stats)
+                    return response, all_llm_stats
             except ValueError as e:
                 self.logger.warning(f"Invalid action/commitment type: {e}")
         
@@ -219,18 +255,26 @@ class ActionPhaseHandler(BasePhaseHandler):
         # Provide examples for structured output
         examples = [
             ActionExtractionResult(
-                reasoning="User said they will apply this week, showing strong commitment",
+                reasoning="User committed and gave a concrete plan with day, place, method, and a backup",
                 has_commitment=True,
                 action_type="apply_to_job",
                 commitment_level="will_do_this_week",
-                barriers_mentioned=[]
+                barriers_mentioned=["fare money"],
+                plan_when="Thursday morning",
+                plan_where="the depot",
+                plan_how="matatu, ask the supervisor about the opening",
+                plan_backup="Saturday if the fare is short"
             ),
             ActionExtractionResult(
-                reasoning="User expressed interest but didn't commit to a timeline",
+                reasoning="User committed to a timeline but gave no concrete plan details yet",
                 has_commitment=True,
-                action_type="explore_occupation",
-                commitment_level="interested",
-                barriers_mentioned=[]
+                action_type="apply_to_job",
+                commitment_level="will_do_this_week",
+                barriers_mentioned=[],
+                plan_when=None,
+                plan_where=None,
+                plan_how=None,
+                plan_backup=None
             ),
             ActionExtractionResult(
                 reasoning="User mentioned concerns about cost and time",
@@ -253,11 +297,16 @@ Determine:
 2. action_type: What type of action? Must be one of: apply_to_job, enroll_in_training, explore_occupation, research_employer, network
 3. commitment_level: How strong is their commitment? Must be one of: will_do_this_week, will_do_this_month, interested, maybe_later, not_interested
 4. barriers_mentioned: List any barriers or concerns mentioned (empty list if none)
+5. plan_when: When they'll act, in their words (e.g., "Thursday morning"). Null if not stated.
+6. plan_where: Where / the specific target (e.g., "the depot", "the Brookside posting"). Null if not stated.
+7. plan_how: How - transport, what to bring or say (e.g., "matatu, ask the supervisor"). Null if not stated.
+8. plan_backup: The if-then backup for the most likely obstacle (e.g., "Saturday if the fare is short"). Null if not stated.
 
 IMPORTANT:
-- Use exact field names: has_commitment, action_type, commitment_level, barriers_mentioned
+- Use exact field names: has_commitment, action_type, commitment_level, barriers_mentioned, plan_when, plan_where, plan_how, plan_backup
 - action_type and commitment_level must use exact enum values listed above
 - If has_commitment is false, set action_type and commitment_level to null
+- Only fill a plan_* field if the user actually stated it THIS turn - never invent details. Leave it null otherwise.
 
 {get_json_response_instructions(examples=examples)}
 """
