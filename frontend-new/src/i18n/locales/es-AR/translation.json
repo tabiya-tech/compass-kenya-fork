@@ -164,7 +164,7 @@
         "confirmation": "¿Estás seguro de que deseas iniciar una nueva conversación?"
       },
       "refreshRecommendations": {
-        "tooltip": "Obtener nuevas recomendaciones"
+        "label": "Actualizar recomendaciones"
       },
       "refreshConfirmationDialog": {
         "title": "¿Estás seguro de que querés actualizar?",

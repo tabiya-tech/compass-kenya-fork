@@ -164,7 +164,7 @@
         "confirmation": "Are you sure you want to start a new conversation?"
       },
       "refreshRecommendations": {
-        "tooltip": "Get new recommendations"
+        "label": "Refresh recommendations"
       },
       "refreshConfirmationDialog": {
         "title": "Are you sure you would like to refresh?",
