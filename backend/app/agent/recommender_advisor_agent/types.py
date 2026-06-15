@@ -795,7 +795,26 @@ class ActionCommitment(BaseModel):
         default=None,
         description="Specific training ID if they picked one"
     )
-    
+
+    # Implementation-intention plan (Change 7 / Change 10). Captured during action planning
+    # and restated verbatim at wrapup; also persisted to DB6 for follow-up.
+    plan_when: Optional[str] = Field(
+        default=None,
+        description="When they'll take the first step, in their own words"
+    )
+    plan_where: Optional[str] = Field(
+        default=None,
+        description="Where they'll act / the specific target"
+    )
+    plan_how: Optional[str] = Field(
+        default=None,
+        description="How they'll do it - transport, what to bring or say"
+    )
+    plan_backup: Optional[str] = Field(
+        default=None,
+        description="The if-then backup for the most likely obstacle"
+    )
+
     # Timestamps
     committed_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc)

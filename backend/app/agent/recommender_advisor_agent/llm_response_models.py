@@ -71,7 +71,28 @@ class ActionExtractionResult(BaseModel):
         default_factory=list,
         description="Any barriers or concerns the user mentioned"
     )
-    
+
+    # Implementation-intention plan slots (Change 7 / Change 10). Capture only what the user
+    # actually stated this turn - leave null if not mentioned. These drive both the
+    # plan-completeness gate that keeps the conversation in action-planning until a concrete
+    # plan exists, and the verbatim plan restatement at wrapup.
+    plan_when: Optional[str] = Field(
+        default=None,
+        description="When they'll act, in their words (e.g., 'Thursday morning', 'this Saturday'). Null if not stated."
+    )
+    plan_where: Optional[str] = Field(
+        default=None,
+        description="Where they'll act / the specific target (e.g., 'the depot', 'the Brookside posting'). Null if not stated."
+    )
+    plan_how: Optional[str] = Field(
+        default=None,
+        description="How they'll do it - transport, what they'll bring or say (e.g., 'matatu, ask the supervisor'). Null if not stated."
+    )
+    plan_backup: Optional[str] = Field(
+        default=None,
+        description="The if-then backup for the most likely obstacle (e.g., 'Saturday if the fare is short'). Null if not stated."
+    )
+
     class Config:
         extra = "forbid"
 

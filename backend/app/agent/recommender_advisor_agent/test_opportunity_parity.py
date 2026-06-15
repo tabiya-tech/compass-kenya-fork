@@ -231,9 +231,12 @@ async def test_action_handler_records_opportunity_commitment():
     state.conversation_phase = ConversationPhase.ACTION_PLANNING
 
     action_caller = MagicMock()
+    # A CONCRETE plan (when + how) is required to leave ACTION_PLANNING for wrapup.
     action_caller.call_llm = AsyncMock(return_value=(
         ActionExtractionResult(reasoning="r", has_commitment=True, action_type="apply_to_job",
-                               commitment_level="will_do_this_week", barriers_mentioned=[]), []))
+                               commitment_level="will_do_this_week", barriers_mentioned=[],
+                               plan_when="tomorrow morning", plan_how="on my phone via the app link",
+                               plan_backup="Saturday if I'm busy"), []))
 
     handler = ActionPhaseHandler(
         conversation_llm=MagicMock(),
@@ -243,12 +246,59 @@ async def test_action_handler_records_opportunity_commitment():
         wrapup_handler=None,      # fall back to acknowledgment
     )
 
-    response, _ = await handler.handle("yes, I'll apply this week", state, _context())
+    response, _ = await handler.handle("yes, I'll apply tomorrow morning on my phone", state, _context())
 
     assert state.action_commitment is not None
     assert state.action_commitment.recommendation_type == "opportunity"
     assert state.action_commitment.recommendation_title == "Glovo Rider"
+    assert state.action_commitment.plan_when == "tomorrow morning"
     assert state.conversation_phase == ConversationPhase.WRAPUP
+
+
+@pytest.mark.asyncio
+async def test_action_handler_nudges_when_plan_not_concrete_then_valve_releases():
+    """A vague commitment ("I'll apply this week") is held in ACTION_PLANNING to elicit a
+    concrete plan; after MAX_PLAN_NUDGES the valve releases to wrapup with the partial plan."""
+    from app.agent.recommender_advisor_agent.phase_handlers.action_handler import ActionPhaseHandler
+    from app.agent.recommender_advisor_agent.llm_response_models import ActionExtractionResult
+
+    opp = _opp_full()
+    state = RecommenderAdvisorAgentState(session_id=1, youth_id="y1")
+    state.recommendations = _recs(opps=[opp])
+    state.current_focus_id = opp.uuid
+    state.current_recommendation_type = "opportunity"
+    state.conversation_phase = ConversationPhase.ACTION_PLANNING
+
+    # Extraction always returns a vague commitment (no plan_when/plan_how).
+    action_caller = MagicMock()
+    action_caller.call_llm = AsyncMock(return_value=(
+        ActionExtractionResult(reasoning="r", has_commitment=True, action_type="apply_to_job",
+                               commitment_level="will_do_this_week", barriers_mentioned=[]), []))
+    # The nudge path generates a follow-up action prompt via the conversation caller.
+    conversation_caller = MagicMock()
+    conversation_caller.call_llm = AsyncMock(return_value=(
+        ConversationResponse(reasoning="asking for specifics", message="Which day and how?", finished=False), []))
+
+    handler = ActionPhaseHandler(
+        conversation_llm=MagicMock(),
+        conversation_caller=conversation_caller,
+        action_caller=action_caller,
+        intent_classifier=None,
+        wrapup_handler=None,
+    )
+
+    # Turns 1 and 2: stays in ACTION_PLANNING, nudging for specifics.
+    await handler.handle("yes, I'll apply this week", state, _context())
+    assert state.conversation_phase == ConversationPhase.ACTION_PLANNING
+    assert state.action_planning_nudges == 1
+    await handler.handle("yeah definitely this week", state, _context())
+    assert state.conversation_phase == ConversationPhase.ACTION_PLANNING
+    assert state.action_planning_nudges == 2
+
+    # Turn 3: valve releases (nudges >= MAX_PLAN_NUDGES) → wrapup, with the partial commitment.
+    await handler.handle("I'll sort the details myself", state, _context())
+    assert state.conversation_phase == ConversationPhase.WRAPUP
+    assert state.action_commitment is not None
 
 
 @pytest.mark.asyncio
