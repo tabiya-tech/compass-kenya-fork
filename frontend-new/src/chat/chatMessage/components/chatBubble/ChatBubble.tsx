@@ -1,6 +1,25 @@
 import React from "react";
 import { ConversationMessageSender } from "src/chat/ChatService/ChatService.types";
-import { Box, Typography, styled } from "@mui/material";
+import { Box, Link, Typography, styled } from "@mui/material";
+
+// Matches http(s) URLs and www. URLs, stopping at whitespace or common trailing punctuation.
+const URL_REGEX = /((?:https?:\/\/|www\.)[^\s<]+[^\s<.,;:!?)\]}'"])/gi;
+
+// Splits a plain-text message into text and clickable link segments, preserving the original text.
+const renderTextWithLinks = (text: string): React.ReactNode => {
+  const parts = text.split(URL_REGEX);
+  return parts.map((part, index) => {
+    if (index % 2 === 1) {
+      const href = part.startsWith("www.") ? `https://${part}` : part;
+      return (
+        <Link key={index} href={href} target="_blank" rel="noopener noreferrer">
+          {part}
+        </Link>
+      );
+    }
+    return part;
+  });
+};
 
 export interface ChatBubbleProps {
   message: string | React.ReactNode;
@@ -39,7 +58,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ message, sender, children }) =>
   return (
     <MessageBubble origin={sender} data-testid={DATA_TEST_ID.CHAT_MESSAGE_BUBBLE_CONTAINER}>
       <Typography whiteSpace="pre-line" data-testid={DATA_TEST_ID.CHAT_MESSAGE_BUBBLE_MESSAGE_TEXT}>
-        {message}
+        {typeof message === "string" ? renderTextWithLinks(message) : message}
       </Typography>
       <Box data-testid={DATA_TEST_ID.CHAT_MESSAGE_BUBBLE_MESSAGE_FOOTER_CONTAINER}>{children}</Box>
     </MessageBubble>
