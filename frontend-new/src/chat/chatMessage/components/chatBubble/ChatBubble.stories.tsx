@@ -35,3 +35,17 @@ export const ShownWithFooter: Story = {
     children: <VisualMock text={"Foo Footer"} />,
   },
 };
+
+export const WithClickableLinks: Story = {
+  args: {
+    message:
+      "Here are some opportunities that match you:\n\n" +
+      "1. Junior Baker\n" +
+      "   Employer: Sunrise Bakery\n" +
+      "   Apply here: https://jobs.example.com/junior-baker\n\n" +
+      "2. Pastry Assistant\n" +
+      "   Employer: City Cafe\n" +
+      "   Apply here: www.citycafe.co.ke/careers/pastry-assistant",
+    sender: ConversationMessageSender.COMPASS,
+  },
+};
