@@ -20,6 +20,7 @@ from app.agent.linking_and_ranking_pipeline.infer_occupation_tool._contextualiza
     _ContextualizationLLMOutput
 from app.agent.linking_and_ranking_pipeline.pick_top_skills_tool import _PickTopSkillsLLMOutput
 from app.agent.linking_and_ranking_pipeline.relevant_entities_classifier_llm import _RelevantEntityClassifierLLMOutput
+from app.agent.recommender_advisor_agent.llm_response_models import ActionExtractionResult
 from app.agent.simple_llm_agent.llm_response import ModelResponse
 from app.agent.skill_explorer_agent._responsibilities_extraction_llm import ResponsibilitiesExtractionResponse
 from app.agent.skill_explorer_agent._sentence_decomposition_llm import _SentenceDecompositionResponse, \
@@ -265,6 +266,7 @@ llm_inputs = [
     ModelResponse,
     ResponsibilitiesExtractionResponse,
     _SentenceDecompositionFirstPassResponse,
+    ActionExtractionResult,
     _SentenceDecompositionResponse,
     CVExtractionResponse
 ]

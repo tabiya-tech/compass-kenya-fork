@@ -51,10 +51,10 @@ from app.conversation_memory.conversation_memory_manager import ConversationCont
 from common_libs.llm.generative_models import GeminiGenerativeLLM
 from common_libs.llm.models_utils import (
     LLMConfig,
-    LOW_TEMPERATURE_GENERATION_CONFIG,
     MEDIUM_TEMPERATURE_GENERATION_CONFIG,
     JSON_GENERATION_CONFIG
 )
+from common_libs.llm.schema_builder import with_response_schema
 
 # Import PreferenceVector from Epic 2
 from app.agent.preference_elicitation_agent.types import PreferenceVector
@@ -120,6 +120,12 @@ class RecommenderAdvisorAgent(Agent):
             config=llm_config
         )
 
+        self._action_llm = GeminiGenerativeLLM(
+            config=LLMConfig(
+                generation_config=MEDIUM_TEMPERATURE_GENERATION_CONFIG | with_response_schema(ActionExtractionResult)
+            )
+        )
+
         # Initialize LLM callers
         self._conversation_caller: LLMCaller[ConversationResponse] = LLMCaller[ConversationResponse](
             model_response_type=ConversationResponse
@@ -162,6 +168,7 @@ class RecommenderAdvisorAgent(Agent):
             conversation_llm=self._conversation_llm,
             conversation_caller=self._conversation_caller,
             action_caller=self._action_caller,
+            action_llm=self._action_llm,
             intent_classifier=self._intent_classifier,
             logger=self.logger
         )

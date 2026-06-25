@@ -343,6 +343,7 @@ async def initialize_handlers():
 
     # Initialize LLM exactly like the agent does
     from common_libs.llm.models_utils import LLMConfig, LOW_TEMPERATURE_GENERATION_CONFIG, JSON_GENERATION_CONFIG
+    from common_libs.llm.schema_builder import with_response_schema
     from app.agent.recommender_advisor_agent.phase_handlers.tradeoffs_handler import TradeoffsPhaseHandler
     from app.agent.recommender_advisor_agent.phase_handlers.followup_handler import FollowupPhaseHandler
     from app.agent.recommender_advisor_agent.phase_handlers.skills_pivot_handler import SkillsPivotPhaseHandler
@@ -372,6 +373,12 @@ async def initialize_handlers():
 
     action_caller = LLMCaller[ActionExtractionResult](
         model_response_type=ActionExtractionResult
+    )
+
+    action_llm = GeminiGenerativeLLM(
+        config=LLMConfig(
+            generation_config=LOW_TEMPERATURE_GENERATION_CONFIG | with_response_schema(ActionExtractionResult)
+        )
     )
 
     # Initialize recommendation interface
@@ -466,6 +473,7 @@ async def initialize_handlers():
         conversation_llm=llm,
         conversation_caller=conversation_caller,
         action_caller=action_caller,
+        action_llm=action_llm,
         intent_classifier=intent_classifier
     )
 
