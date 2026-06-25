@@ -49,6 +49,7 @@ from app.conversation_memory.conversation_memory_types import (
 from app.agent.agent_types import AgentInput, AgentOutput
 from common_libs.llm.generative_models import GeminiGenerativeLLM
 from common_libs.llm.models_utils import LLMConfig, LOW_TEMPERATURE_GENERATION_CONFIG, JSON_GENERATION_CONFIG
+from common_libs.llm.schema_builder import with_response_schema
 from app.countries import Country
 from evaluation_tests.recommender_advisor_agent.sample_data import (
     create_sample_recommendations,
@@ -145,6 +146,12 @@ async def initialize_handlers():
         model_response_type=ActionExtractionResult
     )
 
+    action_llm = GeminiGenerativeLLM(
+        config=LLMConfig(
+            generation_config=LOW_TEMPERATURE_GENERATION_CONFIG | with_response_schema(ActionExtractionResult)
+        )
+    )
+
     recommendation_interface = RecommendationInterface(node2vec_client=None)
     intent_classifier = IntentClassifier(intent_caller=intent_caller)
 
@@ -209,6 +216,7 @@ async def initialize_handlers():
         conversation_llm=llm,
         conversation_caller=conversation_caller,
         action_caller=action_caller,
+        action_llm=action_llm,
         intent_classifier=intent_classifier
     )
 

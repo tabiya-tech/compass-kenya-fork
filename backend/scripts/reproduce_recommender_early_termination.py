@@ -70,7 +70,8 @@ from app.conversation_memory.conversation_memory_types import (
 )
 from app.agent.agent_types import AgentInput, AgentOutput
 from common_libs.llm.generative_models import GeminiGenerativeLLM
-from common_libs.llm.models_utils import LLMConfig, MEDIUM_TEMPERATURE_GENERATION_CONFIG, JSON_GENERATION_CONFIG
+from common_libs.llm.models_utils import LLMConfig, MEDIUM_TEMPERATURE_GENERATION_CONFIG, ZERO_TEMPERATURE_GENERATION_CONFIG, JSON_GENERATION_CONFIG
+from common_libs.llm.schema_builder import with_response_schema
 from app.countries import Country
 
 console = Console()
@@ -213,6 +214,12 @@ async def build_handlers(llm: GeminiGenerativeLLM):
     intent_caller = LLMCaller[UserIntentClassification](model_response_type=UserIntentClassification)
     action_caller = LLMCaller[ActionExtractionResult](model_response_type=ActionExtractionResult)
 
+    action_llm = GeminiGenerativeLLM(
+        config=LLMConfig(
+            generation_config=ZERO_TEMPERATURE_GENERATION_CONFIG | with_response_schema(ActionExtractionResult)
+        )
+    )
+
     intent_classifier = IntentClassifier(intent_caller=intent_caller)
     recommendation_interface = RecommendationInterface(node2vec_client=None)
 
@@ -220,6 +227,7 @@ async def build_handlers(llm: GeminiGenerativeLLM):
         conversation_llm=llm,
         conversation_caller=conversation_caller,
         action_caller=action_caller,
+        action_llm=action_llm,
         intent_classifier=intent_classifier,
     )
     concerns_handler = ConcernsPhaseHandler(

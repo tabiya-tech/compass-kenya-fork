@@ -54,6 +54,7 @@ from app.agent.agent_types import AgentInput, AgentOutput
 from app.agent.preference_elicitation_agent.types import PreferenceVector
 from common_libs.llm.generative_models import GeminiGenerativeLLM
 from common_libs.llm.models_utils import LLMConfig, LOW_TEMPERATURE_GENERATION_CONFIG, JSON_GENERATION_CONFIG
+from common_libs.llm.schema_builder import with_response_schema
 from app.countries import Country
 
 logger = logging.getLogger(__name__)
@@ -120,6 +121,12 @@ async def _build_handlers(llm: GeminiGenerativeLLM) -> dict:
     intent_caller = LLMCaller[UserIntentClassification](model_response_type=UserIntentClassification)
     action_caller = LLMCaller[ActionExtractionResult](model_response_type=ActionExtractionResult)
 
+    action_llm = GeminiGenerativeLLM(
+        config=LLMConfig(
+            generation_config=LOW_TEMPERATURE_GENERATION_CONFIG | with_response_schema(ActionExtractionResult)
+        )
+    )
+
     intent_classifier = IntentClassifier(intent_caller=intent_caller)
     recommendation_interface = RecommendationInterface(node2vec_client=None)
 
@@ -127,6 +134,7 @@ async def _build_handlers(llm: GeminiGenerativeLLM) -> dict:
         conversation_llm=llm,
         conversation_caller=conversation_caller,
         action_caller=action_caller,
+        action_llm=action_llm,
         intent_classifier=intent_classifier,
     )
     concerns_handler = ConcernsPhaseHandler(
