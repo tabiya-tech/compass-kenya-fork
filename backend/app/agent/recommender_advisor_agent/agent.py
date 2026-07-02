@@ -432,9 +432,8 @@ class RecommenderAdvisorAgent(Agent):
         (title + description + application URL) in a clear, friendly format.
         Marks the session as finished after a single message.
         """
-        # On re-engagement (already presented once): refresh with unseen recommendations
+        # On re-engagement (already presented once): refresh recommendations.
         if self._state.presented_occupations:
-            seen_uuids: set[str] = set(self._state.presented_occupations)
             fresh = await self._recommendation_interface.generate_recommendations(
                 youth_id=self._state.youth_id,
                 city=self._state.city,
@@ -445,22 +444,10 @@ class RecommenderAdvisorAgent(Agent):
                 top_10_bws=self._state.top_10_bws,
                 education_experiences=self._state.education_experiences,
             )
-            new_occs = [o for o in fresh.occupation_recommendations if o.uuid not in seen_uuids]
-            new_jobs = [j for j in fresh.opportunity_recommendations if j.uuid not in seen_uuids]
-            if not new_occs and not new_jobs:
-                return AgentOutputWithReasoning(
-                    message_for_user=(
-                        "I've searched again but don't have new matches for you right now. "
-                        "The job database refreshes daily — check back tomorrow."
-                    ),
-                    finished=False,
-                    reasoning="Simple flow refresh: no new recommendations after filtering seen items.",
-                    agent_type=self.agent_type,
-                    agent_response_time_in_sec=round(time.time() - agent_start_time, 2),
-                    llm_stats=[],
-                )
-            fresh.occupation_recommendations = new_occs
-            fresh.opportunity_recommendations = new_jobs
+            seen_job_uuids: set[str] = set(self._state.presented_opportunities)
+            unseen_jobs = [j for j in fresh.opportunity_recommendations if j.uuid not in seen_job_uuids]
+            if unseen_jobs:
+                fresh.opportunity_recommendations = unseen_jobs
             self._state.recommendations = fresh
 
         # First call: fetch recommendations if not yet loaded
@@ -534,6 +521,12 @@ class RecommenderAdvisorAgent(Agent):
         for occ in recs.occupation_recommendations:
             if occ.uuid not in self._state.presented_occupations:
                 self._state.presented_occupations.append(occ.uuid)
+
+        # Likewise record presented opportunity UUIDs, so re-engagement can filter
+        # jobs against jobs (not against occupation uuids, which would never match).
+        for job in recs.opportunity_recommendations:
+            if job.uuid not in self._state.presented_opportunities:
+                self._state.presented_opportunities.append(job.uuid)
 
         careers_block = "\n".join(career_lines) if career_lines else "No career recommendations available."
         jobs_block = "\n".join(job_lines) if job_lines else "No job opportunities available."

@@ -51,8 +51,13 @@ describe("cvUploadPolling", () => {
       onError: (error) => recordedEvents.push(`error:${error}`),
     });
 
-    // Wait for all three polls to complete
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // Wait until COMPLETED is observed (or give up after a generous window).
+    // setInterval + async callback timing is non-deterministic — poll the
+    // recorded events instead of guessing a fixed wait.
+    const deadline = Date.now() + 500;
+    while (Date.now() < deadline && !recordedEvents.includes("complete:COMPLETED")) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
 
     // stop timers and cleanup
     stopUploadPolling(handles);
@@ -89,8 +94,11 @@ describe("cvUploadPolling", () => {
       onError: (error) => recordedEvents.push(`error:${error}`),
     });
 
-    // Wait for both polls to complete
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    // Wait until FAILED termination is observed.
+    const deadline = Date.now() + 500;
+    while (Date.now() < deadline && !recordedEvents.includes("terminal:FAILED")) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
 
     stopUploadPolling(handles);
 
@@ -118,8 +126,11 @@ describe("cvUploadPolling", () => {
       onError: (error) => recordedEvents.push(`error:${(error as Error).message}`),
     });
 
-    // Wait for the error to be triggered
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    // Wait for the error to be triggered.
+    const deadline = Date.now() + 500;
+    while (Date.now() < deadline && recordedEvents.length === 0) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
     stopUploadPolling(handles);
     // THEN expect the error to be recorded
     expect(recordedEvents).toEqual(["error:boom"]);
@@ -146,8 +157,11 @@ describe("cvUploadPolling", () => {
       },
     });
 
-    // Wait for timeout to trigger
-    await new Promise((resolve) => setTimeout(resolve, 60));
+    // Wait for the maxDuration timeout to trigger.
+    const deadline = Date.now() + 500;
+    while (Date.now() < deadline && !events.includes("error:timeout")) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
 
     stopUploadPolling(handles);
     expect(events).toContain("error:timeout");
