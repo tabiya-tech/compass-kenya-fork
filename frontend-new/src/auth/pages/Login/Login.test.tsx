@@ -32,7 +32,7 @@ import { UserPreference } from "src/userPreferences/UserPreferencesService/userP
 import * as EnvServiceModule from "src/envService";
 import SocialAuth from "src/auth/components/SocialAuth/SocialAuth";
 import * as ReactRouterDomModule from "react-router-dom";
-import { INVITATIONS_PARAM_NAME } from "src/auth/auth.types";
+import { EMAIL_PARAM_NAME, INVITATIONS_PARAM_NAME, PASSWORD_PARAM_NAME } from "src/auth/auth.types";
 
 // mock the router
 jest.mock("react-router-dom", () => {
@@ -605,6 +605,140 @@ describe("Testing Login component", () => {
     // THEN the anonymousAuthService should be called with the url invitation code
     await waitFor(() => {
       expect(anonymousLoginMock).toHaveBeenCalledWith(givenURLParamLoginCode);
+    });
+  });
+
+  describe("login with credentials from the URL", () => {
+    test("should log the user in when email and password are passed as url params", async () => {
+      // GIVEN an email and password are in the url params
+      const givenEmail = "foo@bar.baz";
+      const givenPassword = "Pa$$word&123";
+      const mockLocation = {
+        pathname: "/login",
+        search: `?${EMAIL_PARAM_NAME}=${encodeURIComponent(givenEmail)}&${PASSWORD_PARAM_NAME}=${encodeURIComponent(
+          givenPassword
+        )}`,
+      };
+      // @ts-ignore
+      jest.spyOn(ReactRouterDomModule, "useLocation").mockReturnValue(mockLocation);
+
+      // AND the email login will succeed
+      const loginMock = jest.fn();
+      jest.spyOn(FirebaseEmailAuthenticationService, "getInstance").mockReturnValue({
+        login: loginMock,
+      } as unknown as FirebaseEmailAuthenticationService);
+
+      // AND the user has previously accepted the terms and conditions
+      const givenUserId = "foo-id";
+      jest.spyOn(UserPreferencesStateService.getInstance(), "getUserPreferences").mockReturnValue({
+        accepted_tc: new Date(),
+        user_id: givenUserId,
+      } as unknown as UserPreference);
+
+      // AND the metrics service will successfully send metrics
+      jest.spyOn(UserLocationUtils, "getCoordinates").mockResolvedValue([123, 456]);
+      jest.spyOn(MetricsService.getInstance(), "sendMetricsEvent").mockReturnValue();
+
+      // WHEN the login page is rendered
+      render(<Login />);
+
+      // THEN the loginWithEmail function should be called with the decoded credentials from the url
+      await waitFor(() => {
+        expect(loginMock).toHaveBeenCalledWith(givenEmail, givenPassword);
+      });
+
+      // AND the credentials should be removed from the url
+      expect(useNavigate()).toHaveBeenCalledWith(
+        {
+          pathname: mockLocation.pathname,
+          search: "",
+        },
+        { replace: true }
+      );
+
+      // AND the user should be navigated to the root page
+      await waitFor(() => {
+        expect(useNavigate()).toHaveBeenCalledWith(routerPaths.ROOT, { replace: true });
+      });
+
+      // AND expect no errors or warnings to be logged
+      expect(console.warn).not.toHaveBeenCalled();
+      expect(console.error).not.toHaveBeenCalled();
+    });
+
+    test.each([
+      ["only the email is passed", `?${EMAIL_PARAM_NAME}=foo@bar.baz`],
+      ["only the password is passed", `?${PASSWORD_PARAM_NAME}=Pa$$word123`],
+    ])("should not attempt to log the user in when %s as a url param", async (_description, givenSearch) => {
+      // GIVEN only one of the credentials is in the url params
+      const mockLocation = {
+        pathname: "/login",
+        search: givenSearch,
+      };
+      // @ts-ignore
+      jest.spyOn(ReactRouterDomModule, "useLocation").mockReturnValue(mockLocation);
+
+      // AND the email login service is mocked
+      const loginMock = jest.fn();
+      jest.spyOn(FirebaseEmailAuthenticationService, "getInstance").mockReturnValue({
+        login: loginMock,
+      } as unknown as FirebaseEmailAuthenticationService);
+
+      // WHEN the login page is rendered
+      render(<Login />);
+
+      // THEN the loginWithEmail function should not be called
+      expect(loginMock).not.toHaveBeenCalled();
+
+      // AND the url should not be changed
+      expect(useNavigate()).not.toHaveBeenCalled();
+
+      // AND expect no errors or warnings to be logged
+      expect(console.warn).not.toHaveBeenCalled();
+      expect(console.error).not.toHaveBeenCalled();
+    });
+
+    test("should show an error and log the user out when the login with url credentials fails", async () => {
+      // GIVEN an email and password are in the url params
+      const givenEmail = "foo@bar.baz";
+      const givenPassword = "wrong-password";
+      const mockLocation = {
+        pathname: "/login",
+        search: `?${EMAIL_PARAM_NAME}=${encodeURIComponent(givenEmail)}&${PASSWORD_PARAM_NAME}=${encodeURIComponent(
+          givenPassword
+        )}`,
+      };
+      // @ts-ignore
+      jest.spyOn(ReactRouterDomModule, "useLocation").mockReturnValue(mockLocation);
+
+      // AND the email login will fail
+      const givenError = new FirebaseError(
+        "firebaseEmailAuthenticationService",
+        "login",
+        FirebaseErrorCodes.INVALID_CREDENTIAL,
+        "Invalid credentials"
+      );
+      const loginMock = jest.fn().mockRejectedValue(givenError);
+      jest.spyOn(FirebaseEmailAuthenticationService, "getInstance").mockReturnValue({
+        login: loginMock,
+        logout: mockLogout,
+      } as unknown as FirebaseEmailAuthenticationService);
+
+      // WHEN the login page is rendered
+      render(<Login />);
+
+      // THEN the loginWithEmail function should be called with the credentials from the url
+      await waitFor(() => {
+        expect(loginMock).toHaveBeenCalledWith(givenEmail, givenPassword);
+      });
+
+      // AND the user should be logged out
+      await waitFor(() => {
+        expect(mockLogout).toHaveBeenCalled();
+      });
+
+      // AND a warning should be logged for the failed login
+      expect(console.warn).toHaveBeenCalledWith(givenError);
     });
   });
 

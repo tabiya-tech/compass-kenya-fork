@@ -24,3 +24,5 @@ export enum AuthenticationServices {
 }
 
 export const INVITATIONS_PARAM_NAME = "invite-code";
+export const EMAIL_PARAM_NAME = "email";
+export const PASSWORD_PARAM_NAME = "password";
