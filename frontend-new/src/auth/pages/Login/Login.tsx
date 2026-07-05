@@ -22,7 +22,7 @@ import ResendVerificationEmail from "src/auth/components/resendVerificationEmail
 import RequestInvitationCode from "src/auth/components/requestInvitationCode/RequestInvitationCode";
 import { InvitationType } from "src/auth/services/invitationsService/invitations.types";
 import CustomLink from "src/theme/CustomLink/CustomLink";
-import { INVITATIONS_PARAM_NAME } from "src/auth/auth.types";
+import { EMAIL_PARAM_NAME, INVITATIONS_PARAM_NAME, PASSWORD_PARAM_NAME } from "src/auth/auth.types";
 import MetricsService from "src/metrics/metricsService";
 import { DeviceSpecificationEvent, EventType, UserLocationEvent } from "src/metrics/types";
 import { browserName, browserVersion, deviceType, osName } from "react-device-detect";
@@ -434,6 +434,32 @@ const Login: React.FC = () => {
       );
     }
   }, [handleLoginWithInvitationCode, location, navigate]);
+
+  /**
+   * Check if login credentials (email and password) were passed in the URL,
+   * and if so, log the user in with them
+   */
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const emailParam = params.get(EMAIL_PARAM_NAME);
+    const passwordParam = params.get(PASSWORD_PARAM_NAME);
+    if (emailParam && passwordParam) {
+      handleLoginWithEmail(emailParam, passwordParam).then(() =>
+        console.info("Attempted login with credentials from the URL.")
+      );
+      // Remove the credentials from the URL
+      const newSearchParams = new URLSearchParams(location.search);
+      newSearchParams.delete(EMAIL_PARAM_NAME);
+      newSearchParams.delete(PASSWORD_PARAM_NAME);
+      navigate(
+        {
+          pathname: location.pathname,
+          search: newSearchParams.toString(),
+        },
+        { replace: true }
+      );
+    }
+  }, [handleLoginWithEmail, location, navigate]);
 
   // Reset resend verification state when email or password changes
   useEffect(() => {
