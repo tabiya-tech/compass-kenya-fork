@@ -10,7 +10,6 @@ export const DATA_TEST_ID = {
   CONTAINER: `chat-progress-bar-container-${uniqueId}`,
   PROGRESS_BAR: `chat-progress-bar-${uniqueId}`,
   PROGRESS_BAR_PHASE_TEXT: `chat-progress-bar-text-${uniqueId}`,
-  PROGRESS_BAR_LABEL: `chat-progress-bar-label-${uniqueId}`,
 };
 
 const ChatProgressBar: React.FC<CurrentPhase> = (currentPhase) => {
@@ -79,7 +78,6 @@ const ChatProgressBar: React.FC<CurrentPhase> = (currentPhase) => {
           <Typography variant="progressBarText" lineHeight={1} data-testid={DATA_TEST_ID.PROGRESS_BAR_PHASE_TEXT}>
             {userFriendlyConversationPhaseText}
           </Typography>
-          <Box data-testid={DATA_TEST_ID.PROGRESS_BAR_LABEL}>{percentageInText}</Box>
         </Box>
       </Box>
     </Box>
