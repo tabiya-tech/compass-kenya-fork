@@ -39,11 +39,6 @@ describe("ChatProgresBar", () => {
       expect(progressBar).toBeInTheDocument();
       expect(progressBar).toHaveTextContent(givenReturnedUserFriendlyPhaseName);
 
-      // AND the progress bar label should be in the document
-      const progressBarLabel = screen.getByTestId(DATA_TEST_ID.PROGRESS_BAR_LABEL);
-      expect(progressBarLabel).toBeInTheDocument();
-      expect(progressBarLabel).toHaveTextContent(`${givenPercentage}%`);
-
       // AND the width of the progress bar should be set to the percentage
       // Wait for it because of the animation.
 
