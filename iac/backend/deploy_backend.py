@@ -61,6 +61,7 @@ class BackendServiceConfig:
     matching_service_url: Optional[str]
     matching_service_api_key: Optional[str]
     inline_phase_transition: Optional[str]
+    recommendation_batch_size: Optional[str]
 
 
 """
@@ -436,6 +437,9 @@ def _deploy_cloud_run_service(
                         gcp.cloudrunv2.ServiceTemplateContainerEnvArgs(
                             name="COMPASS_INLINE_PHASE_TRANSITION",
                             value=backend_service_cfg.inline_phase_transition),
+                        gcp.cloudrunv2.ServiceTemplateContainerEnvArgs(
+                            name="COMPASS_RECOMMENDATION_BATCH_SIZE",
+                            value=backend_service_cfg.recommendation_batch_size),
                         # Add more environment variables here
                     ],
                 )

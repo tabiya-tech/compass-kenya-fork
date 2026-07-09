@@ -105,7 +105,7 @@ class UserIntentClassification(BaseModel):
         description="Reasoning about what the user wants to do"
     )
     intent: str = Field(
-        description="User intent: 'explore_occupation', 'show_opportunities', 'express_concern', 'ask_question', 'reject', 'accept', 'discuss_next_steps', 'explore_alternatives', 'address_more_concerns', 'other'"
+        description="User intent: 'explore_occupation', 'show_opportunities', 'show_more', 'express_concern', 'ask_question', 'reject', 'accept', 'discuss_next_steps', 'explore_alternatives', 'address_more_concerns', 'other'"
     )
     target_recommendation_id: Optional[str] = Field(
         default=None,

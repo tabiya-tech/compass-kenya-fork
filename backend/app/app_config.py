@@ -109,6 +109,15 @@ class ApplicationConfig(BaseModel):
     Corresponds to the COMPASS_INLINE_PHASE_TRANSITION environment variable.
     """
 
+    recommendation_batch_size: int = Field(default=5, ge=1, le=50)
+    """
+    Number of recommendations (occupations or job openings) presented per batch by the
+    Recommender/Advisor Agent — both in the initial presentation and in each
+    subsequent "show me more" turn. Also caps the list of options shown to the
+    intent classifier when it disambiguates which item the user is referring to.
+    Corresponds to the COMPASS_RECOMMENDATION_BATCH_SIZE environment variable.
+    """
+
     @model_validator(mode='after')
     def check_cv_upload_configurations(self) -> "ApplicationConfig":
         # Check that the CV upload configurations are valid.

@@ -234,6 +234,10 @@ application_config = ApplicationConfig(
     matching_service_url=os.getenv("MATCHING_SERVICE_URL"),
     matching_service_api_key=os.getenv("MATCHING_SERVICE_API_KEY"),
     inline_phase_transition=os.getenv("COMPASS_INLINE_PHASE_TRANSITION", "").lower() in ("1", "true"),
+    **(
+        {"recommendation_batch_size": int(os.environ["COMPASS_RECOMMENDATION_BATCH_SIZE"])}
+        if os.getenv("COMPASS_RECOMMENDATION_BATCH_SIZE") else {}
+    ),
 )
 
 set_application_config(application_config)
