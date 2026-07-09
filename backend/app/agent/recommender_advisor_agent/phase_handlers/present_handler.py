@@ -25,7 +25,7 @@ from app.agent.recommender_advisor_agent.prompts import (
     PRESENT_RECOMMENDATIONS_PROMPT,
     build_context_block
 )
-from app.agent.recommender_advisor_agent.intent_classifier import IntentClassifier
+from app.agent.recommender_advisor_agent.intent_classifier import IntentClassifier, _batch_size
 from app.conversation_memory.conversation_memory_manager import ConversationContext
 from app.conversation_memory.conversation_formatter import ConversationHistoryFormatter
 from app.agent.simple_llm_agent.prompt_response_template import get_json_response_instructions
@@ -178,11 +178,11 @@ class PresentPhaseHandler(BasePhaseHandler):
                 return response, all_llm_stats
 
         # Get top occupations to present (strict rank order)
-        occupations = state.recommendations.occupation_recommendations[:5]
+        occupations = state.recommendations.occupation_recommendations[:_batch_size()]
 
         if not occupations:
             # Fall back to opportunity recommendations if no occupations are available
-            opportunities = state.recommendations.opportunity_recommendations[:5]
+            opportunities = state.recommendations.opportunity_recommendations[:_batch_size()]
             if opportunities:
                 self.logger.info(
                     f"No occupation recommendations available; presenting {len(opportunities)} opportunity recommendations instead"
@@ -379,7 +379,7 @@ class PresentPhaseHandler(BasePhaseHandler):
         context: ConversationContext,
     ) -> tuple[ConversationResponse, list[LLMStats]]:
         """Present job openings, keeping the conversation open (jobs-only view)."""
-        opportunities = state.recommendations.opportunity_recommendations[:5]
+        opportunities = state.recommendations.opportunity_recommendations[:_batch_size()]
         if not opportunities:
             return ConversationResponse(
                 reasoning="User chose jobs but no job openings are available",
@@ -407,8 +407,8 @@ class PresentPhaseHandler(BasePhaseHandler):
         context: ConversationContext,
     ) -> tuple[ConversationResponse, list[LLMStats]]:
         """Present job openings first, then career paths, in one message (both view)."""
-        opportunities = state.recommendations.opportunity_recommendations[:5]
-        occupations = state.recommendations.occupation_recommendations[:5]
+        opportunities = state.recommendations.opportunity_recommendations[:_batch_size()]
+        occupations = state.recommendations.occupation_recommendations[:_batch_size()]
 
         if not opportunities and not occupations:
             return ConversationResponse(
@@ -550,6 +550,10 @@ class PresentPhaseHandler(BasePhaseHandler):
         elif intent.intent == "accept":
             return await self._handle_accept_intent(intent, user_input, state, context)
 
+        # Handle SHOW_MORE intent - user wants the next batch of recommendations
+        elif intent.intent == "show_more":
+            return await self._handle_show_more_intent(user_input, state, context)
+
         # For other intents (questions, unclear), let LLM handle conversationally
         # The LLM has instructions in the base prompt to handle user-suggested occupations
         return None
@@ -624,6 +628,172 @@ class PresentPhaseHandler(BasePhaseHandler):
         self.logger.warning(f"Could not identify target occupation from intent. target_occupation_index={intent.target_occupation_index}, target_recommendation_id={intent.target_recommendation_id}")
         return None
 
+    @staticmethod
+    def _next_unpresented(
+        all_recs: list, presented_ids: list[str], k: Optional[int] = None
+    ) -> list:
+        """Next ``k`` recommendations in rank order that the user has not seen yet.
+
+        ``presented_ids`` is treated as an ordered log (initial batch, then any prior
+        show_more batches), so callers can compute both what to render next and
+        whether the underlying list is exhausted. ``k`` defaults to the configured
+        recommendation batch size (``COMPASS_RECOMMENDATION_BATCH_SIZE``).
+        """
+        seen = set(presented_ids)
+        limit = _batch_size() if k is None else k
+        return [r for r in all_recs if r.uuid not in seen][:limit]
+
+    async def _handle_show_more_intent(
+        self,
+        user_input: str,
+        state: RecommenderAdvisorAgentState,
+        context: ConversationContext,
+    ) -> tuple[ConversationResponse, list[LLMStats]]:
+        """Present the next batch of recommendations in the user's current view.
+
+        - ``careers`` view (or default) → next 5 occupations.
+        - ``jobs`` view → next 5 opportunities.
+        - ``both`` view → next 5 opportunities followed by next 5 occupations.
+
+        When the underlying list is exhausted, returns a graceful "that's all"
+        message that invites the user to go deeper on one of the ones already shown
+        (rather than looping back to page 1). Stays in PRESENT_RECOMMENDATIONS.
+        """
+        if state.recommendations is None:
+            return ConversationResponse(
+                reasoning="show_more requested but no recommendations are cached",
+                message="Let me pull up your recommendations first — say the word when you're ready.",
+                finished=False,
+            ), []
+
+        view = state.recommendation_view or "careers"
+        all_llm_stats: list[LLMStats] = []
+
+        if view == "jobs":
+            next_opps = self._next_unpresented(
+                state.recommendations.opportunity_recommendations,
+                state.presented_opportunities,
+            )
+            if not next_opps:
+                return self._exhausted_response("opportunity", state), []
+            for opp in next_opps:
+                state.presented_opportunities.append(opp.uuid)
+            recs_summary = self._build_opportunities_summary(next_opps)
+            full_prompt = self._build_view_prompt(state, context, recs_summary, _PRESENT_JOBS_PROMPT)
+            response, llm_stats = await self._call_llm(full_prompt, user_input, context)
+            response.finished = False
+            all_llm_stats.extend(llm_stats)
+            return response, all_llm_stats
+
+        if view == "both":
+            next_opps = self._next_unpresented(
+                state.recommendations.opportunity_recommendations,
+                state.presented_opportunities,
+            )
+            next_occs = self._next_unpresented(
+                state.recommendations.occupation_recommendations,
+                state.presented_occupations,
+            )
+            if not next_opps and not next_occs:
+                return self._exhausted_response("both", state), []
+            for opp in next_opps:
+                state.presented_opportunities.append(opp.uuid)
+            for occ in next_occs:
+                state.presented_occupations.append(occ.uuid)
+            jobs_block = (self._build_opportunities_summary(next_opps)
+                          if next_opps else "No more job openings to show.")
+            careers_block = (self._build_detailed_recommendations_summary(next_occs)
+                             if next_occs else "No more career paths to show.")
+            recs_summary = (
+                f"{jobs_block}\n\n"
+                f"**Career Paths** (present these after the jobs):\n{careers_block}"
+            )
+            full_prompt = self._build_view_prompt(state, context, recs_summary, _PRESENT_BOTH_PROMPT)
+            response, llm_stats = await self._call_llm(full_prompt, user_input, context)
+            response.finished = False
+            all_llm_stats.extend(llm_stats)
+            return response, all_llm_stats
+
+        # Default: careers view.
+        next_occs = self._next_unpresented(
+            state.recommendations.occupation_recommendations,
+            state.presented_occupations,
+        )
+        if not next_occs:
+            return self._exhausted_response("occupation", state), []
+        for occ in next_occs:
+            state.presented_occupations.append(occ.uuid)
+        recs_summary = self._build_detailed_recommendations_summary(next_occs)
+        skills_list = self._extract_skills_list(state)
+        pref_vec_dict = state.preference_vector.model_dump() if state.preference_vector else {}
+        conv_history = ConversationHistoryFormatter.format_to_string(context)
+        context_block = build_context_block(
+            skills=skills_list,
+            preference_vector=pref_vec_dict,
+            recommendations_summary=recs_summary,
+            conversation_history=conv_history,
+            country_of_user=state.country_of_user,
+        )
+        full_prompt = context_block + PRESENT_RECOMMENDATIONS_PROMPT + get_json_response_instructions()
+        response, llm_stats = await self._call_llm(full_prompt, user_input, context)
+        response.finished = False
+        all_llm_stats.extend(llm_stats)
+
+        response.metadata = self._build_metadata(
+            interaction_type="occupation_presentation",
+            occupations=[
+                {
+                    "uuid": occ.uuid,
+                    "occupation": occ.occupation,
+                    "rank": occ.rank,
+                    "confidence_score": occ.confidence_score,
+                    "labor_demand_category": occ.labor_demand_category,
+                    "salary_range": occ.salary_range,
+                    "justification": occ.justification,
+                    "skills_match_score": occ.skills_match_score,
+                    "preference_match_score": occ.preference_match_score,
+                    "labor_demand_score": occ.labor_demand_score,
+                }
+                for occ in next_occs
+            ],
+        )
+        return response, all_llm_stats
+
+    def _exhausted_response(
+        self,
+        kind: str,
+        state: RecommenderAdvisorAgentState,
+    ) -> ConversationResponse:
+        """Reply when the user has already seen every available recommendation of a kind.
+
+        We deliberately do not loop back to page 1 — surfacing repeats without saying so
+        would erode trust. Instead, invite the user to go deeper on something already shown
+        (or, in the jobs case, to check back later for new listings)."""
+        if kind == "opportunity":
+            message = (
+                "Those are all the job openings I have for you right now. New listings come in "
+                "regularly, so it's worth checking back another day. In the meantime, would you "
+                "like to dig into any of the openings we've already looked at, or switch to career "
+                "paths to consider?"
+            )
+        elif kind == "both":
+            message = (
+                "That's everything I have on both sides for now — jobs and career paths. New "
+                "openings come in regularly, so check back another day. For now, would you like "
+                "to go deeper on any of the options we've already looked at?"
+            )
+        else:
+            message = (
+                "Those are all the career paths I have that fit your profile. Would you like to "
+                "go deeper on any of the ones we've already looked at, or shall we look at actual "
+                "job openings you could apply to?"
+            )
+        return ConversationResponse(
+            reasoning=f"No more {kind} recommendations to present; offering to explore shown items",
+            message=message,
+            finished=False,
+        )
+
 
     async def _handle_jobs_followup(
         self,
@@ -669,6 +839,11 @@ class PresentPhaseHandler(BasePhaseHandler):
                 # Switch to the careers view; fall through to the occupation presentation.
                 state.recommendation_view = "careers"
                 return None
+
+            elif intent.intent == "show_more":
+                # Paginate the next batch in the same view (jobs, or jobs+careers for "both").
+                response, s = await self._handle_show_more_intent(user_input, state, context)
+                return response, all_llm_stats + s
 
             elif intent.intent == "express_concern":
                 response, s = await self._handle_concern_intent(intent, user_input, state, context)

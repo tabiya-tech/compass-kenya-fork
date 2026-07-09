@@ -94,6 +94,9 @@ def main():
 
         # Phase transition behavior (optional)
         inline_phase_transition=getenv("COMPASS_INLINE_PHASE_TRANSITION", False, False),
+
+        # Recommender/Advisor batch size (optional; defaults to 5 in the backend)
+        recommendation_batch_size=getenv("COMPASS_RECOMMENDATION_BATCH_SIZE", False, False),
     )
 
     # version of the artifacts to deploy

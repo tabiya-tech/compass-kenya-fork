@@ -10,12 +10,23 @@ from typing import Tuple
 
 from app.agent.agent_types import LLMStats
 from app.agent.llm_caller import LLMCaller
+from app.app_config import get_application_config
 from app.agent.recommender_advisor_agent.state import RecommenderAdvisorAgentState
 from app.agent.recommender_advisor_agent.types import ConversationPhase
 from app.agent.recommender_advisor_agent.llm_response_models import UserIntentClassification
 from app.conversation_memory.conversation_memory_manager import ConversationContext
 from app.conversation_memory.conversation_formatter import ConversationHistoryFormatter
 from common_libs.llm.generative_models import GeminiGenerativeLLM
+
+
+def _batch_size() -> int:
+    """Configured recommendation batch size, with a safe default when the
+    application config has not been initialised (e.g. unit tests that construct
+    the classifier directly without going through the application setup)."""
+    try:
+        return get_application_config().recommendation_batch_size
+    except RuntimeError:
+        return 5
 
 
 class IntentClassifier:
@@ -164,14 +175,14 @@ Always return a valid JSON object matching this exact schema.
         """
         opp_list = ""
         if state.recommendations:
-            for i, opp in enumerate(state.recommendations.opportunity_recommendations[:5], 1):
+            for i, opp in enumerate(state.recommendations.opportunity_recommendations[:_batch_size()], 1):
                 opp_list += f"{i}. {opp.opportunity_title} (uuid: {opp.uuid})\n"
 
         # The "both" view also showed career paths, so the user might reference one of those.
         occ_block = ""
         if state.recommendation_view == "both" and state.recommendations:
             occ_lines = ""
-            for i, occ in enumerate(state.recommendations.occupation_recommendations[:5], 1):
+            for i, occ in enumerate(state.recommendations.occupation_recommendations[:_batch_size()], 1):
                 occ_lines += f"{i}. {occ.occupation} (uuid: {occ.uuid})\n"
             if occ_lines:
                 occ_block = f"""
@@ -196,6 +207,10 @@ Possible intents:
   (its NUMBER in the job-openings list above), using case-insensitive / partial matching.
 - "show_careers": They want to see career paths instead of (or in addition to) the openings
   (e.g. "show me career paths", "what careers do you suggest?").
+- "show_more": They want MORE job openings (or, in the "both" view, more of the same recommendation type)
+  without naming a specific opening. Examples: "show me more jobs", "any other openings?",
+  "what else do you have?", "next", "keep going", "more", "nyingine".
+  If they name a SPECIFIC opening above, that is EXPLORE_OPPORTUNITY (not show_more).
 - "express_concern": They're expressing worry, doubt, or an objection about an opening.
 - "ask_question": A factual question about an opening (e.g. "where is it?", "is it remote?").
 - "accept": They want to move forward / apply.
@@ -204,7 +219,7 @@ Possible intents:
 Your response must be a JSON object with the following schema:
 {{
     "reasoning": "A step by step explanation of why you classified this intent",
-    "intent": "One of: explore_opportunity, explore_occupation, show_careers, express_concern, ask_question, accept, other",
+    "intent": "One of: explore_opportunity, explore_occupation, show_careers, show_more, express_concern, ask_question, accept, other",
     "target_recommendation_id": "The UUID of the opening (or career path) if identified, or null",
     "target_occupation_index": "The 1-based index number in its list if identified, or null",
     "requested_occupation_name": null
@@ -227,7 +242,7 @@ Always return a valid JSON object matching this exact schema.
         # Build occupation list for reference
         occ_list = ""
         if state.recommendations:
-            for i, occ in enumerate(state.recommendations.occupation_recommendations[:5], 1):
+            for i, occ in enumerate(state.recommendations.occupation_recommendations[:_batch_size()], 1):
                 occ_list += f"{i}. {occ.occupation} (uuid: {occ.uuid})\n"
 
         return f"""
@@ -262,7 +277,13 @@ MATCHING EXAMPLES:
 Possible intents:
 - "explore_occupation": They want to learn more about a specific occupation (e.g., "tell me more about Data Analyst", "I'm interested in #1", "what would I do day-to-day?", "I love the marine role")
   CRITICAL: When this intent is detected, you MUST also extract target_occupation_index AND target_recommendation_id using the matching rules above
+- "show_more": They want to see MORE / DIFFERENT recommendations from the same category, without naming a specific one.
+  Examples: "show me more", "any others?", "what else?", "more options", "next", "keep going", "see more", "any other careers?", "any other jobs?", "different ones", "show me the next batch", "nyingine", "zaidi"
+  CRITICAL: They are asking for the NEXT page of the same recommendation type — not naming a specific item.
+  If they name a specific occupation from the list, that is EXPLORE_OCCUPATION (not show_more).
+  If they name an occupation NOT in the list, that is REQUEST_OUTSIDE_RECOMMENDATIONS.
 - "reject": They're explicitly rejecting the current recommendations (e.g., "not interested", "I don't like these", "none of these appeal to me", "I reject that")
+  IMPORTANT: "not these ones, show me others" is SHOW_MORE (wants next batch), not REJECT.
 - "express_concern": They're expressing worry, doubt, hesitation, or identifying problems with a recommendation
   Examples: "I'm worried about...", "what if...", "but...", "seems like it would...", "this takes too much...", "I don't think I can...", "sounds too...", "not enough...", "too boring", "doesn't sound adventurous"
   Key: ANY statement that raises an objection, barrier, or negative aspect about a recommendation
@@ -286,7 +307,7 @@ If they mentioned a specific occupation by name, set target_recommendation_id to
 Your response must be a JSON object with the following schema:
 {{
     "reasoning": "A step by step explanation of why you classified this intent",
-    "intent": "One of: explore_occupation, reject, express_concern, ask_question, accept, request_outside_recommendations, other",
+    "intent": "One of: explore_occupation, show_more, reject, express_concern, ask_question, accept, request_outside_recommendations, other",
     "target_recommendation_id": "The UUID of the recommendation if identified, or null",
     "target_occupation_index": "The 1-based index number if identified, or null",
     "requested_occupation_name": "The occupation name if they requested something outside recommendations, or null"
@@ -315,7 +336,7 @@ Always return a valid JSON object matching this exact schema.
         # Build list of other available occupations
         other_occs = ""
         if state.recommendations:
-            for i, occ in enumerate(state.recommendations.occupation_recommendations[:5], 1):
+            for i, occ in enumerate(state.recommendations.occupation_recommendations[:_batch_size()], 1):
                 if occ.uuid != state.current_focus_id:
                     other_occs += f"{i}. {occ.occupation} (uuid: {occ.uuid})\n"
 
@@ -412,7 +433,7 @@ Always return a valid JSON object matching this exact schema.
         # Build occupation list for reference
         occ_list = ""
         if state.recommendations:
-            for i, occ in enumerate(state.recommendations.occupation_recommendations[:5], 1):
+            for i, occ in enumerate(state.recommendations.occupation_recommendations[:_batch_size()], 1):
                 occ_list += f"{i}. {occ.occupation} (uuid: {occ.uuid})\n"
 
         return f"""
@@ -469,7 +490,7 @@ Always return a valid JSON object matching this exact schema.
         # Build list of other available occupations
         other_occs = ""
         if state.recommendations:
-            for i, occ in enumerate(state.recommendations.occupation_recommendations[:5], 1):
+            for i, occ in enumerate(state.recommendations.occupation_recommendations[:_batch_size()], 1):
                 other_occs += f"{i}. {occ.occupation} (uuid: {occ.uuid})\n"
 
         return f"""
@@ -556,13 +577,13 @@ Always return a valid JSON object matching this exact schema.
         # Build training list
         trainings_list = ""
         if state.recommendations and state.recommendations.skillstraining_recommendations:
-            for i, trn in enumerate(state.recommendations.skillstraining_recommendations[:5], 1):
+            for i, trn in enumerate(state.recommendations.skillstraining_recommendations[:_batch_size()], 1):
                 trainings_list += f"{i}. {trn.training_title} - {trn.skill} (uuid: {trn.uuid})\n"
 
         # Build occupations list for going back
         occs_list = ""
         if state.recommendations and state.recommendations.occupation_recommendations:
-            for i, occ in enumerate(state.recommendations.occupation_recommendations[:5], 1):
+            for i, occ in enumerate(state.recommendations.occupation_recommendations[:_batch_size()], 1):
                 occs_list += f"{i}. {occ.occupation} (uuid: {occ.uuid})\n"
 
         return f"""
@@ -647,7 +668,7 @@ Always return a valid JSON object matching this exact schema.
         # Build occupation list if available
         occ_list = ""
         if state.recommendations:
-            for i, occ in enumerate(state.recommendations.occupation_recommendations[:5], 1):
+            for i, occ in enumerate(state.recommendations.occupation_recommendations[:_batch_size()], 1):
                 occ_list += f"{i}. {occ.occupation}\n"
 
         occ_context = f"""
