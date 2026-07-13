@@ -5,19 +5,26 @@ import { Box, Link, Typography, styled } from "@mui/material";
 // Matches http(s) URLs and www. URLs, stopping at whitespace or common trailing punctuation.
 const URL_REGEX = /((?:https?:\/\/|www\.)[^\s<]+[^\s<.,;:!?)\]}'"])/gi;
 
-// Splits a plain-text message into text and clickable link segments, preserving the original text.
+// Matches **bold** spans.
+const BOLD_REGEX = /(\*\*[^*]+\*\*)/g;
+
+// Splits a plain-text segment into URL links, bold spans, and plain text.
 const renderTextWithLinks = (text: string): React.ReactNode => {
-  const parts = text.split(URL_REGEX);
-  return parts.map((part, index) => {
-    if (index % 2 === 1) {
-      const href = part.startsWith("www.") ? `https://${part}` : part;
-      return (
-        <Link key={index} href={href} target="_blank" rel="noopener noreferrer">
-          {part}
-        </Link>
-      );
+  return text.split(URL_REGEX).flatMap((urlPart, urlIndex) => {
+    if (urlIndex % 2 === 1) {
+      const href = urlPart.startsWith("www.") ? `https://${urlPart}` : urlPart;
+      return [
+        <Link key={`url-${urlIndex}`} href={href} target="_blank" rel="noopener noreferrer">
+          {urlPart}
+        </Link>,
+      ];
     }
-    return part;
+    return urlPart.split(BOLD_REGEX).map((boldPart, boldIndex) => {
+      if (boldPart.startsWith("**") && boldPart.endsWith("**")) {
+        return <strong key={`bold-${urlIndex}-${boldIndex}`}>{boldPart.slice(2, -2)}</strong>;
+      }
+      return boldPart;
+    });
   });
 };
 

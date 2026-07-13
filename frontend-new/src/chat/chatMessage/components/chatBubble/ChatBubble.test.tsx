@@ -6,6 +6,23 @@ import { render, screen } from "src/_test_utilities/test-utils";
 import { ConversationMessageSender } from "src/chat/ChatService/ChatService.types";
 
 describe("render tests", () => {
+  test("should render bold text for **bold** markers in a COMPASS message", () => {
+    // GIVEN a message with bold markers
+    const givenMessage = "Hello **bold text** world";
+    // AND a COMPASS sender
+    const givenSender: ConversationMessageSender = ConversationMessageSender.COMPASS;
+
+    // WHEN the chat bubble is rendered
+    render(<ChatBubble message={givenMessage} sender={givenSender} />);
+
+    // THEN expect the bold text to be rendered in a strong element
+    const strong = document.querySelector("strong");
+    expect(strong).toBeInTheDocument();
+    expect(strong).toHaveTextContent("bold text");
+    // AND the asterisks should not appear in the output
+    expect(screen.getByTestId(DATA_TEST_ID.CHAT_MESSAGE_BUBBLE_MESSAGE_TEXT).textContent).not.toContain("**");
+  });
+
   test("should render the Chat Bubble without a child if none is passed", () => {
     // GIVEN a message
     const givenMessage: string = "Hello, I'm Compass";
