@@ -279,15 +279,10 @@ class LLMAgentDirector(AbstractAgentDirector):
                     transitioned_to_new_phase = True
                     user_input = AgentInput(message="", is_artificial=True)
                 elif transitioned_to_new_phase:
-                    if get_application_config().inline_phase_transition:
-                        # Inline transition: skip the (silence) loop re-invocation.
-                        # The next user message will be routed deterministically via sub-phase.
-                        transitioned_to_new_phase = False
-                    else:
-                        user_input = AgentInput(
-                            message="(silence)",
-                            is_artificial=True
-                        )
+                    user_input = AgentInput(
+                        message="(silence)",
+                        is_artificial=True
+                    )
                 
                 # Clear agent_type after all operations and logging for this iteration
                 # This ensures observability logs capture the agent type throughout execution
