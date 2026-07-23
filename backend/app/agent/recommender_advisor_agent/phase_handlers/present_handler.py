@@ -177,12 +177,20 @@ class PresentPhaseHandler(BasePhaseHandler):
                 all_llm_stats.extend(stats)
                 return response, all_llm_stats
 
-        # Get top occupations to present (strict rank order)
-        occupations = state.recommendations.occupation_recommendations[:_batch_size()]
+        # Get the next unpresented occupations in rank order. Using _next_unpresented
+        # instead of a raw slice ensures pagination works correctly when occupations
+        # were already shown via a "both" view before the user switched to the careers view.
+        occupations = self._next_unpresented(
+            state.recommendations.occupation_recommendations,
+            state.presented_occupations,
+        )
 
         if not occupations:
             # Fall back to opportunity recommendations if no occupations are available
-            opportunities = state.recommendations.opportunity_recommendations[:_batch_size()]
+            opportunities = self._next_unpresented(
+                state.recommendations.opportunity_recommendations,
+                state.presented_opportunities,
+            )
             if opportunities:
                 self.logger.info(
                     f"No occupation recommendations available; presenting {len(opportunities)} opportunity recommendations instead"
@@ -379,7 +387,10 @@ class PresentPhaseHandler(BasePhaseHandler):
         context: ConversationContext,
     ) -> tuple[ConversationResponse, list[LLMStats]]:
         """Present job openings, keeping the conversation open (jobs-only view)."""
-        opportunities = state.recommendations.opportunity_recommendations[:_batch_size()]
+        opportunities = self._next_unpresented(
+            state.recommendations.opportunity_recommendations,
+            state.presented_opportunities,
+        )
         if not opportunities:
             return ConversationResponse(
                 reasoning="User chose jobs but no job openings are available",
@@ -407,8 +418,14 @@ class PresentPhaseHandler(BasePhaseHandler):
         context: ConversationContext,
     ) -> tuple[ConversationResponse, list[LLMStats]]:
         """Present job openings first, then career paths, in one message (both view)."""
-        opportunities = state.recommendations.opportunity_recommendations[:_batch_size()]
-        occupations = state.recommendations.occupation_recommendations[:_batch_size()]
+        opportunities = self._next_unpresented(
+            state.recommendations.opportunity_recommendations,
+            state.presented_opportunities,
+        )
+        occupations = self._next_unpresented(
+            state.recommendations.occupation_recommendations,
+            state.presented_occupations,
+        )
 
         if not opportunities and not occupations:
             return ConversationResponse(
