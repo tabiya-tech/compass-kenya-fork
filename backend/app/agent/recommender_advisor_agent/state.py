@@ -124,6 +124,10 @@ class RecommenderAdvisorAgentState(BaseModel):
         default=None,
         description="Complete Node2Vec algorithm output"
     )
+    recommendation_history: list[Node2VecRecommendations] = Field(
+        default_factory=list,
+        description="Previous recommendation runs, oldest first. Appended on each refresh."
+    )
     
     # === PRESENTATION TRACKING ===
     presented_occupations: list[str] = Field(
@@ -288,6 +292,13 @@ class RecommenderAdvisorAgentState(BaseModel):
         # Convert recommendations from dict if present
         if "recommendations" in data and isinstance(data["recommendations"], dict):
             data["recommendations"] = Node2VecRecommendations(**data["recommendations"])
+
+        # Convert recommendation_history list of dicts if present
+        if "recommendation_history" in data:
+            data["recommendation_history"] = [
+                Node2VecRecommendations(**r) if isinstance(r, dict) else r
+                for r in data["recommendation_history"]
+            ]
         
         # Convert action_commitment from dict if present
         if "action_commitment" in data and isinstance(data["action_commitment"], dict):

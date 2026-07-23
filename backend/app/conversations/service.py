@@ -294,9 +294,22 @@ class ConversationService(IConversationService):
     async def refresh_recommendations(self, user_id: str, session_id: int,
                                       city: str | None = None, province: str | None = None) -> ConversationResponse:
         state = await self._application_state_metrics_recorder.get_state(session_id, city=city, province=province)
+        rec_state = state.recommender_advisor_agent_state
+        # Archive the current recommendations before clearing so they're preserved in the DB.
+        if rec_state.recommendations is not None:
+            rec_state.recommendation_history.append(rec_state.recommendations)
         # Clear cached recommendations so the intro handler re-runs matching
-        state.recommender_advisor_agent_state.recommendations = None
-        state.recommender_advisor_agent_state.conversation_phase = RecommenderConversationPhase.INTRO
+        rec_state.recommendations = None
+        rec_state.conversation_phase = RecommenderConversationPhase.INTRO
+        # Reset all presentation tracking so the new run starts from a clean slate.
+        # Without this, items presented in the previous run are treated as "already seen"
+        # and _next_unpresented skips them, causing the refreshed set to appear empty or
+        # to start mid-way through the new recommendation list.
+        rec_state.presented_occupations = []
+        rec_state.presented_opportunities = []
+        rec_state.presented_trainings = []
+        rec_state.recommendation_view = None
+        rec_state.awaiting_view_choice = False
         await self._application_state_metrics_recorder.save_state(state, user_id)
         # Send an empty message — the recommender INTRO handler fires, fetches fresh
         # results from the matching service, and returns the response.
