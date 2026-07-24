@@ -289,7 +289,7 @@ describe("Testing Consent Page", () => {
         // AND the error message should be displayed
         await waitFor(() => {
           expect(useSnackbar().enqueueSnackbar).toHaveBeenCalledWith(
-            "Failed to update user preferences: Failed to update user preferences",
+            "Imeshindikana kusasisha mapendeleo ya mtumiaji: Failed to update user preferences",
             {
               variant: "error",
             }
@@ -412,7 +412,7 @@ describe("Testing Consent Page", () => {
 
         // AND snack bar should display a success message
         await waitFor(() => {
-          expect(useSnackbar().enqueueSnackbar).toHaveBeenCalledWith("Successfully logged out.", {
+          expect(useSnackbar().enqueueSnackbar).toHaveBeenCalledWith("Umetoka kwa mafanikio.", {
             variant: "success",
           });
         });
@@ -448,7 +448,7 @@ describe("Testing Consent Page", () => {
           expect(console.error).toHaveBeenCalledWith(new AuthenticationError("Failed to log out", error));
         });
         // AND snack bar should display an error message
-        expect(useSnackbar().enqueueSnackbar).toHaveBeenCalledWith("Failed to log out.", { variant: "error" });
+        expect(useSnackbar().enqueueSnackbar).toHaveBeenCalledWith("Imeshindikana kutoka.", { variant: "error" });
       });
 
       test("should not log the user out when the user clicks the cancel button on the approve modal", async () => {

@@ -831,7 +831,7 @@ describe("Sensitive Data Form", () => {
       await user.click(screen.getByTestId(CONFIRM_MODAL_DATA_TEST_IDS.CONFIRM_MODAL_CANCEL));
 
       // THEN an error message should be shown
-      expect(useSnackbar().enqueueSnackbar).toHaveBeenCalledWith("Failed to log out.", { variant: "error" });
+      expect(useSnackbar().enqueueSnackbar).toHaveBeenCalledWith("Imeshindikana kutoka.", { variant: "error" });
     });
 
     it("should handle service errors during skip operation", async () => {
@@ -965,7 +965,7 @@ describe("Sensitive Data Form", () => {
       });
 
       // AND a success message should be shown
-      expect(useSnackbar().enqueueSnackbar).toHaveBeenCalledWith("Successfully logged out.", { variant: "success" });
+      expect(useSnackbar().enqueueSnackbar).toHaveBeenCalledWith("Umetoka kwa mafanikio.", { variant: "success" });
       // AND no console errors or warnings should be logged
       expect(console.warn).not.toHaveBeenCalled();
       expect(console.error).not.toHaveBeenCalled();
