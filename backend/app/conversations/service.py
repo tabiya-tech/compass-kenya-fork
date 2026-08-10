@@ -32,7 +32,8 @@ from app.users.cv.service import ICVUploadService
 from app.users.cv.cv_to_agent_mapper import map_cv_to_collected_data
 from app.context_vars import turn_index_ctx_var, detected_language_ctx_var, user_language_ctx_var
 from app.agent.persona_detector import detect_persona
-from app.agent.language_detector import detect_language, get_locale_for_detected_language, DetectedLanguage
+from app.agent.language_detector import detect_language, get_locale_for_detected_language, DetectedLanguage, \
+    is_structured_message
 from app.i18n.types import Locale
 
 class ConversationAlreadyConcludedError(Exception):
@@ -224,14 +225,24 @@ class ConversationService(IConversationService):
         state.collect_experience_state.persona_type = persona_type
         state.skills_explorer_agent_state.persona_type = persona_type
 
+        # Structured UI payloads (e.g. the BWS best/worst card sends a JSON
+        # {"type": "bws_response", ...}) carry no linguistic signal and can be
+        # misread as English. Exclude them from detection — both from the
+        # stickiness window and as the current message — so they don't flip the
+        # conversation locale away from what the user actually chose.
+        natural_history = [msg for msg in history_messages if not is_structured_message(msg)]
         previous_detections = [
-            detect_language(msg) for msg in history_messages[-3:]
-        ] if history_messages else []
-        detected = detect_language(
-            user_input.message,
-            conversation_history=history_messages,
-            previous_detections=previous_detections or None,
-        )
+            detect_language(msg) for msg in natural_history[-3:]
+        ] if natural_history else []
+        if is_structured_message(user_input.message):
+            # Keep the language implied by prior natural-language turns.
+            detected = previous_detections[-1] if previous_detections else DetectedLanguage.ENGLISH
+        else:
+            detected = detect_language(
+                user_input.message,
+                conversation_history=natural_history,
+                previous_detections=previous_detections or None,
+            )
         detected_language_ctx_var.set(detected.value)
         app_config = get_application_config()
         default_locale = app_config.language_config.default_locale

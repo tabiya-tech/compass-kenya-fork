@@ -15,10 +15,44 @@ DetectedLanguage:
 - MIXED: Input contains significant amounts of both languages
 """
 
+import json
 import re
 from enum import Enum
 from typing import Optional
 from app.i18n.types import Locale
+
+
+# Structured message ``type`` values that UI components submit as the user message
+# instead of natural-language prose. These carry no linguistic signal — and tokens
+# like ``best``/``worst`` even read as English — so they are excluded from language
+# detection to avoid flipping the conversation locale (e.g. away from Swahili).
+#
+# This is an explicit allowlist: a new structured card must be added here on purpose.
+# That keeps behaviour auditable (nothing is silently skipped) while making the guard
+# a one-line change when a genuinely new structured message type is introduced.
+_STRUCTURED_MESSAGE_TYPES = frozenset({"bws_response"})
+
+
+def is_structured_message(message: Optional[str]) -> bool:
+    """
+    Return True if the message is a known structured (machine-generated) payload
+    rather than natural language typed by the user.
+
+    A message qualifies only if it is a JSON object whose ``type`` field is in the
+    ``_STRUCTURED_MESSAGE_TYPES`` allowlist (e.g. the BWS best/worst card sends
+    ``{"type": "bws_response", ...}``). Natural-language prose — even prose that
+    happens to mention "best"/"worst" — is never treated as structured.
+    """
+    if not message:
+        return False
+    stripped = message.strip()
+    if not (stripped.startswith("{") and stripped.endswith("}")):
+        return False
+    try:
+        data = json.loads(stripped)
+    except (json.JSONDecodeError, ValueError):
+        return False
+    return isinstance(data, dict) and data.get("type") in _STRUCTURED_MESSAGE_TYPES
 
 
 class DetectedLanguage(Enum):
