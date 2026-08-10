@@ -259,7 +259,7 @@ def parse_bws_response(user_message: str, task_occupations: List[str]) -> Tuple[
                 return best, worst
             else:
                 raise ValueError(
-                    f"Invalid item codes. Expected codes from: {task_occupations}"
+                    t("messages", "preferenceElicitation.bws.parseFailure")
                 )
     except (json.JSONDecodeError, KeyError):
         # Not JSON or invalid structure - fall through to text parsing
@@ -299,9 +299,7 @@ def parse_bws_response(user_message: str, task_occupations: List[str]) -> Tuple[
         if 1 <= best_num <= len(task_occupations) and 1 <= worst_num <= len(task_occupations):
             return task_occupations[best_num - 1], task_occupations[worst_num - 1]
 
-    # If we can't parse, raise error for LLM to handle
+    # If we can't parse, raise error with a localized clarification for the user
     raise ValueError(
-        "Could not understand your response. Please specify which option you like MOST "
-        "and which you like LEAST using letters (A-E) or numbers (1-5). "
-        "For example: 'Most: B, Least: D'"
+        t("messages", "preferenceElicitation.bws.parseFailure")
     )

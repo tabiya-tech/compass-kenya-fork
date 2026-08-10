@@ -94,7 +94,8 @@
       "example": "\n_Ejemplo: \"Más: B, Menos: D\" o \"Prefiero C y no me gusta A\"_",
       "waIntro": "¡Genial! Ahora que entiendo lo que te importa en un trabajo, vamos a averiguar qué actividades laborales te interesan más.\n\nTe mostraré grupos de actividades laborales. Para cada grupo, dime:\n• ¿Qué actividad **disfrutarías más** haciendo en el trabajo?\n• ¿Cuál **disfrutarías menos**?\n\n",
       "waListHeader": "Aquí tienes 5 actividades laborales:\n\n",
-      "waChoosePrompt": "¿Cuál **disfrutarías más**? ¿Y cuál **disfrutarías menos**?\n"
+      "waChoosePrompt": "¿Cuál **disfrutarías más**? ¿Y cuál **disfrutarías menos**?\n",
+      "parseFailure": "No entendí tu respuesta. Por favor indica qué opción te gusta MÁS y cuál te gusta MENOS usando letras (A-E) o números (1-5). Por ejemplo: 'Más: B, Menos: D'"
     }
   }
 }
