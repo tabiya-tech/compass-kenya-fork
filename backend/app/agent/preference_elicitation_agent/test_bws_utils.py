@@ -162,7 +162,9 @@ class TestParseResponse:
             "worst": "4.A.2.b.5"
         })
 
-        with pytest.raises(ValueError, match="Invalid item codes"):
+        # Invalid codes are rejected with the localized clarification message
+        # (the package conftest sets the locale to EN_US for tests).
+        with pytest.raises(ValueError, match="Could not understand your response"):
             bws_utils.parse_bws_response(json_input, self.task_items)
 
     def test_parse_text_letter_format(self):

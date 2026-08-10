@@ -94,7 +94,8 @@
       "example": "\n_Mfano: \"Zaidi: B, Kidogo: D\" au \"Napendelea C na sipendi A\"_",
       "waIntro": "Vizuri! Sasa kwa kuwa naelewa kinachokuhusu katika kazi, hebu tubaini ni shughuli zipi za kazi zinazokuvutia zaidi.\n\nNitakuonyesha makundi ya shughuli za kazi. Kwa kila kundi, niambie:\n• Ni shughuli ipi ungefurahia **zaidi** kuifanya kazini?\n• Ni ipi ungefurahia **kidogo** zaidi?\n\n",
       "waListHeader": "Hizi ni shughuli 5 za kazi:\n\n",
-      "waChoosePrompt": "Ni ipi ungefurahia **zaidi**? Na ni ipi ungefurahia **kidogo** zaidi?\n"
+      "waChoosePrompt": "Ni ipi ungefurahia **zaidi**? Na ni ipi ungefurahia **kidogo** zaidi?\n",
+      "parseFailure": "Sikuelewa jibu lako. Tafadhali onyesha ni chaguo lipi unalopenda ZAIDI na lipi unalopenda KIDOGO zaidi ukitumia herufi (A-E) au namba (1-5). Kwa mfano: 'Zaidi: B, Kidogo: D'"
     }
   }
 }
