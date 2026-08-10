@@ -84,6 +84,17 @@
     "alreadyComplete": "Ya he registrado tus preferencias. ¡Pasemos a encontrar oportunidades para ti!",
     "errorRetry": "Estoy teniendo algunos problemas en este momento. ¿Podrías intentarlo de nuevo?",
     "followUpFallback": "¿Podrías contarme más sobre tu elección?",
-    "followUpFallbackNoVignette": "¿Podrías contarme un poco más sobre por qué elegiste esa opción?"
+    "followUpFallbackNoVignette": "¿Podrías contarme un poco más sobre por qué elegiste esa opción?",
+    "bws": {
+      "occupationIntro": "¡Genial! Ahora que entiendo lo que te importa en un trabajo, vamos a averiguar qué áreas profesionales generales te interesan más.\n\nTe mostraré grupos de tipos de trabajo. Para cada grupo, dime:\n• ¿Qué tipo de trabajo te gustaría **más** tener?\n• ¿Cuál te gustaría **menos**?\n\n",
+      "questionHeader": "**Pregunta {task_number} de {total_tasks}**\n\n",
+      "occupationListHeader": "Aquí tienes 5 tipos de trabajo:\n\n",
+      "occupationItemFallback": "Ocupación {code}",
+      "occupationChoosePrompt": "¿Cuál te gustaría hacer **más**? ¿Y cuál te gustaría hacer **menos**?\n",
+      "example": "\n_Ejemplo: \"Más: B, Menos: D\" o \"Prefiero C y no me gusta A\"_",
+      "waIntro": "¡Genial! Ahora que entiendo lo que te importa en un trabajo, vamos a averiguar qué actividades laborales te interesan más.\n\nTe mostraré grupos de actividades laborales. Para cada grupo, dime:\n• ¿Qué actividad **disfrutarías más** haciendo en el trabajo?\n• ¿Cuál **disfrutarías menos**?\n\n",
+      "waListHeader": "Aquí tienes 5 actividades laborales:\n\n",
+      "waChoosePrompt": "¿Cuál **disfrutarías más**? ¿Y cuál **disfrutarías menos**?\n"
+    }
   }
 }

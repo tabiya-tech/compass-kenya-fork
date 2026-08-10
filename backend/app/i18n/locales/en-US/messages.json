@@ -84,6 +84,17 @@
     "alreadyComplete": "I've already recorded your preferences. Let's move on to finding opportunities for you!",
     "errorRetry": "I'm having some trouble right now. Could you please try again?",
     "followUpFallback": "Could you tell me more about your choice?",
-    "followUpFallbackNoVignette": "Could you tell me a bit more about why you chose that option?"
+    "followUpFallbackNoVignette": "Could you tell me a bit more about why you chose that option?",
+    "bws": {
+      "occupationIntro": "Great! Now that I understand what matters to you in a job, let's figure out which broad career areas interest you most.\n\nI'll show you groups of job types. For each group, tell me:\n• Which type of job would you **most** like to have?\n• Which would you **least** like to have?\n\n",
+      "questionHeader": "**Question {task_number} of {total_tasks}**\n\n",
+      "occupationListHeader": "Here are 5 job types:\n\n",
+      "occupationItemFallback": "Occupation {code}",
+      "occupationChoosePrompt": "Which would you **most** like to do? And which would you **least** like to do?\n",
+      "example": "\n_Example: \"Most: B, Least: D\" or \"I prefer C and dislike A\"_",
+      "waIntro": "Great! Now that I understand what matters to you in a job, let's figure out which work activities interest you most.\n\nI'll show you groups of work activities. For each group, tell me:\n• Which activity would you **most** enjoy doing at work?\n• Which would you **least** enjoy?\n\n",
+      "waListHeader": "Here are 5 work activities:\n\n",
+      "waChoosePrompt": "Which would you **most** enjoy? And which would you **least** enjoy?\n"
+    }
   }
 }

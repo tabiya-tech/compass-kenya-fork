@@ -84,6 +84,17 @@
     "alreadyComplete": "Tayari nimerekodi mapendeleo yako. Tuendelee kutafuta fursa kwa ajili yako!",
     "errorRetry": "Nina matatizo fulani kwa sasa. Tafadhali unaweza kujaribu tena?",
     "followUpFallback": "Unaweza kunieleza zaidi kuhusu chaguo lako?",
-    "followUpFallbackNoVignette": "Unaweza kunieleza zaidi kwa nini ulichagua chaguo hilo?"
+    "followUpFallbackNoVignette": "Unaweza kunieleza zaidi kwa nini ulichagua chaguo hilo?",
+    "bws": {
+      "occupationIntro": "Vizuri! Sasa kwa kuwa naelewa kinachokuhusu katika kazi, hebu tubaini ni maeneo gani mapana ya kazi yanayokuvutia zaidi.\n\nNitakuonyesha makundi ya aina za kazi. Kwa kila kundi, niambie:\n• Ni aina gani ya kazi ungependa **zaidi** kuwa nayo?\n• Ni ipi ungependa **kidogo** zaidi?\n\n",
+      "questionHeader": "**Swali {task_number} kati ya {total_tasks}**\n\n",
+      "occupationListHeader": "Hizi ni aina 5 za kazi:\n\n",
+      "occupationItemFallback": "Kazi {code}",
+      "occupationChoosePrompt": "Ni ipi ungependa kuifanya **zaidi**? Na ni ipi ungependa kuifanya **kidogo** zaidi?\n",
+      "example": "\n_Mfano: \"Zaidi: B, Kidogo: D\" au \"Napendelea C na sipendi A\"_",
+      "waIntro": "Vizuri! Sasa kwa kuwa naelewa kinachokuhusu katika kazi, hebu tubaini ni shughuli zipi za kazi zinazokuvutia zaidi.\n\nNitakuonyesha makundi ya shughuli za kazi. Kwa kila kundi, niambie:\n• Ni shughuli ipi ungefurahia **zaidi** kuifanya kazini?\n• Ni ipi ungefurahia **kidogo** zaidi?\n\n",
+      "waListHeader": "Hizi ni shughuli 5 za kazi:\n\n",
+      "waChoosePrompt": "Ni ipi ungefurahia **zaidi**? Na ni ipi ungefurahia **kidogo** zaidi?\n"
+    }
   }
 }

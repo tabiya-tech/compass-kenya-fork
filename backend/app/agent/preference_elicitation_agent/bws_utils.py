@@ -9,6 +9,30 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 from collections import defaultdict
 
+from app.context_vars import user_language_ctx_var
+from app.i18n.translation_service import t
+from app.i18n.types import Locale
+
+# The simplified English label is the default; locales with a dedicated translated field
+# in onet_wa_tasks.json override it.
+_WA_LABEL_FIELD_DEFAULT = "WA_Element_Name_simplified"
+_WA_LABEL_FIELD_BY_LOCALE: Dict[Locale, str] = {
+    Locale.SW_KE: "WA_Element_Name_swahili",
+}
+
+
+def _resolve_wa_label_field() -> str:
+    """Pick the WA label field for the active locale (``user_language_ctx_var``).
+
+    Falls back to the simplified English label when no locale is set in context or the
+    active locale has no dedicated translated field.
+    """
+    try:
+        locale = user_language_ctx_var.get()
+    except LookupError:
+        return _WA_LABEL_FIELD_DEFAULT
+    return _WA_LABEL_FIELD_BY_LOCALE.get(locale, _WA_LABEL_FIELD_DEFAULT)
+
 
 def load_bws_tasks() -> List[Dict]:
     """Load static BWS tasks from config (now WA-element based)."""
@@ -38,9 +62,17 @@ def load_wa_items() -> List[Dict]:
 
 
 def load_wa_labels() -> Dict[str, str]:
-    """Load WA_Element_ID → WA_Element_Name_simplified mapping."""
+    """Load WA_Element_ID → localized label mapping for the active locale.
+
+    The label field is chosen from the active locale (Swahili, …) and falls
+    back to the simplified English label when the locale has no dedicated field.
+    """
+    field = _resolve_wa_label_field()
     items = load_wa_items()
-    return {item["WA_Element_ID"]: item["WA_Element_Name_simplified"] for item in items}
+    return {
+        item["WA_Element_ID"]: item.get(field) or item["WA_Element_Name_simplified"]
+        for item in items
+    }
 
 
 def load_occupation_labels() -> Dict[str, str]:
@@ -128,18 +160,13 @@ def format_bws_question(task: Dict, task_number: int, total_tasks: int = 12) -> 
     occupations = task["occupations"]
 
     # Build question
-    if task_number == 1:
-        intro = (
-            "Great! Now that I understand what matters to you in a job, let's figure out which broad career areas interest you most.\n\n"
-            "I'll show you groups of job types. For each group, tell me:\n"
-            "• Which type of job would you **most** like to have?\n"
-            "• Which would you **least** like to have?\n\n"
-        )
-    else:
-        intro = ""
+    intro = t("messages", "preferenceElicitation.bws.occupationIntro") if task_number == 1 else ""
 
-    question = f"{intro}**Question {task_number} of {total_tasks}**\n\n"
-    question += "Here are 5 job types:\n\n"
+    question = intro + t(
+        "messages", "preferenceElicitation.bws.questionHeader",
+        task_number=task_number, total_tasks=total_tasks,
+    )
+    question += t("messages", "preferenceElicitation.bws.occupationListHeader")
 
     for i, occ_code in enumerate(occupations, 1):
         occ_data = occupation_map.get(occ_code)
@@ -153,10 +180,11 @@ def format_bws_question(task: Dict, task_number: int, total_tasks: int = 12) -> 
             question += f"   _{description}_\n\n"
         else:
             # Fallback if occupation not found
-            question += f"{chr(64+i)}. **Occupation {occ_code}**\n\n"
+            fallback = t("messages", "preferenceElicitation.bws.occupationItemFallback", code=occ_code)
+            question += f"{chr(64+i)}. **{fallback}**\n\n"
 
-    question += "Which would you **most** like to do? And which would you **least** like to do?\n"
-    question += "\n_Example: \"Most: B, Least: D\" or \"I prefer C and dislike A\"_"
+    question += t("messages", "preferenceElicitation.bws.occupationChoosePrompt")
+    question += t("messages", "preferenceElicitation.bws.example")
 
     return question
 
@@ -176,26 +204,20 @@ def format_bws_wa_question(task: Dict, task_number: int, total_tasks: int = 8) -
     wa_labels = load_wa_labels()
     items = task["items"]
 
-    if task_number == 1:
-        intro = (
-            "Great! Now that I understand what matters to you in a job, "
-            "let's figure out which work activities interest you most.\n\n"
-            "I'll show you groups of work activities. For each group, tell me:\n"
-            "• Which activity would you **most** enjoy doing at work?\n"
-            "• Which would you **least** enjoy?\n\n"
-        )
-    else:
-        intro = ""
+    intro = t("messages", "preferenceElicitation.bws.waIntro") if task_number == 1 else ""
 
-    question = f"{intro}**Question {task_number} of {total_tasks}**\n\n"
-    question += "Here are 5 work activities:\n\n"
+    question = intro + t(
+        "messages", "preferenceElicitation.bws.questionHeader",
+        task_number=task_number, total_tasks=total_tasks,
+    )
+    question += t("messages", "preferenceElicitation.bws.waListHeader")
 
     for i, wa_id in enumerate(items, 1):
         label = wa_labels.get(wa_id, wa_id)
         question += f"{chr(64+i)}. **{label}**\n\n"
 
-    question += "Which would you **most** enjoy? And which would you **least** enjoy?\n"
-    question += "\n_Example: \"Most: B, Least: D\" or \"I prefer C and dislike A\"_"
+    question += t("messages", "preferenceElicitation.bws.waChoosePrompt")
+    question += t("messages", "preferenceElicitation.bws.example")
 
     return question
 
