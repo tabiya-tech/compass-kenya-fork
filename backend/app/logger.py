@@ -8,8 +8,11 @@ from app.context_vars import (
     turn_index_ctx_var,
     agent_type_ctx_var,
     phase_ctx_var,
+    module_ctx_var,
+    sub_module_ctx_var,
     llm_call_duration_ms_ctx_var
 )
+from common_libs.observability.tracing import current_trace_id
 
 
 class SessionIdLogFilter(logging.Filter):
@@ -30,6 +33,13 @@ class SessionIdLogFilter(logging.Filter):
         record.agent_type = agent_type_ctx_var.get()
         record.phase = phase_ctx_var.get()
         record.llm_call_duration_ms = llm_call_duration_ms_ctx_var.get()
+
+        # The Compass Connect suite area, the area within it and the Langfuse trace, so a log line
+        # can be pivoted straight to the trace it belongs to. Named trace_module rather than module
+        # because LogRecord already defines `module` as the name of the module that emitted the record.
+        record.trace_module = module_ctx_var.get()
+        record.trace_sub_module = sub_module_ctx_var.get()
+        record.trace_id = current_trace_id()
 
         return True
 
@@ -72,5 +82,9 @@ class JsonLogFormatter(logging.Formatter):
             "turn_index": getattr(record, 'turn_index', -1),
             "agent_type": getattr(record, 'agent_type', ':none:'),
             "phase": getattr(record, 'phase', ':none:'),
-            "llm_call_duration_ms": getattr(record, 'llm_call_duration_ms', -1)
+            "llm_call_duration_ms": getattr(record, 'llm_call_duration_ms', -1),
+            # LLM tracing correlation (CC-1)
+            "trace_module": getattr(record, 'trace_module', ':none:'),
+            "trace_sub_module": getattr(record, 'trace_sub_module', ':none:'),
+            "trace_id": getattr(record, 'trace_id', None)
         })

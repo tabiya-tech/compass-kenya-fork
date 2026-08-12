@@ -27,6 +27,16 @@ agent_type_ctx_var = contextvars.ContextVar("agent_type", default=":none:")
 # Current conversation phase
 phase_ctx_var = contextvars.ContextVar("phase", default=":none:")
 
+# The Compass Connect suite area (module) the current work belongs to.
+# Holds the *value* of an app.observability.TraceModule, e.g. "Build your Profile".
+# Set at the service entry points and used to group LLM traces by module.
+module_ctx_var = contextvars.ContextVar("module", default=":none:")
+
+# The area within the module the current work belongs to, e.g. "Preference Elicitation" for a
+# Build Your Profile turn or "CV Development" for a Career Readiness one.
+# Set at the service entry points and used to group LLM traces one level below the module.
+sub_module_ctx_var = contextvars.ContextVar("sub_module", default=":none:")
+
 # LLM call duration in milliseconds (for current operation)
 llm_call_duration_ms_ctx_var = contextvars.ContextVar("llm_call_duration_ms", default=-1)
 
