@@ -298,9 +298,10 @@ class DatabaseApplicationStateStore(ApplicationStateStore):
                 state.recommender_advisor_agent_state.bws_scores = bws_scores
                 state.recommender_advisor_agent_state.top_10_bws = top_10_bws
 
-                # Extract and transfer skills vector
+                # Extract and transfer skills vector from all explored experiences, not just
+                # the initial snapshot (which only contains the first explored experience).
                 state.recommender_advisor_agent_state.skills_vector = self._extract_skills_from_experiences(
-                    state.preference_elicitation_agent_state.initial_experiences_snapshot
+                    state.explore_experiences_director_state.explored_experiences
                 )
 
                 # Set youth_id based on session_id

@@ -148,8 +148,17 @@ class SkillsExtractor:
 
             # Process top_skills
             if experience.top_skills:
-                for skill in experience.top_skills:
-                    if not isinstance(skill, SkillEntity):
+                for raw_skill in experience.top_skills:
+                    # explored_experiences stores skills as [index, skill] lists (tuple-format
+                    # from get_editable_experience, serialized to lists by MongoDB).
+                    # initial_experiences_snapshot stores bare SkillEntity objects.
+                    if isinstance(raw_skill, (list, tuple)):
+                        raw_skill = raw_skill[1]
+                    if isinstance(raw_skill, dict):
+                        skill = SkillEntity(**raw_skill)
+                    elif isinstance(raw_skill, SkillEntity):
+                        skill = raw_skill
+                    else:
                         continue
 
                     skill_uuid = skill.UUID
@@ -172,8 +181,14 @@ class SkillsExtractor:
 
             # Process remaining_skills
             if experience.remaining_skills:
-                for skill in experience.remaining_skills:
-                    if not isinstance(skill, SkillEntity):
+                for raw_skill in experience.remaining_skills:
+                    if isinstance(raw_skill, (list, tuple)):
+                        raw_skill = raw_skill[1]
+                    if isinstance(raw_skill, dict):
+                        skill = SkillEntity(**raw_skill)
+                    elif isinstance(raw_skill, SkillEntity):
+                        skill = raw_skill
+                    else:
                         continue
 
                     skill_uuid = skill.UUID
