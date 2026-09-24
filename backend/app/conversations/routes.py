@@ -20,6 +20,7 @@ from app.conversations.reactions.repository import ReactionRepository
 from app.conversations.reactions.routes import add_reaction_routes, get_user_preferences_repository
 from app.conversations.service import ConversationAlreadyConcludedError, IConversationService, ConversationService
 from app.conversations.types import ConversationResponse, ConversationInput
+from app.observability.treatment_group import set_treatment_group
 from app.job_preferences.get_job_preferences_service import get_job_preferences_service
 from app.job_preferences.service import IJobPreferencesService
 from app.user_recommendations.services.get_user_recommendations_service import get_user_recommendations_service
@@ -116,6 +117,8 @@ def add_conversation_routes(app: FastAPI, authentication: Authentication):
 
             # set the client_id in the context variable.
             client_id_ctx_var.set(current_user_preferences.client_id)
+            # and the treatment group, so the turn's trace is tagged with it
+            set_treatment_group(current_user_preferences.experiments)
 
             return await service.send(user_id, session_id, user_input, clear_memory, filter_pii,
                                       city=current_user_preferences.city,

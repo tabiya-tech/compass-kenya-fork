@@ -193,8 +193,9 @@ class LLMAgentDirector(AbstractAgentDirector):
             if self._state is None:
                 raise RuntimeError("AgentDirectorState must be set before executing")
             
-            # Set initial phase in context for observability logging
-            phase_ctx_var.set(self._state.current_phase.value)
+            # Set initial phase in context for observability logging. The name ("COUNSELING") rather than
+            # the enum value (1), so logs and traces carry a readable label.
+            phase_ctx_var.set(self._state.current_phase.name)
             
             first_call: bool = True
             transitioned_to_new_phase: bool = False
@@ -273,7 +274,7 @@ class LLMAgentDirector(AbstractAgentDirector):
                 transitioned_to_new_phase = _will_transition
                 if transitioned_to_new_phase:
                     self._state.current_phase = new_phase
-                    phase_ctx_var.set(new_phase.value if new_phase else ":none:")
+                    phase_ctx_var.set(new_phase.name if new_phase else ":none:")
 
                 if _will_transition_to_preference:
                     transitioned_to_new_phase = True
