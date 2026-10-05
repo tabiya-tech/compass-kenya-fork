@@ -1,45 +1,48 @@
-from typing import Literal, final, Final
+from enum import StrEnum
+from typing import Literal, Final
 
 Model = Literal[
-    # gemini-1.5-flash is an auto update version the points to the most recent stable version
-    # see https://cloud.google.com/vertex-ai/generative-ai/docs/learn/model-versioning#auto-updated-version
-    # "gemini-1.5-flash-001",
-    # "gemini-2.0-flash-001",
     "gemini-2.5-flash-lite",
     "gemini-2.5-flash",
     "gemini-2.5-pro",
 ]
 
 
-@final
-class AgentsConfig:
-    default_model: Final[Model] = "gemini-2.5-flash-lite"
+class ModelTier(StrEnum):
     """
-    The LLM model name to use by default.
-    Uses Flash Lite for fast response times in conversation-facing agents.
+    The capability tier an LLM call needs. The concrete model for each tier is resolved at call time
+    from the LLM_DEFAULT_MODEL, LLM_REASONING_MODEL and LLM_DEEP_REASONING_MODEL environment variables,
+    see `common_libs.llm.models_utils.resolve_model_name`.
+    """
+
+    DEFAULT = "default"
+    """
+    The model to use by default.
+    Used by conversation-facing agents that need fast response times.
     Swahili support is handled via mapping/normalization layer instead of model upgrade.
     """
 
-    fast_model: Final[Model] = "gemini-2.5-flash"
+    REASONING = "reasoning"
     """
-    The fast LLM model name to use.
-    
-    Expectations
-    - Low reasoning
-    - Fast in response time
-    """
+    The model to use for tasks that need good reasoning.
 
-    deep_reasoning_model: Final[Model] = "gemini-2.5-flash"
-    """
-    The LLM model name to use for deep reasoning.
-    
     Expectations
     - Good reasoning
-    - Slow in response time compared to the fast model
+    - Slow in response time compared to the default model
     """
 
-    ultra_high_reasoning_model: Final[Model] = "gemini-2.5-pro"
+    DEEP_REASONING = "deep_reasoning"
     """
-    Ultra high reasoning models to be used. 
+    The model to use for tasks that need the strongest reasoning,
     for specific cases like evaluations that don't run at run time.
     """
+
+
+GEMINI_DEFAULT_MODELS: Final[dict[ModelTier, Model]] = {
+    ModelTier.DEFAULT: "gemini-2.5-flash-lite",
+    ModelTier.REASONING: "gemini-2.5-flash",
+    ModelTier.DEEP_REASONING: "gemini-2.5-pro",
+}
+"""
+The Gemini model used for each tier when the tier's environment variable is not set.
+"""

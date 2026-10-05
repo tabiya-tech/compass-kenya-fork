@@ -15,7 +15,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from app.agent.config import AgentsConfig
+from app.agent.config import ModelTier
 from app.agent.prompt_template import get_language_style
 from app.agent.prompt_template.agent_prompt_template import STD_AGENT_CHARACTER
 from common_libs.llm.generative_models import GeminiGenerativeLLM
@@ -89,7 +89,7 @@ async def generate_bridge_to_work_type(
         llm = GeminiGenerativeLLM(
             system_instructions=_build_system_instructions(),
             config=LLMConfig(
-                language_model_name=AgentsConfig.default_model,
+                model_tier=ModelTier.DEFAULT,
                 generation_config=_BRIDGE_GENERATION_CONFIG,
             ),
         )

@@ -6,7 +6,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 from app.agent.agent_types import AgentInput, LLMStats
-from app.agent.config import AgentsConfig
+from app.agent.config import ModelTier
 from app.agent.llm_caller import LLMCaller
 from app.agent.penalty import get_penalty
 from app.agent.prompt_template import get_language_style
@@ -84,7 +84,7 @@ class TransitionDecisionTool:
                 language_style=get_language_style()
             ),
             config=LLMConfig(
-                language_model_name=AgentsConfig.deep_reasoning_model,
+                model_tier=ModelTier.REASONING,
                 generation_config=ZERO_TEMPERATURE_GENERATION_CONFIG
                 | JSON_GENERATION_CONFIG
                 | temperature_config
