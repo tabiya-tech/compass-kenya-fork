@@ -194,7 +194,7 @@ class SkillsPivotPhaseHandler(BasePhaseHandler):
         # Import here to avoid circular dependency
         from app.agent.recommender_advisor_agent.prompts import build_context_block
         from app.conversation_memory.conversation_formatter import ConversationHistoryFormatter
-        from app.agent.simple_llm_agent.prompt_response_template import get_json_response_instructions
+        from app.agent.simple_llm_agent.prompt_response_template import get_response_instructions
 
         # Build context
         skills_list = self._extract_skills_list(state)
@@ -261,18 +261,17 @@ Generate a response that:
 - Be educational (show the map), not judgmental
 - End with OPTIONS (not dead ends)
 - Do NOT ask "What interests you about Music Director?" (prevents derailing)
-- Response must be JSON matching ConversationResponse schema
 - Set `finished` to `false`
 - NEVER provide specific contact information, URLs, or addresses you don't have - stick to general career guidance only
 
-**REQUIRED OUTPUT FORMAT** (JSON):
+**EXAMPLE RESPONSE** (treat it as an example, do not repeat it exactly):
 {{
     "reasoning": "User passionate about Music Director. Providing educational career path guidance and realistic stepping stones.",
     "message": "I understand you're passionate about Music Director work. To become a Music Director, you'd typically need skills in music theory, composition, conducting, and sound engineering. Most people start by learning an instrument or music production, then gain experience in smaller musical projects, and eventually work up to directing. This path usually takes 3-5 years of dedicated training and practice. While your current electrical skills are quite different, they could actually be useful when working with sound engineering equipment and stage setups. Our Electrician Grade III Certification could be a foundation for technical sound work, which is often a stepping stone into the music industry. Would you like to explore this technical music path, or look at careers that build more directly on your current strengths?",
     "finished": false
 }}
 
-""" + get_json_response_instructions()
+""" + get_response_instructions()
 
         # Call LLM
         try:
@@ -367,12 +366,6 @@ You previously provided educational career path guidance for "{requested_occupat
 - "Show me careers that match my skills" → FALSE
 - "I want to see the other recommendations" → FALSE
 - "Actually, let's focus on what you recommended" → FALSE
-
-**REQUIRED OUTPUT FORMAT** (JSON):
-{{
-    "wants_training_path": true,
-    "reasoning": "User explicitly said they want to explore the technical route further"
-}}
 """
 
         try:
@@ -460,7 +453,7 @@ You previously provided educational career path guidance for "{requested_occupat
             SKILLS_UPGRADE_PIVOT_PROMPT,
         )
         from app.conversation_memory.conversation_formatter import ConversationHistoryFormatter
-        from app.agent.simple_llm_agent.prompt_response_template import get_json_response_instructions
+        from app.agent.simple_llm_agent.prompt_response_template import get_response_instructions
 
         # Build context
         skills_list = self._extract_skills_list(state)
@@ -530,7 +523,6 @@ Respond helpfully and contextually to the user's input. You should:
 - Respond directly to what they said (don't ignore their question!)
 - Don't just dump a static training list
 - Be helpful and relevant
-- Response must be JSON matching ConversationResponse schema
 - Set `finished` to `false`
 
 **FORBIDDEN - DO NOT HALLUCINATE**:
@@ -539,14 +531,7 @@ Respond helpfully and contextually to the user's input. You should:
 - NEVER make up URLs, phone numbers, or addresses
 - Be honest about what information you don't have
 
-**REQUIRED OUTPUT FORMAT** (JSON):
-{{
-    "reasoning": "User is [what they're doing/asking]. Responding with [your approach].",
-    "message": "[Your contextual, helpful response to their specific input]",
-    "finished": false
-}}
-
-""" + get_json_response_instructions()
+""" + get_response_instructions()
 
         # Call LLM
         try:

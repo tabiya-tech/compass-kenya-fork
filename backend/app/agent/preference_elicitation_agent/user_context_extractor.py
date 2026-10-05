@@ -30,7 +30,7 @@ class ExtractedUserContext(BaseModel):
 
     industry: Optional[str] = Field(
         default=None,
-        description="Industry/sector (e.g., 'Technology', 'Education', 'Retail', 'Healthcare')"
+        description="Industry/sector of the most recent role (e.g., 'Technology', 'Education', 'Retail', 'Healthcare')"
     )
 
     experience_level: str = Field(
@@ -40,7 +40,7 @@ class ExtractedUserContext(BaseModel):
 
     key_experiences: list[str] = Field(
         default_factory=list,
-        description="List of key past experiences or employers"
+        description="List of notable past employers or roles (max 3)"
     )
 
     background_summary: Optional[str] = Field(
@@ -50,7 +50,8 @@ class ExtractedUserContext(BaseModel):
 
     all_backgrounds: list[str] = Field(
         default_factory=list,
-        description="ALL experience backgrounds as 'Role | Industry' strings (one per past experience, newest first)"
+        description="ALL experience backgrounds as 'Role | Industry' strings (one per past experience, newest first), "
+                    "e.g. ['Software Developer | Technology', 'Sales Associate | Retail', 'Teacher | Education']"
     )
 
 
@@ -98,15 +99,6 @@ For Kenyan context, recognize local companies and roles:
 - Teaching roles = Education
 - Shop/retail roles = Retail
 - Matatu conductor, driver = Transportation
-
-Output Schema:
-You must return a JSON object with exactly these fields:
-- current_role (string or null): Most recent job title (e.g., "Software Developer", "Teacher")
-- industry (string or null): Industry/sector of most recent role (e.g., "Technology", "Education", "Retail")
-- experience_level (string): One of: "entry", "junior", "mid", "senior", or "expert"
-- key_experiences (array of strings): List of notable employers or roles (max 3)
-- background_summary (string or null): Brief 1-2 sentence summary of their background
-- all_backgrounds (array of strings): One "Role | Industry" string per experience, newest first (e.g., ["Software Developer | Technology", "Sales Associate | Retail", "Teacher | Education"])
 
 Example Output:
 {
