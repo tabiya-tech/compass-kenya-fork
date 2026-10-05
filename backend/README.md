@@ -538,9 +538,13 @@ For more details, see [app/agent/preference_elicitation_agent/README.md](app/age
 ### AI & Embeddings
 
 - `VERTEX_API_EMBEDDINGS_REGION` - Vertex AI region for embedding models (must be a regional location, e.g. `us-central1`)
-- `VERTEX_API_GEN_AI_REGION` - Vertex AI region for generative-AI calls (regional or `global`, default: `us-central1`)
+- `VERTEX_API_GEN_AI_REGION` - Vertex AI region for generative-AI calls (regional or `global`, default: `global`). The default and reasoning Gemini 3.x models are only available in `global`
 - `EMBEDDINGS_SERVICE_NAME` - Embeddings service provider
 - `EMBEDDINGS_MODEL_NAME` - Model for generating embeddings
+- `LLM_DEFAULT_MODEL` - Model for the default tier (default: `gemini-3.5-flash-lite`)
+- `LLM_REASONING_MODEL` - Model for the reasoning tier (default: `gemini-3.8-flash`)
+- `LLM_DEEP_REASONING_MODEL` - Model for the deep reasoning tier (default: `gemini-3.1-pro-preview`)
+  - Gemini models are called through the google-genai Interactions API, which only supports `gemini-3.5-flash-lite`, `gemini-3.8-flash` and `gemini-3.1-pro-preview` (the 2.5 models are rejected)
 
 ### Application
 
