@@ -61,6 +61,62 @@ async def setup_search_services() -> SearchServices:
     return search_services
 
 
+def _multi_locale_language_config() -> LanguageConfig:
+    return LanguageConfig(
+        default_locale=Locale.EN_US,
+        available_locales=[
+            LocaleDateFormatEntry(locale=Locale.EN_US, date_format="MM/DD/YYYY"),
+            LocaleDateFormatEntry(locale=Locale.EN_GB, date_format="DD/MM/YYYY"),
+            LocaleDateFormatEntry(locale=Locale.ES_AR, date_format="DD/MM/YYYY"),
+            LocaleDateFormatEntry(locale=Locale.ES_ES, date_format="DD/MM/YYYY"),
+            LocaleDateFormatEntry(locale=Locale.SW_KE, date_format="DD/MM/YYYY"),
+        ],
+    )
+
+
+def _eval_application_config(language_config: LanguageConfig) -> ApplicationConfig:
+    """
+    The ApplicationConfig used by evaluation tests.
+    """
+    return ApplicationConfig(
+        environment_name="test",
+        version_info=Version(date="test", branch="test", buildNumber="test", sha="test"),
+        enable_metrics=False,
+        default_country_of_user=Country.UNSPECIFIED,
+        taxonomy_model_id="test",
+        embeddings_service_name="test",
+        embeddings_model_name="test",
+        cv_storage_bucket="test",
+        features={},
+        language_config=language_config,
+        app_name="Compass",
+        admin_firebase_tenant_id="temp-tenant-id",
+        matching_service_url="https://test-matching-service",
+        matching_service_api_key="test-matching-api-key",
+    )
+
+
+@pytest.fixture(scope="function", autouse=True)
+def ensure_application_config():
+    """
+    Makes sure an ApplicationConfig is set for every evaluation test. Tests that request a specific config
+    (e.g. `setup_application_config`) still override it.
+    """
+    try:
+        get_application_config()
+        config_was_set = True
+    except RuntimeError:
+        config_was_set = False
+
+    if not config_was_set:
+        set_application_config(_eval_application_config(_multi_locale_language_config()))
+
+    yield
+
+    if not config_was_set:
+        set_application_config(None)
+
+
 @pytest.fixture(scope="function")
 def setup_multi_locale_app_config():
     """
@@ -72,34 +128,10 @@ def setup_multi_locale_app_config():
     except RuntimeError:
         current = None
 
-    language_config = LanguageConfig(
-        default_locale=Locale.EN_US,
-        available_locales=[
-            LocaleDateFormatEntry(locale=Locale.EN_US, date_format="MM/DD/YYYY"),
-            LocaleDateFormatEntry(locale=Locale.EN_GB, date_format="DD/MM/YYYY"),
-            LocaleDateFormatEntry(locale=Locale.ES_AR, date_format="DD/MM/YYYY"),
-            LocaleDateFormatEntry(locale=Locale.ES_ES, date_format="DD/MM/YYYY"),
-            LocaleDateFormatEntry(locale=Locale.SW_KE, date_format="DD/MM/YYYY"),
-        ],
-    )
+    language_config = _multi_locale_language_config()
 
     if current is None:
-        config = ApplicationConfig(
-            environment_name="test",
-            version_info=Version(date="test", branch="test", buildNumber="test", sha="test"),
-            enable_metrics=False,
-            default_country_of_user=Country.UNSPECIFIED,
-            taxonomy_model_id="test",
-            embeddings_service_name="test",
-            embeddings_model_name="test",
-            cv_storage_bucket="test",
-            features={},
-            language_config=language_config,
-            app_name="Compass",
-            admin_firebase_tenant_id="temp-tenant-id",
-            matching_service_url="https://test-matching-service",
-            matching_service_api_key="test-matching-api-key",
-        )
+        config = _eval_application_config(language_config)
     else:
         config = current.model_copy(update={"language_config": language_config})
 
@@ -110,7 +142,6 @@ def setup_multi_locale_app_config():
 
     # No teardown of ApplicationConfig to avoid affecting other fixtures; just clear the cache.
     reset_date_format_cache()
-
 
 
 @pytest.fixture(scope="function")
