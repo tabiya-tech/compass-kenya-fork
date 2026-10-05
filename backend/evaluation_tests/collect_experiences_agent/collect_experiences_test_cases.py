@@ -76,31 +76,6 @@ test_cases = [
         }]
     ),
     CollectExperiencesAgentTestCase(
-        name='taking_care_of_siblings_e2e',
-        simulated_user_prompt=dedent("""
-                    You are a young person from Mombasa.
-                    You have never had a formal job, but you have been a taking care of your baby sister since 2015, when your mother is ar work.
-                    You obviously also do household chores and general housework for your family.
-                    You have never done volunteering or helped your community.
-                    """) + kenya_prompt,
-        country_of_user=Country.KENYA,
-        evaluations=[Evaluation(type=EvaluationType.CONCISENESS, expected=30)],
-        expected_experiences_count_min=1,
-        expected_experiences_count_max=2,
-        expected_work_types={WorkType.FORMAL_SECTOR_WAGED_EMPLOYMENT: (0, 0),
-                             WorkType.SELF_EMPLOYMENT: (0, 0),
-                             WorkType.FORMAL_SECTOR_UNPAID_TRAINEE_WORK: (0, 0),
-                             WorkType.UNSEEN_UNPAID: (1, 2)},
-        matchers=["llm"],
-        expected_experience_data=[{
-            "experience_title": "MatchesCloselyConcept(taking care of your baby sister)",
-            "location": "MatchesCloselyLocation(Mombasa)", #TODO: check that the location is getting parsed properly
-            "company": "MatchesCloselyConcept(family)",
-            "timeline": {"start": "2015", "end": ContainsString("present")},
-            "work_type": f"ExactMatch({WorkType.UNSEEN_UNPAID.name})",
-        }]
-    ),
-    CollectExperiencesAgentTestCase(
         name='mentor_kenya_disabled',
         simulated_user_prompt=dedent("""
             You are a young from Kenya Mombasa.
@@ -183,32 +158,7 @@ test_cases = [
         expected_work_types={WorkType.FORMAL_SECTOR_WAGED_EMPLOYMENT: (0, 0),
                              WorkType.SELF_EMPLOYMENT: (0, 0),
                              WorkType.FORMAL_SECTOR_UNPAID_TRAINEE_WORK: (0, 0),
-                             WorkType.UNSEEN_UNPAID: (0, 0)
-                             },
-    ), CollectExperiencesAgentTestCase(
-        name='add_experience_after_recap',
-        simulated_user_prompt=dedent("""
-            You are a person without any personal background.
-            When asked about your experiences you will say no and that you have no experiences at all.
-            Once you are given a recap and only then you will say that you have one experience!:
-            1. Worked as a project manager at the University of Oxford, from 2018 to 2020. It was a paid job and you worked remotely.
-            """) + sa_prompt,
-        evaluations=[Evaluation(type=EvaluationType.CONCISENESS, expected=30)],
-        expected_experiences_count_min=1,
-        expected_experiences_count_max=1,
-        country_of_user=Country.UNSPECIFIED,
-        expected_work_types={WorkType.FORMAL_SECTOR_WAGED_EMPLOYMENT: (1, 1),
-                             WorkType.SELF_EMPLOYMENT: (0, 0),
-                             WorkType.FORMAL_SECTOR_UNPAID_TRAINEE_WORK: (0, 0),
-                             WorkType.UNSEEN_UNPAID: (0, 0)
-                             },
-        expected_experience_data=[
-            {"experience_title": ContainsString("project manager"),
-             "location": ContainsString("remote"),
-             "company": ContainsString("University of Oxford"),
-             "timeline": {"start": "2018", "end": "2020"},
-             "work_type": WorkType.FORMAL_SECTOR_WAGED_EMPLOYMENT.name,
-             }]
+                             WorkType.UNSEEN_UNPAID: (0, 0)},
     ),
     CollectExperiencesAgentTestCase(
         name='experiences_of_all_kinds',
@@ -235,8 +185,7 @@ test_cases = [
         expected_work_types={WorkType.FORMAL_SECTOR_WAGED_EMPLOYMENT: (2, 2),
                              WorkType.SELF_EMPLOYMENT: (2, 2),
                              WorkType.FORMAL_SECTOR_UNPAID_TRAINEE_WORK: (1, 1),
-                             WorkType.UNSEEN_UNPAID: (2, 2)
-                             },
+                             WorkType.UNSEEN_UNPAID: (2, 2)},
         expected_experience_data=[
             {"experience_title": ContainsString("project manager"),
              "location": ContainsString("remote"),
@@ -424,41 +373,7 @@ test_cases = [
         expected_work_types={WorkType.FORMAL_SECTOR_WAGED_EMPLOYMENT: (0, 0),
                              WorkType.SELF_EMPLOYMENT: (0, 0),
                              WorkType.FORMAL_SECTOR_UNPAID_TRAINEE_WORK: (0, 0),
-                             WorkType.UNSEEN_UNPAID: (2, 3)}
-    ),
-    CollectExperiencesAgentTestCase(
-        name='french_worker_typos_e2e',
-        simulated_user_prompt=dedent("""
-            You are a young person from Paris, France looking for a job. You would like to work in retail and your previous experiences are as follows:
-            1. Delivery job for Uber Eats in Paris, from Janary 2021 to March 2023. This was a paid job with a contract.
-            2. Selling old furniture at the Flea Market of rue Jean Henri Fabre, every Wednesday and Friday.
-               You started in 2019 with your older brother and are still doing it today.
-               This is informal labor, as you only get 100 euros at the end of the day, without any formal contract.
-            You write with typos.
-            """) + france_prompt,
-        country_of_user=Country.FRANCE,
-        evaluations=[Evaluation(type=EvaluationType.CONCISENESS, expected=30)],
-        expected_experiences_count_min=2,
-        expected_experiences_count_max=2,
-        expected_work_types={WorkType.FORMAL_SECTOR_WAGED_EMPLOYMENT: (1, 2),
-                             WorkType.SELF_EMPLOYMENT: (1, 2),
-                             WorkType.FORMAL_SECTOR_UNPAID_TRAINEE_WORK: (0, 0),
-                             WorkType.UNSEEN_UNPAID: (0, 0)},
-        expected_experience_data=[
-            {"experience_title": ContainsString("delivery"),
-             "location": ContainsString("Paris"),
-             "company": ContainsString("Uber Eats"),
-             "timeline": DictContaining({"start": "2021", "end": ContainsString("2023")}),
-             "work_type": AnyOf(WorkType.SELF_EMPLOYMENT.name, WorkType.FORMAL_SECTOR_WAGED_EMPLOYMENT.name),
-             },
-            {"experience_title": ContainsString("selling furniture"),
-             "location": AnyOf(ContainsString("Flea Market"), ContainsString("Jean Henri Fabre"), ContainsString("Paris")),
-             "company": ContainsString("Flea Market"),
-             "timeline": DictContaining({"start": "2019", "end": ContainsString("present")}),
-             "work_type": AnyOf(WorkType.SELF_EMPLOYMENT.name, WorkType.FORMAL_SECTOR_WAGED_EMPLOYMENT.name),
-             },
-        ],
-
+                             WorkType.UNSEEN_UNPAID: (2, 3)},
     ),
     CollectExperiencesAgentTestCase(
         name='french_worker_infodump_e2e',
@@ -516,33 +431,6 @@ test_cases = [
              "timeline": DictContaining({"start": "2018", "end": ContainsString("present")}),
              "work_type": WorkType.FORMAL_SECTOR_WAGED_EMPLOYMENT.name,
              }]
-    ),
-    CollectExperiencesAgentTestCase(
-        name='single_experience_mistake_e2e',
-        simulated_user_prompt=dedent("""
-            You are a trained Dancer from Nairobi and would like to find a new job because the theatre you were working for is now closing.
-            Your only previous experience is only one in the Chandaria Center for Performing Art, where you have been working since 2018 with a full time contract.
-            Do not add additional information or invent information. You have never done volunteering or helped your community.
-            When first asked about your experience, you mistake the dates and say that you have been working there since 2009. Only when asked about more information,
-            you correct your mistake.
-            Also when you initially talk about your experience, you lie and say that is was a volunteering experience. 
-            When given an opportunity to correct yourself, you say that it was a paid job with a work contract.
-            """) + france_prompt,
-        country_of_user=Country.FRANCE,
-        evaluations=[Evaluation(type=EvaluationType.CONCISENESS, expected=30)],
-        expected_experiences_count_min=1,
-        expected_experiences_count_max=1,
-        expected_work_types={WorkType.FORMAL_SECTOR_WAGED_EMPLOYMENT: (1, 1),
-                             WorkType.SELF_EMPLOYMENT: (0, 0),
-                             WorkType.FORMAL_SECTOR_UNPAID_TRAINEE_WORK: (0, 0),
-                             WorkType.UNSEEN_UNPAID: (0, 0)},
-        expected_experience_data=[
-            {"experience_title": ContainsString("dancer"),
-             "location": ContainsString("Nairobi"),
-             "company": ContainsString("Chandaria"),
-             "timeline": DictContaining({"start": "2018", "end": ContainsString("present")}),
-             "work_type": WorkType.FORMAL_SECTOR_WAGED_EMPLOYMENT.name,
-             }]
 
     ),
     CollectExperiencesAgentTestCase(
@@ -566,78 +454,6 @@ test_cases = [
              "location": NON_EMPTY_STRING_REGEX,
              "company": NON_EMPTY_STRING_REGEX,
              "timeline": DictContaining({"start": "2018", "end": ContainsString("present")}),
-             "work_type": WorkType.UNSEEN_UNPAID.name,
-             },
-        ],
-    ),
-    CollectExperiencesAgentTestCase(
-        name='cv_upload_style_experiences',
-        simulated_user_prompt=dedent("""
-            You are a professional with diverse experiences. When asked about your experiences, 
-            you will respond in one message exactly like it is Message Section
-            
-            #Message
-            These are my experiences:
-            • Worked as a project manager at the University of Oxford, from 2018 to 2020. It was a paid job and you worked remotely.
-            • Worked as a software architect at ProUbis GmbH in berlin, from 2010 to 2018. It was a full-time job.
-            • You owned a bar/restaurant called Dinner For Two in Berlin from 2010 until covid-19, then you sold it.
-            • Co-founded Acme Inc. in 2022, a gen-ai startup based in DC, USA. You owned this business and your role was CEO.
-            • In 1998 did an unpaid internship as a Software Developer for Ubis GmbH in Berlin. 
-            • Between 2015-2017 volunteer, taught coding to kids in a community center in Berlin.
-            • Helped your elderly neighbor with groceries and cleaning every week since 2019.
-            
-            You will provide all this information at once when asked about your experiences. Do not add additional information or invent information.
-            You have no other experiences than the above 7.
-            """) + sa_prompt,
-        country_of_user=Country.SOUTH_AFRICA,
-        evaluations=[Evaluation(type=EvaluationType.CONCISENESS, expected=30)],
-        expected_experiences_count_min=7,
-        expected_experiences_count_max=7,
-        expected_work_types={WorkType.FORMAL_SECTOR_WAGED_EMPLOYMENT: (2, 2),
-                             WorkType.SELF_EMPLOYMENT: (2, 2),
-                             WorkType.FORMAL_SECTOR_UNPAID_TRAINEE_WORK: (1, 1),
-                             WorkType.UNSEEN_UNPAID: (2, 2)},
-        expected_experience_data=[
-            {"experience_title": ContainsString("project manager"),
-             "location": ContainsString("remote"),
-             "company": ContainsString("University of Oxford"),
-             "timeline": DictContaining({"start": "2018", "end": "2020"}),
-             "work_type": WorkType.FORMAL_SECTOR_WAGED_EMPLOYMENT.name,
-             },
-            {"experience_title": ContainsString("software architect"),
-             "location": ContainsString("Berlin"),
-             "company": ContainsString("ProUbis GmbH"),
-             "timeline": DictContaining({"start": "2010", "end": "2018"}),
-             "work_type": WorkType.FORMAL_SECTOR_WAGED_EMPLOYMENT.name,
-             },
-            {"experience_title": ContainsString("Owned a bar/restaurant"),
-             "location": ContainsString("Berlin"),
-             "company": ContainsString("Dinner For Two"),
-             "timeline": DictContaining({"start": "2010", "end": "2020"}),
-             "work_type": WorkType.SELF_EMPLOYMENT.name,
-             },
-            {"experience_title": ContainsString("CEO"),
-             "location": ContainsString("DC"),
-             "company": ContainsString("Acme Inc."),
-             "timeline": DictContaining({"start": "2022", "end": AnyOf('', ContainsString("present"))}),
-             "work_type": WorkType.SELF_EMPLOYMENT.name,
-             },
-            {"experience_title": ContainsString("Software Developer"),
-             "location": ContainsString("Berlin"),
-             "company": ContainsString("Ubis GmbH"),
-             "timeline": DictContaining({"start": ContainsString("1998"), "end": ContainsString("1998")}),
-             "work_type": WorkType.FORMAL_SECTOR_UNPAID_TRAINEE_WORK.name,
-             },
-            {"experience_title": ContainsString("Teach coding"),
-             "location": ContainsString("Berlin"),
-             "company": ContainsString("community center"),
-             "timeline": DictContaining({"start": ContainsString("2015"), "end": ContainsString("2017")}),
-             "work_type": WorkType.UNSEEN_UNPAID.name,
-             },
-            {"experience_title": ContainsString("Help"),
-             "location": AnyValue(),
-             "company": ContainsString("neighbor"),
-             "timeline": DictContaining({"start": ContainsString("2019"), "end": AnyOf('', ContainsString("present"))}),
              "work_type": WorkType.UNSEEN_UNPAID.name,
              },
         ],

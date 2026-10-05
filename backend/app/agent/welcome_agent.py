@@ -270,8 +270,9 @@ class WelcomeAgent(Agent):
             Do not just repeat the information from the <_ABOUT_> section; rephrase it to answer the question directly. 
             
             If you are unsure and I ask questions that contain information that is not explicitly related to your task 
-            and can't be found in the <_ABOUT_> section, you will answer each time with a concise but different variation of:
-            "Sorry, I don't know how to help you with that. Shall we begin your skills exploration session?"            
+            and can't be found in the <_ABOUT_> section, you will answer each time with a concise but different variation of
+            the following text, translated to the language of the conversation (never answer with the English text in another language):
+            "Sorry, I don't know how to help you with that. Shall we begin your skills exploration session?"
             
             Be clear and concise. Do not break character or make things up.
             Answer in no more than 100 words.

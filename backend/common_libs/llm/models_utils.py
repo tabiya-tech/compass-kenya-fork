@@ -9,7 +9,8 @@ from pydantic import BaseModel
 
 from app.agent.config import GEMINI_DEFAULT_MODELS, ModelTier
 from common_libs.observability.tracing import traced_observation, update_observation
-from common_libs.retry import RetryConfigWithExponentialBackOff, DEFAULT_RETRY_CONFIG_WITH_EXP_BACKOFF, Retry
+from common_libs.retry import RetryConfigWithExponentialBackOff, DEFAULT_RETRY_CONFIG_WITH_EXP_BACKOFF, Retry, RetryLimitExceededError, \
+    is_retryable_error
 
 logger = logging.getLogger(__name__)
 
@@ -269,8 +270,10 @@ class BasicLLM(LLM):
                 return await self.internal_generate_content(llm_input, response_schema)
 
             except Exception as e:
-                logger.error("An error occurred while generating content with resource:%s",
-                             self._resource_name, exc_info=True)
+                # A transient error is retried, and the retry logs it as a warning.
+                if not is_retryable_error(e):
+                    logger.error("An error occurred while generating content with resource:%s",
+                                 self._resource_name, exc_info=True)
                 raise e
 
         # This is the single funnel for nearly every LLM call in the backend, which is why the
@@ -287,6 +290,8 @@ class BasicLLM(LLM):
             try:
                 response = await Retry[str].call_with_exponential_backoff(callback=_generate_content, logger=logger)
             except Exception as e:
+                if isinstance(e, RetryLimitExceededError):
+                    logger.error("Generating content with resource:%s failed: %s", self._resource_name, e)
                 update_observation(generation, level="ERROR", status_message=str(e))
                 raise
 
