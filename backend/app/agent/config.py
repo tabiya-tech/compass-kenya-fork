@@ -2,9 +2,9 @@ from enum import StrEnum
 from typing import Literal, Final
 
 Model = Literal[
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-flash",
-    "gemini-2.5-pro",
+    "gemini-3.5-flash-lite",
+    "gemini-3.8-flash",
+    "gemini-3.1-pro-preview",
 ]
 
 
@@ -39,10 +39,12 @@ class ModelTier(StrEnum):
 
 
 GEMINI_DEFAULT_MODELS: Final[dict[ModelTier, Model]] = {
-    ModelTier.DEFAULT: "gemini-2.5-flash-lite",
-    ModelTier.REASONING: "gemini-2.5-flash",
-    ModelTier.DEEP_REASONING: "gemini-2.5-pro",
+    ModelTier.DEFAULT: "gemini-3.5-flash-lite",
+    ModelTier.REASONING: "gemini-3.8-flash",
+    ModelTier.DEEP_REASONING: "gemini-3.1-pro-preview",
 }
 """
 The Gemini model used for each tier when the tier's environment variable is not set.
+The Gemini 3.x models are only served from the Vertex AI `global` location, see `VERTEX_API_GEN_AI_REGION`.
+These are models the google-genai Interactions API supports, it rejects the Gemini 2.5 models.
 """
