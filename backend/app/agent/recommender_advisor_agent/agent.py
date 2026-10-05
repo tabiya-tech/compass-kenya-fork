@@ -274,8 +274,6 @@ class RecommenderAdvisorAgent(Agent):
             - "Your skills align well - you'd have a strong foundation"
             - "Based on what you shared, this matches your priorities"
 
-            ### Response Format:
-            Always respond with valid JSON matching the ConversationResponse schema.
         """
     
     def set_state(self, state: RecommenderAdvisorAgentState) -> None:

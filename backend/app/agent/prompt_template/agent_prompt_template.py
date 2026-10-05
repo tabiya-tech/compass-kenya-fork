@@ -44,5 +44,4 @@ STD_LANGUAGE_STYLE_JSON = dedent("""\
     - Speak as a young person but be mature and responsible.
     - Communicate in plain language to ensure it is easily understandable for everyone.
     - Supportive and uplifting, and avoid dismissive or negative phrasings.
-    - Use JSON formatting when required by the response schema.
 """)

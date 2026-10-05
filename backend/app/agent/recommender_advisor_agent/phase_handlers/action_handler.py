@@ -4,7 +4,6 @@ Action Phase Handler for the Recommender/Advisor Agent.
 Handles the ACTION_PLANNING phase where we guide users
 toward concrete next steps.
 """
-from textwrap import dedent
 
 from app.agent.agent_types import LLMStats
 from app.agent.llm_caller import LLMCaller
@@ -24,7 +23,7 @@ from app.agent.recommender_advisor_agent.llm_response_models import (
 )
 from app.agent.recommender_advisor_agent.phase_handlers.base_handler import BasePhaseHandler
 from app.agent.recommender_advisor_agent.intent_classifier import IntentClassifier
-from app.agent.simple_llm_agent.prompt_response_template import get_json_response_instructions
+from app.agent.simple_llm_agent.prompt_response_template import get_response_instructions
 from app.conversation_memory.conversation_formatter import ConversationHistoryFormatter
 from app.conversation_memory.conversation_memory_manager import ConversationContext
 from common_libs.llm.generative_models import GeminiGenerativeLLM
@@ -289,29 +288,23 @@ class ActionPhaseHandler(BasePhaseHandler):
             )
         ]
 
-        prompt = dedent(f"""
-            Analyze this user response to determine if they're committing to an action:
-            
-            User said: "{user_input}"
-            
-            Context: They've been exploring career/occupation recommendations.
-            
-            Determine:
-            1. has_commitment: Did they make a clear commitment to take action? (true/false)
-            2. action_type: What type of action? Must be one of: apply_to_job, enroll_in_training, explore_occupation, research_employer, network
-            3. commitment_level: How strong is their commitment? Must be one of: will_do_this_week, will_do_this_month, interested, maybe_later, not_interested
-            4. barriers_mentioned: List any barriers or concerns mentioned (empty list if none)
-            5. plan_when: When they'll act, in their words (e.g., "Thursday morning"). Null if not stated.
-            6. plan_where: Where / the specific target (e.g., "the depot", "the Brookside posting"). Null if not stated.
-            7. plan_how: How - transport, what to bring or say (e.g., "matatu, ask the supervisor"). Null if not stated.
-            8. plan_backup: The if-then backup for the most likely obstacle (e.g., "Saturday if the fare is short"). Null if not stated.
-            
-            IMPORTANT:
-            - Use exact field names: has_commitment, action_type, commitment_level, barriers_mentioned, plan_when, plan_where, plan_how, plan_backup
-            - action_type and commitment_level must use exact enum values listed above
-            - If has_commitment is false, set action_type and commitment_level to null
-            - Only fill a plan_* field if the user actually stated it THIS turn - never invent details. Leave it null otherwise.
-            """)
+        prompt = f"""
+Analyze this user response to determine if they're committing to an action:
+
+User said: "{user_input}"
+
+Context: They've been exploring career/occupation recommendations.
+
+Determine whether they made a clear commitment to take action, what type of action it is,
+how strong their commitment is, and which barriers or concerns they mentioned.
+
+IMPORTANT:
+- action_type and commitment_level must use exactly one of their allowed values
+- If has_commitment is false, set action_type and commitment_level to null
+- Only fill a plan_* field if the user actually stated it THIS turn - never invent details. Leave it null otherwise.
+
+{get_response_instructions(examples=examples)}
+"""
 
         try:
             result = await self._action_caller.call_llm(
@@ -387,7 +380,7 @@ IMPORTANT - When to set finished:
 - ONLY set finished=True if the user has already made a strong commitment and you're providing a final summary/farewell
 - In ACTION_PLANNING phase, finished should almost always be False unless wrapping up
 
-{get_json_response_instructions(examples=examples)}
+{get_response_instructions(examples=examples)}
 """
 
         return await self._conversation_caller.call_llm(

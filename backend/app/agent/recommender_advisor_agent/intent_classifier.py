@@ -303,17 +303,6 @@ CRITICAL DISTINCTION:
 
 If they mentioned a number (1, 2, 3...) or occupation name, identify which one in target_occupation_index (1-based).
 If they mentioned a specific occupation by name, set target_recommendation_id to the uuid.
-
-Your response must be a JSON object with the following schema:
-{{
-    "reasoning": "A step by step explanation of why you classified this intent",
-    "intent": "One of: explore_occupation, show_more, reject, express_concern, ask_question, accept, request_outside_recommendations, other",
-    "target_recommendation_id": "The UUID of the recommendation if identified, or null",
-    "target_occupation_index": "The 1-based index number if identified, or null",
-    "requested_occupation_name": "The occupation name if they requested something outside recommendations, or null"
-}}
-
-Always return a valid JSON object matching this exact schema.
 """
 
     def _build_exploration_phase_prompt(self, user_input: str, state: RecommenderAdvisorAgentState) -> str:
@@ -411,17 +400,6 @@ PRIORITY RULES:
 3. Otherwise: Follow the intent classification rules above
 
 If they mentioned a different occupation by name or number, you MUST set both target_recommendation_id AND target_occupation_index by looking up the occupation in the "Other available occupations" list above.
-
-Your response must be a JSON object with the following schema:
-{{
-    "reasoning": "A step by step explanation of why you classified this intent",
-    "intent": "One of: express_concern, accept, reject, explore_different, ask_question, continue_exploring, request_outside_recommendations, other",
-    "target_recommendation_id": "The UUID of a different occupation if mentioned, or null",
-    "target_occupation_index": "The 1-based index of a different occupation if mentioned, or null",
-    "requested_occupation_name": "The occupation name if they requested something outside recommendations, or null"
-}}
-
-Always return a valid JSON object matching this exact schema.
 """
 
     def _build_followup_phase_prompt(self, user_input: str, state: RecommenderAdvisorAgentState) -> str:
@@ -458,17 +436,6 @@ Possible intents:
 - "other": Unclear or off-topic
 
 If they mentioned a number (1, 2, 3...) or occupation name, identify which one.
-
-Your response must be a JSON object with the following schema:
-{{
-    "reasoning": "A step by step explanation of why you classified this intent",
-    "intent": "One of: explore_occupation, show_opportunities, express_concern, ask_question, reject, accept, request_outside_recommendations, other",
-    "target_recommendation_id": "The UUID of the recommendation if identified, or null",
-    "target_occupation_index": "The 1-based index number if identified, or null",
-    "requested_occupation_name": "The occupation name if they requested something outside recommendations, or null"
-}}
-
-Always return a valid JSON object matching this exact schema.
 """
 
     def _build_concerns_phase_prompt(self, user_input: str, state: RecommenderAdvisorAgentState) -> str:
@@ -550,17 +517,6 @@ CRITICAL DISTINCTION:
 - "that sounds hard" = EXPRESS_CONCERN (return null to let resistance classifier handle)
 - "okay I understand" = ACCEPT
 - "I don't like any of them" = REJECT
-
-Your response must be a JSON object with the following schema:
-{{
-    "reasoning": "A step by step explanation of why you classified this intent",
-    "intent": "One of: express_concern, explore_occupation, request_outside_recommendations, accept, ask_question, reject, other",
-    "target_recommendation_id": "The UUID of a different occupation if mentioned, or null",
-    "target_occupation_index": "The 1-based index of a different occupation if mentioned, or null",
-    "requested_occupation_name": "The occupation name if they requested something outside recommendations, or null"
-}}
-
-Always return a valid JSON object matching this exact schema.
 """
 
     def _build_skills_pivot_phase_prompt(self, user_input: str, state: RecommenderAdvisorAgentState) -> str:
@@ -648,17 +604,6 @@ CRITICAL DISTINCTIONS:
 - "what about electrician?" = EXPLORE_OCCUPATION (wants to explore original recommendation)
 - "this is too expensive" = EXPRESS_CONCERN (raising a barrier)
 - "how much is it?" = ASK_QUESTION (neutral info request)
-
-Your response must be a JSON object with the following schema:
-{{
-    "reasoning": "A step by step explanation of why you classified this intent",
-    "intent": "One of: accept, return_to_recommendations, explore_occupation, explore_training, express_concern, ask_question, request_outside_recommendations, other",
-    "target_recommendation_id": "UUID of training (for accept/explore_training) or occupation (for explore_occupation), or null",
-    "target_occupation_index": "1-based index if user mentioned an occupation by number, or null",
-    "requested_occupation_name": "Occupation name if request_outside_recommendations, or null"
-}}
-
-Always return a valid JSON object matching this exact schema.
 """
 
     def _build_generic_prompt(self, user_input: str, state: RecommenderAdvisorAgentState) -> str:
@@ -702,14 +647,5 @@ CRITICAL DISTINCTION:
 - "I understand" = ACCEPT (acknowledging explanation)
 - "tell me more about why" = ASK_QUESTION (wants more details)
 
-Your response must be a JSON object with the following schema:
-{{
-    "reasoning": "A step by step explanation of why you classified this intent",
-    "intent": "One of: express_concern, ask_question, accept, reject, request_outside_recommendations, other",
-    "target_recommendation_id": null,
-    "target_occupation_index": null,
-    "requested_occupation_name": "The occupation name if they requested something outside recommendations, or null"
-}}
-
-Always return a valid JSON object matching this exact schema.
+In this phase, always set target_recommendation_id and target_occupation_index to null.
 """

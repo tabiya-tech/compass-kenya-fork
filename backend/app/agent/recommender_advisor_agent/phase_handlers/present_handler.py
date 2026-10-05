@@ -28,7 +28,7 @@ from app.agent.recommender_advisor_agent.prompts import (
 from app.agent.recommender_advisor_agent.intent_classifier import IntentClassifier, _batch_size
 from app.conversation_memory.conversation_memory_manager import ConversationContext
 from app.conversation_memory.conversation_formatter import ConversationHistoryFormatter
-from app.agent.simple_llm_agent.prompt_response_template import get_json_response_instructions
+from app.agent.simple_llm_agent.prompt_response_template import get_response_instructions
 from common_libs.llm.generative_models import GeminiGenerativeLLM
 from app.vector_search.esco_entities import OccupationEntity
 from app.vector_search.similarity_search_service import SimilaritySearchService
@@ -293,7 +293,7 @@ class PresentPhaseHandler(BasePhaseHandler):
         )
 
         # Build prompt for LLM
-        full_prompt = context_block + PRESENT_RECOMMENDATIONS_PROMPT + get_json_response_instructions()
+        full_prompt = context_block + PRESENT_RECOMMENDATIONS_PROMPT + get_response_instructions()
 
         # Call LLM to generate natural presentation
         response, llm_stats = await self._call_llm(full_prompt, user_input, context)
@@ -345,7 +345,7 @@ class PresentPhaseHandler(BasePhaseHandler):
             country_of_user=state.country_of_user
         )
 
-        full_prompt = context_block + PRESENT_RECOMMENDATIONS_PROMPT + get_json_response_instructions()
+        full_prompt = context_block + PRESENT_RECOMMENDATIONS_PROMPT + get_response_instructions()
         response, llm_stats = await self._call_llm(full_prompt, user_input, context)
         return response, llm_stats
 
@@ -474,7 +474,7 @@ class PresentPhaseHandler(BasePhaseHandler):
             conversation_history=conv_history,
             country_of_user=state.country_of_user,
         )
-        return context_block + instruction_prompt + get_json_response_instructions()
+        return context_block + instruction_prompt + get_response_instructions()
 
     def _build_opportunities_summary(self, opportunities: list) -> str:
         """Build a summary of job opportunity recommendations for LLM context."""
@@ -751,7 +751,7 @@ class PresentPhaseHandler(BasePhaseHandler):
             conversation_history=conv_history,
             country_of_user=state.country_of_user,
         )
-        full_prompt = context_block + PRESENT_RECOMMENDATIONS_PROMPT + get_json_response_instructions()
+        full_prompt = context_block + PRESENT_RECOMMENDATIONS_PROMPT + get_response_instructions()
         response, llm_stats = await self._call_llm(full_prompt, user_input, context)
         response.finished = False
         all_llm_stats.extend(llm_stats)
