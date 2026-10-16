@@ -65,7 +65,7 @@ class LLMCaller(Generic[RESPONSE_T]):
                 metadata={"expected_response_type": self._model_response_type.__name__},
         ) as call_observation:
             model_response, llm_stats_list = await self._call_llm_with_retries(
-                llm=llm, llm_input=llm_input, logger=logger, output_metadata=output_metadata,
+                llm=llm, llm_input=llm_input, logger=logger,
             )
 
             failed_attempts = [stats for stats in llm_stats_list if stats.error]
