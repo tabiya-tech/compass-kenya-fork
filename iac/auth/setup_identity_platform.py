@@ -52,7 +52,7 @@ def _setup_google_signin(*,
 
     # The issue:
     # When running `pulumi preview`, the `idp` resource does not yet exist.
-    # However, `gcp.firebase.HostingSite.get("default")` tries to retrieve an existing resource immediately.
+    # However, `gcp.firebase.HostingSite.get(...)` tries to retrieve an existing resource immediately.
     # This causes an error during the preview phase because the Firebase Hosting Site depends on `idp`.
 
     # Solution:
@@ -63,7 +63,9 @@ def _setup_google_signin(*,
         # At this point the Identity Platform is already setup and the Auth domain is already verified.
         gcp.firebase.HostingSite.get(
             resource_name=get_resource_name(resource="firebase-site", resource_type="firebase-site"),
-            id="default",
+            # The default site's id is the project id. Pass the full resource name: since pulumi 3.271
+            # (pulumi/pulumi#24973) the provider resolves the site from this id only, not from project/site_id below.
+            id=f"projects/{args[0]}/sites/{args[0]}",
             project=args[0],
             site_id=args[0],
             opts=pulumi.ResourceOptions(provider=basic_config.provider)
