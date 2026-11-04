@@ -222,7 +222,10 @@ class ConversationService(IConversationService):
                 session_id=session_id,
                 input=user_input,
         ) as trace:
-            response = await self._send(user_id, session_id, user_input, state)
+            response = await self._send(user_id, session_id, user_input, state,
+                                        city=city, province=province,
+                                        discuss_recommendations=discuss_recommendations,
+                                        is_artificial=is_artificial)
             update_observation(
                 trace,
                 output=[message.message for message in response.messages],
@@ -235,7 +238,11 @@ class ConversationService(IConversationService):
             return response
 
     async def _send(self, user_id: str, session_id: int, user_input: str,
-                    state: ApplicationState) -> ConversationResponse:
+                    state: ApplicationState, *,
+                    city: str | None = None,
+                    province: str | None = None,
+                    discuss_recommendations: bool = True,
+                    is_artificial: bool = False) -> ConversationResponse:
         # set the sent_at for the user input
         user_input = AgentInput(message=user_input, sent_at=datetime.now(timezone.utc), is_artificial=is_artificial)
 
