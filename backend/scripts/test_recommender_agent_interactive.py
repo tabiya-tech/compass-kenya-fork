@@ -9,6 +9,10 @@ Usage:
     poetry run python scripts/test_recommender_agent_interactive.py
 """
 
+# Not a pytest suite: a manual CLI script whose test_* functions are meant to be called from
+# __main__, not collected by pytest (they are unmarked async defs pytest can't run natively).
+__test__ = False
+
 import asyncio
 import sys
 import logging

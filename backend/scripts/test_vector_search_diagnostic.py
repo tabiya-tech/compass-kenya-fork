@@ -11,6 +11,10 @@ This script checks each component needed for vector search to work:
 Run with: poetry run python scripts/test_vector_search_diagnostic.py
 """
 
+# Not a pytest suite: a manual CLI script whose test_* functions are meant to be called from
+# __main__, not collected by pytest (they are unmarked async defs pytest can't run natively).
+__test__ = False
+
 import asyncio
 import sys
 from pathlib import Path
