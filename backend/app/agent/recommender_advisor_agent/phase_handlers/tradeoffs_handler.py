@@ -15,7 +15,7 @@ from app.agent.recommender_advisor_agent.types import (
 )
 from app.agent.recommender_advisor_agent.llm_response_models import ConversationResponse
 from app.agent.recommender_advisor_agent.phase_handlers.base_handler import BasePhaseHandler
-from app.agent.simple_llm_agent.prompt_response_template import get_json_response_instructions
+from app.agent.simple_llm_agent.prompt_response_template import get_response_instructions
 from app.conversation_memory.conversation_formatter import ConversationHistoryFormatter
 from app.conversation_memory.conversation_memory_manager import ConversationContext
 
@@ -154,7 +154,7 @@ HARD RULES:
 - Use language like "Here's the tradeoff to consider..."
 - Set finished=false (the conversation continues after this)
 
-{get_json_response_instructions()}
+{get_response_instructions()}
 """
         
         response, llm_stats = await self._conversation_caller.call_llm(

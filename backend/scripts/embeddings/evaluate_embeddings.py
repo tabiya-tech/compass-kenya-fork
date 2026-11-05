@@ -7,9 +7,9 @@ import os
 import sys
 from typing import List, Optional, Tuple, Any
 
-import vertexai
 from datasets import load_dataset, Features, Value, VerificationMode
 from dotenv import load_dotenv
+from huggingface_hub import HfApi
 from tqdm import tqdm
 
 from _base_data_settings import Type
@@ -34,6 +34,16 @@ logger = logging.getLogger()
 
 # TODO: Change according to the model you are evaluating
 _TARGET_LOCALE = Locale.ES_ES
+
+
+def _resolve_dataset_revision(repo_id: str, *, token: Optional[str]) -> str:
+    """
+    Resolve a dataset's current commit SHA, so load_dataset() can pin to it instead of an
+    unpinned branch reference that could change between resolving and downloading.
+    """
+    revision = HfApi(token=token).dataset_info(repo_id).sha
+    logger.info("Resolved revision %s for dataset %s", revision, repo_id)
+    return revision
 
 
 def _precision_at_k(prediction: List[List[str]], true: List[List[str]], k: Optional[int] = None):
@@ -178,7 +188,6 @@ async def main(*, do_skills: bool = False, do_occupations: bool = False):
     region = os.getenv("VERTEX_API_EMBEDDINGS_REGION")
     if not region:
         raise ValueError("VERTEX_API_EMBEDDINGS_REGION environment variable is not set.")
-    vertexai.init(location=region)
 
     search_services = await get_search_services()
 
@@ -190,6 +199,7 @@ async def main(*, do_skills: bool = False, do_occupations: bool = False):
     if do_occupations:
         async def evaluate_occupations_task():
             occupation_dataset = load_dataset(OCCUPATION_REPO_ID, data_files=[OCCUPATION_FILENAME],
+                                              revision=_resolve_dataset_revision(OCCUPATION_REPO_ID, token=hf_access_token),
                                               token=hf_access_token).get("train")
             occupation_queries: list[str] = occupation_dataset["synthetic_query"]
             occupation_ground_truth: list[str] = occupation_dataset["esco_code"]
@@ -219,6 +229,7 @@ async def main(*, do_skills: bool = False, do_occupations: bool = False):
         # it and disable verification.
         async def evaluate_skills_task():
             skill_dataset = load_dataset(SKILL_REPO_ID, data_files=[SKILL_FILENAME], token=hf_access_token,
+                                         revision=_resolve_dataset_revision(SKILL_REPO_ID, token=hf_access_token),
                                          features=Features(
                                              {
                                                  "label": Value(dtype="string"),

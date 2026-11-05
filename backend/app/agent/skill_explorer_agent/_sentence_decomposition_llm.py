@@ -16,7 +16,8 @@ from ...i18n.translation_service import get_i18n_manager
 
 
 class _SentenceDecompositionResponse(BaseModel):
-    decomposed_and_dereferenced: list[str] = Field(default_factory=list)
+    decomposed_and_dereferenced: list[str] = Field(default_factory=list, description=(
+        "The reviewed and fixed sentences, one item for each sentence of the input."))
     """
     The decomposed and dereferenced sentences from the user's input.
     This is the final output of the second pass and what the SentenceDecompositionLLM returns to the caller.
@@ -25,12 +26,13 @@ class _SentenceDecompositionResponse(BaseModel):
 
 class _SentenceDecompositionFirstPassResponse(BaseModel):
     decomposed_sentences: list[str] = Field(default_factory=list, description=dedent("""
-    The decomposed sentences from the user's input.
+    The decomposed sentences from the user's input, one sub-sentence per item, see the '# 'decomposed_sentences' instructions'.
     This is used to help the model complete the task in steps as dereferencing the pronouns is too complex for the model to do in one step.
     """))
 
     pronouns_indexing: list[str] = Field(default_factory=list, description=dedent("""
-    The unique pronouns from the user's input and their types.
+    The unique pronouns from the user's input and their types, each item in the format: "pronoun -> pronoun type".
+    See the '# 'pronouns_indexing' instructions'. This is a helper field, keep it brief and not repetitive.
     Helps the model to identify the pronouns and complete the task in steps.
     Each pronoun should appear only once in this list, even if it appears multiple times in the text.
     Keep this list concise - only include pronouns that need to be resolved.
@@ -39,14 +41,16 @@ class _SentenceDecompositionFirstPassResponse(BaseModel):
     """))
 
     pronouns_antecedents: list[str] = Field(default_factory=list, description=dedent("""
-    The unique pronouns from the user's input and their antecedents.
+    The unique pronouns from the user's input and their antecedents, each item in the format: "pronoun -> antecedent".
+    See the '# 'pronouns_antecedents' instructions'. This is a helper field, keep it brief and not repetitive.
     This is used to help the model complete the task in steps.
     Each pronoun should appear only once in this list, even if it appears multiple times in the text.
     Keep this list concise - only include pronouns that need to be resolved.
     """))
 
     resolved_pronouns: list[str] = Field(default_factory=list, description=dedent("""
-    The resolved pronouns from the user's input. This is the final output of the first pass.
+    The resolved pronouns from the user's input, one rephrased sentence per item, see the '# 'resolved_pronouns' instructions'.
+    This is the final output of the first pass (the main output).
     The original sentences are decomposed into sub-sentences and the pronouns are resolved to their antecedents.
     However, models struggle to correctly frame the sentences in a natural way. This is due to the pronouns_antecedents 
     which condition the output to return expressions like "Ben helps Ben's" or "Ben uses Ben's hands".
@@ -76,6 +80,7 @@ class _SentenceDecompositionLLM:
             config=LLMConfig(
                 generation_config=ZERO_TEMPERATURE_GENERATION_CONFIG | JSON_GENERATION_CONFIG | {
                     "top_p": 0.0,
+                    "seed": 1,  # A fixed seed makes the decomposition reproducible
                     "max_output_tokens": 3000,  # Limit the output to 3000 tokens to avoid the "reasoning recursion issues"
                 } | with_response_schema(_SentenceDecompositionFirstPassResponse)
             ))
@@ -85,6 +90,7 @@ class _SentenceDecompositionLLM:
             config=LLMConfig(
                 generation_config=ZERO_TEMPERATURE_GENERATION_CONFIG | JSON_GENERATION_CONFIG | {
                     "top_p": 0.0,
+                    "seed": 1,  # A fixed seed makes the decomposition reproducible
                     "max_output_tokens": 3000,  # Limit the output to 3000 tokens to avoid the "reasoning recursion issues"
                 } | with_response_schema(_SentenceDecompositionResponse)
             ))
@@ -142,23 +148,44 @@ class _SentenceDecompositionLLM:
             Do not infer the my responsibilities, skills, duties, tasks, actions, behaviour, activities, competencies, or knowledge based on your prior knowledge about the experience.
             Do not infer the experience and do not use that information in your task.
             Use only information that is present in <My Last Input> and <Conversation History>.
+        # Scope
+            Decompose ONLY the sentences of <My Last Input>.
+            Use <Conversation History> solely to resolve what the pronouns and references in <My Last Input> refer to.
+            Never output a sentence for something that is only said in <Conversation History> and is not stated in <My Last Input>.
+        # Keep my wording
+            Reuse my exact words, word order and tense. Do not use synonyms, do not reorder words, do not change the tense,
+            and do not add or remove words. Keep adverbs and modifiers such as "sometimes", "very early in the morning" or "myself".
+            The only changes you are allowed to make are:
+                - split a sentence into standalone sub-sentences and drop the connectors that only linked them (e.g. "and", "but", "then", "also"),
+                - repeat the subject when it was omitted (e.g. "I heat the ovens, clean the place" -> "I heat the ovens", "I clean the place"),
+                - replace pronouns and references with what they refer to, adapting the verb agreement when needed
+                  (e.g. "We do it" where "it" is shaping the dough -> "John and I shape the dough").
+            For example: "I cook. I also wash the dishes and then sometimes I dry them myself" ->
+                "I cook.", "I wash the dishes.", "Sometimes I dry the dishes myself."
+            Start every sentence with a capital letter and end it with a period.
         # 'decomposed_sentences' instructions
             Extract and accurately identify and separate the main actions from their purpose or descriptive clauses and decompose complex sentences from the <My Last Input> into sub-sentences.
             
-            Main Action Sub-Sentences: Convert the main action into a standalone sentences.
-            Purpose Action Sub-Sentences: Turn the purpose clause into a standalone sentences.
-            Further Detail or Requirement Sub-Sentences: Extract additional details or requirements into further standalone sentences.
+            Main Action Sub-Sentences: Convert each main action into a standalone sentence. Each sub-sentence contains exactly one main action:
+            split the actions joined by "and", "but" or commas, and split the actions in relative clauses
+            (e.g. "My aunt eats the cake that I baked" -> "My aunt eats the cake", "I baked the cake"),
+            but not a relative clause about what someone needs, has or wants (e.g. "I buy the tools we need" stays one sentence).
+            Keep a purpose or reason clause (e.g. "to ...", "so that ...", "because ...") and a time clause (e.g. "after ...", "when ...")
+            in the same sub-sentence as the main action it directly belongs to, and only with that action
+            (e.g. "My son eats the soup that I cooked after I came home" -> "My son eats the soup.", "I cooked the soup after I came home.").
             
             The sum of the sub-sentences should cover all the information in the original sentence and preserve the original meaning.
-            Do not duplicate sub-sentences that are similar and do not convey new information. Be as concise as possible.
+            Each piece of information must appear in exactly one sub-sentence: do not output both a sentence and its parts,
+            and do not duplicate sub-sentences that are similar and do not convey new information. Be as concise as possible.
             The sub-sentence must incorporate parts of the <Conversation History>, so that the sub-sentence is standalone and can be understood
-            without the need to refer back to the <Conversation History>. Adjust phrasing as necessary to maintain clarity and coherence.
+            without the need to refer back to the <Conversation History>.
             Include all information about the action, including the subject, verb, and object.
-            Place each sub-sentence in a separate JSON string in the 'decomposed_sentences' list.
+            Place each sub-sentence as a separate item in the 'decomposed_sentences' list.
         # 'pronouns_indexing' instructions
             Identify all unique pronouns in <My Last Input> and <Conversation History>.
             Include all possessive, reflexive, demonstrative, relative, interrogative, indefinite, reciprocal, and intensive pronouns.
             Exclude first person pronouns (I, me, my, mine etc.) and second person pronouns (you, your, yours etc.) that refer to me.
+            First person plural pronouns (we, us, our, ours etc.) are not excluded when they refer to me together with other people.
             
             List each unique pronoun only once, even if it appears multiple times in the text.
             For each pronoun provide the pronoun type in the format: "pronoun -> pronoun type".
@@ -167,6 +194,7 @@ class _SentenceDecompositionLLM:
         # 'pronouns_antecedents'  instructions  
             Identify all unique pronouns in <My Last Input> and <Conversation History> and determine their antecedents.
             Exclude first person pronouns (I, me, my, mine etc.) and second person pronouns (you, your, yours etc.) that refer to me.
+            First person plural pronouns (we, us, our, ours etc.) are not excluded when they refer to me together with other people.
             List each unique pronoun only once, even if it appears multiple times in the text.
             For each pronoun, provide the antecedent in the format: "pronoun -> antecedent" and briefly explain the reasoning behind the choice of antecedent.
             Keep this list concise - only include pronouns that need to be resolved.
@@ -174,18 +202,13 @@ class _SentenceDecompositionLLM:
             
         # 'resolved_pronouns' instructions
             Replace all pronouns (expect the ones that refer to the first person), in the 'decomposed_sentences' with the specific nouns or phrases they reference.
+            Replace first person plural pronouns (we, us, our etc.) with the people they refer to, naming me as "I" (e.g. "we" -> "John and I") when they are known.
             The antecedent should not show up multiple times in the same sentence.
             Use <My Last Input> and <Conversation History> to determine the antecedent.            
             All information from the original sentence is preserved and covered.
-            Place each rephrased sentence in a separate JSON string in the 'resolved_pronouns' list.
+            Place each rephrased sentence as a separate item in the 'resolved_pronouns' list.
         
-        # JSON Output instructions
-            Your response must always be a JSON object with the following schema:
-            - 'decomposed_sentences': list of JSON strings
-            - 'pronouns_indexing': list of JSON strings in the format: pronoun -> pronoun type (helper field, keep concise)
-            - 'pronouns_antecedents': list of JSON strings in the format: pronoun -> antecedent (helper field, keep concise)
-            - 'resolved_pronouns': list of JSON strings (this is the main output)
-            
+        # Helper fields
             IMPORTANT: Do not repeat entries in pronouns_indexing or pronouns_antecedents. Each unique pronoun should appear only once in each list.
             These are helper fields to guide your reasoning - they should be brief and not repetitive.
         # Example
@@ -195,8 +218,6 @@ class _SentenceDecompositionLLM:
             pronouns_indexing: ["him -> third person pronoun", "it -> third person pronoun", "this -> demonstrative pronoun"]
             pronouns_antecedents: ["him -> Ben", "it -> the bread", "this -> the action of making and selling the bread"]
             resolved_pronouns: ["I help Ben", "Ben makes the bread", "I help Ben sell the bread", "Ben sells the bread to the neighbours", "Ben gives me money for helping him"]
-            
-        Your response must always be a JSON object with the schema above
         </System Instructions>
         """)
 
@@ -235,24 +256,20 @@ class _SentenceDecompositionLLM:
         # Role
             You are ({language_name}) language expert that reviews sentences and fixes them.
             You will be given an input with a list of independent sentences.
-            Your task is to review each sentence and fix it to ensure that it is grammatically correct, clear, concise and sounds natural.
-            Pay attention to awkward phrasing, grammatical errors, and any other issues that may affect the clarity and readability of the sentence.
+            Your task is to review each sentence and fix only its grammatical errors, such as "I use I's hands" -> "I use my hands"
+            or "Ben helps Ben's brother" -> "Ben helps his brother".
+            If a sentence is grammatically correct, return it exactly as it is, character for character.
+            Do not restyle or rephrase: do not use synonyms, do not reorder words, do not change the tense,
+            and do not add or remove words such as adverbs (e.g. "also", "sometimes", "myself").
             Do not change the meaning of the sentence or add any new information.
             Do not change the grammatical person of the sentence. If a sentence uses first person ("I", "my", "me"), keep it in first person. Do not convert first-person sentences to third person ("The user", "he", "she", "they").
-            Both the input and the fixed sentence should be interpreted in a different way review independently. 
-            Each sentence from the input must fixed and added to the output in the decomposed_and_dereferenced list.
+            Review each sentence independently.
+            Every sentence must end with a period.
+            Each sentence from the input must be reviewed and added to the output in the decomposed_and_dereferenced list, in the same order.
                        
         # Input Structure
             The input structure is a list of sentences:
             "sentences": list of sentences 
-        
-        # JSON Output instructions
-            Your response must always be a JSON object with the following schema:
-            {
-              "decomposed_and_dereferenced": list of JSON strings
-            }
-            
-        Your response must always be a JSON object with the schema above
         </System Instructions>
         """)
 

@@ -1,70 +1,65 @@
 import logging
 import os
 from abc import ABC, abstractmethod
+from typing import Type
 
-import vertexai
 from dotenv import load_dotenv
+from google.genai.types import GroundingMetadata
 from pydantic import BaseModel
-from vertexai.generative_models import HarmCategory, HarmBlockThreshold, SafetySetting
 
-from app.agent.config import AgentsConfig
+from app.agent.config import GEMINI_DEFAULT_MODELS, ModelTier
 from common_libs.observability.tracing import traced_observation, update_observation
-from common_libs.retry import RetryConfigWithExponentialBackOff, DEFAULT_RETRY_CONFIG_WITH_EXP_BACKOFF, Retry
+from common_libs.retry import RetryConfigWithExponentialBackOff, DEFAULT_RETRY_CONFIG_WITH_EXP_BACKOFF, Retry, RetryLimitExceededError, \
+    is_retryable_error
 
 logger = logging.getLogger(__name__)
 
 # Load environment variables from .env file
 load_dotenv()
 
-# Initialize the default region for the Vertex AI generative-AI client.
+# The default Vertex AI location of the generative-AI client.
 # Embeddings use a separate region (VERTEX_API_EMBEDDINGS_REGION) — see GoogleEmbeddingService.
 
 DEFAULT_VERTEX_API_GEN_AI_REGION = os.getenv("VERTEX_API_GEN_AI_REGION")
 if not DEFAULT_VERTEX_API_GEN_AI_REGION:
-    logging.warning("VERTEX_API_GEN_AI_REGION is not set. Using 'us-central1' as the default region.")
-    DEFAULT_VERTEX_API_GEN_AI_REGION = "us-central1"
+    # The Gemini 3.x models are only served from the global location, regional locations return a 404 for them.
+    logging.warning("VERTEX_API_GEN_AI_REGION is not set. Using 'global' as the default region.")
+    DEFAULT_VERTEX_API_GEN_AI_REGION = "global"
 else:
     logging.info("Default Vertex AI gen-AI region is %s", DEFAULT_VERTEX_API_GEN_AI_REGION)
 
 DEFAULT_GENERATION_CONFIG = {
     "temperature": 0.1,
-    "candidate_count": 1,
     "top_p": 0.95,
 }
 
 ZERO_TEMPERATURE_GENERATION_CONFIG = {
     "temperature": 0.0,
-    "candidate_count": 1,
     "top_p": 0.95,
 }
 
 LOW_TEMPERATURE_GENERATION_CONFIG = {
     "temperature": 0.1,
-    "candidate_count": 1,
     "top_p": 0.95,
 }
 
 MODERATE_TEMPERATURE_GENERATION_CONFIG = {
     "temperature": 0.25,
-    "candidate_count": 1,
     "top_p": 0.95,
 }
 
 MEDIUM_TEMPERATURE_GENERATION_CONFIG = {
     "temperature": 0.5,
-    "candidate_count": 1,
     "top_p": 0.95,
 }
 
 HIGH_TEMPERATURE_GENERATION_CONFIG = {
     "temperature": 1.0,
-    "candidate_count": 1,
     "top_p": 0.95,
 }
 
 CRAZY_TEMPERATURE_GENERATION_CONFIG = {
     "temperature": 2.0,
-    "candidate_count": 1,
     "top_p": 0.95,
 }
 
@@ -72,32 +67,15 @@ JSON_GENERATION_CONFIG = {
     "response_mime_type": "application/json",
 }
 
-# Todo(apostolos): Specify the safety settings after we have some relevant tests
-DEFAULT_SAFETY_SETTINGS: frozenset[SafetySetting] = frozenset([
-    SafetySetting(category=SafetySetting.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                  threshold=SafetySetting.HarmBlockThreshold.BLOCK_ONLY_HIGH),
-    SafetySetting(category=HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-                  threshold=HarmBlockThreshold.BLOCK_ONLY_HIGH),
-    SafetySetting(category=HarmCategory.HARM_CATEGORY_HARASSMENT,
-                  threshold=HarmBlockThreshold.BLOCK_ONLY_HIGH),
-    SafetySetting(category=HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-                  threshold=HarmBlockThreshold.BLOCK_ONLY_HIGH),
-    SafetySetting(category=HarmCategory.HARM_CATEGORY_UNSPECIFIED,
-                  threshold=HarmBlockThreshold.BLOCK_ONLY_HIGH),
-])
+_HARM_CATEGORIES = ("dangerous_content", "sexually_explicit", "harassment", "hate_speech")
+"""The harm categories of the google-genai Interactions API safety settings."""
 
-SAFETY_OFF_SETTINGS: frozenset[SafetySetting] = frozenset([
-    SafetySetting(category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                  threshold=HarmBlockThreshold.BLOCK_NONE),
-    SafetySetting(category=HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-                  threshold=HarmBlockThreshold.BLOCK_NONE),
-    SafetySetting(category=HarmCategory.HARM_CATEGORY_HARASSMENT,
-                  threshold=HarmBlockThreshold.BLOCK_NONE),
-    SafetySetting(category=HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-                  threshold=HarmBlockThreshold.BLOCK_NONE),
-    SafetySetting(category=HarmCategory.HARM_CATEGORY_UNSPECIFIED,
-                  threshold=HarmBlockThreshold.BLOCK_NONE),
-])
+# Todo(apostolos): Specify the safety settings after we have some relevant tests
+DEFAULT_SAFETY_SETTINGS: tuple[dict[str, str], ...] = tuple(
+    {"type": category, "threshold": "block_only_high"} for category in _HARM_CATEGORIES)
+
+SAFETY_OFF_SETTINGS: tuple[dict[str, str], ...] = tuple(
+    {"type": category, "threshold": "block_none"} for category in _HARM_CATEGORIES)
 
 
 def get_config_variation(
@@ -140,18 +118,43 @@ def get_config_variation(
     return {
         "temperature": temperature,
         "top_p": top_p,
-        "candidate_count": 1,
-    }
+        }
+
+
+def resolve_model_name(*, tier: ModelTier) -> str:
+    """
+    Resolve the Gemini model name to use for a tier, in order:
+      1. The tier's environment variable (LLM_DEFAULT_MODEL, LLM_REASONING_MODEL, LLM_DEEP_REASONING_MODEL).
+      2. The tier's built-in default, see `GEMINI_DEFAULT_MODELS`.
+    """
+    env_var = {
+        ModelTier.DEFAULT: "LLM_DEFAULT_MODEL",
+        ModelTier.REASONING: "LLM_REASONING_MODEL",
+        ModelTier.DEEP_REASONING: "LLM_DEEP_REASONING_MODEL",
+    }[tier]
+    return os.getenv(env_var) or GEMINI_DEFAULT_MODELS[tier]
 
 
 class LLMConfig(BaseModel):
     """
     Configuration for the LLM.
     """
-    language_model_name: str = AgentsConfig.default_model
+    model_tier: ModelTier = ModelTier.DEFAULT
+    """
+    The capability tier of the model to use. The model name is resolved from it when the LLM is created,
+    see `resolve_model_name`.
+    """
+    language_model_name: str | None = None
+    """
+    An explicit model name. When set, it is used as-is instead of resolving `model_tier`.
+    """
     location: str = DEFAULT_VERTEX_API_GEN_AI_REGION
     generation_config: dict = DEFAULT_GENERATION_CONFIG
-    safety_settings: frozenset[SafetySetting] = DEFAULT_SAFETY_SETTINGS
+    """
+    The generation parameters (temperature, top_p, max_output_tokens, ...). It may also carry the structured output
+    of the response, see `common_libs.llm.schema_builder.with_response_schema`.
+    """
+    safety_settings: tuple[dict[str, str], ...] = DEFAULT_SAFETY_SETTINGS
     retry_config: RetryConfigWithExponentialBackOff = DEFAULT_RETRY_CONFIG_WITH_EXP_BACKOFF
 
     class Config:
@@ -160,7 +163,11 @@ class LLMConfig(BaseModel):
         """
         arbitrary_types_allowed = True
         """
-        Allow arbitrary types for the model as the generation_config is a custom class.
+        Allow arbitrary types, as the generation_config may carry the pydantic class of the response schema.
+        """
+        protected_namespaces = ()
+        """
+        Allow the model_tier field, which would otherwise clash with pydantic's reserved "model_" prefix.
         """
 
 
@@ -189,6 +196,8 @@ class LLMResponse(BaseModel):
     """The number of tokens in the prompt."""
     response_token_count: int
     """The number of tokens in the response."""
+    grounding_metadata: GroundingMetadata | None = None
+    """Grounding metadata from Google Search or other retrieval tools, when present."""
 
 
 class LLM(ABC):
@@ -197,24 +206,30 @@ class LLM(ABC):
     """
 
     @abstractmethod
-    async def generate_content(self, llm_input: LLMInput | str) -> LLMResponse:
+    async def generate_content(self, llm_input: LLMInput | str,
+                               response_schema: Type[BaseModel] | None = None) -> LLMResponse:
         """
-        Wrapper for the asynchronous `generate_content` method of `GenerativeModel`, `predict` of 'TextGenerationModel'
-        and 'send_message' of 'ChatModel' and 'GenerativeModel'.
-        that provides retry logic with exponential backoff.
+        Generate a response for the input, with retry logic with exponential backoff.
         :param llm_input: Either a LLMInput object for chat, or a string for general generative content.
-        :return: The generated response as a "model" with .
+        :param response_schema: The pydantic model the response must follow (structured output).
+            When omitted, the response schema of the LLM's generation config is used, if any.
+        :return: The generated response as a "model".
         """
         raise NotImplementedError()
 
 
-vertex_ai_initialized: bool = False
-def init_vertex_ai_once(_logger: logging.Logger, location: str):
-    global vertex_ai_initialized
-    if not vertex_ai_initialized:
-        _logger.info("Initializing VertexAI client with location: %s", location)
-        vertexai.init(location=location)
-        vertex_ai_initialized = True
+def get_response_schema(generation_config: dict, response_schema: Type[BaseModel] | None = None) -> Type[BaseModel] | None:
+    """
+    Get the pydantic model of the structured output: the one given for the call, else the one of the generation config.
+    """
+    if response_schema is not None:
+        return response_schema
+    return generation_config.get("response_schema")
+
+
+_TRACEABLE_GENERATION_PARAMETERS = ("temperature", "top_p", "max_output_tokens", "seed", "stop_sequences")
+"""The generation parameters reported to the tracing backend."""
+
 
 def llm_input_to_traceable(llm_input: LLMInput | str) -> str | list[dict]:
     """
@@ -230,30 +245,35 @@ def llm_input_to_traceable(llm_input: LLMInput | str) -> str | list[dict]:
 
 class BasicLLM(LLM):
     def __init__(self, *, config: LLMConfig = LLMConfig()):
-        # Before constructing the llm model, we need to initialize the VertexAI client
-        # as the init function may have been called in another module with different parameters
         self.logger = logging.getLogger(self.__class__.__name__)
-        init_vertex_ai_once(self.logger, config.location)
         self._retry_config = config.retry_config
-        self._model = None
-        self._chat = None
         self._resource_name = ""
-        # Kept so that the observability layer can report which model and parameters produced a
-        # generation. The concrete wrappers hand the same values to the underlying Vertex model.
-        self._model_name = config.language_model_name
-        self._generation_config = config.generation_config
+        self._model_name = config.language_model_name or resolve_model_name(tier=config.model_tier)
+        # A copy, as the callers may adjust it between attempts (see `generation_config`).
+        self._generation_config = dict(config.generation_config)
 
-    async def generate_content(self, llm_input: LLMInput | str) -> LLMResponse:
+    @property
+    def generation_config(self) -> dict:
+        """
+        The generation parameters used for every call. It is read at call time, so a caller can adjust it between
+        attempts, e.g. to raise the temperature to escape a repetition trap.
+        """
+        return self._generation_config
+
+    async def generate_content(self, llm_input: LLMInput | str,
+                               response_schema: Type[BaseModel] | None = None) -> LLMResponse:
         async def _generate_content() -> LLMResponse:
             try:
                 logger.debug("Generating content with resource:%s",
                              self._resource_name)
 
-                return await self.internal_generate_content(llm_input)
+                return await self.internal_generate_content(llm_input, response_schema)
 
             except Exception as e:
-                logger.error("An error occurred while generating content with resource:%s",
-                             self._resource_name, exc_info=True)
+                # A transient error is retried, and the retry logs it as a warning.
+                if not is_retryable_error(e):
+                    logger.error("An error occurred while generating content with resource:%s",
+                                 self._resource_name, exc_info=True)
                 raise e
 
         # This is the single funnel for nearly every LLM call in the backend, which is why the
@@ -263,12 +283,15 @@ class BasicLLM(LLM):
                 as_type="generation",
                 input=llm_input_to_traceable(llm_input),
                 model=self._model_name,
-                model_parameters=self._generation_config,
+                model_parameters={key: value for key, value in self._generation_config.items()
+                                  if key in _TRACEABLE_GENERATION_PARAMETERS},
                 metadata={"resource_name": self._resource_name},
         ) as generation:
             try:
                 response = await Retry[str].call_with_exponential_backoff(callback=_generate_content, logger=logger)
             except Exception as e:
+                if isinstance(e, RetryLimitExceededError):
+                    logger.error("Generating content with resource:%s failed: %s", self._resource_name, e)
                 update_observation(generation, level="ERROR", status_message=str(e))
                 raise
 
@@ -284,5 +307,6 @@ class BasicLLM(LLM):
             return response
 
     @abstractmethod
-    async def internal_generate_content(self, llm_input: LLMInput | str) -> LLMResponse:
+    async def internal_generate_content(self, llm_input: LLMInput | str,
+                                        response_schema: Type[BaseModel] | None = None) -> LLMResponse:
         raise NotImplementedError()

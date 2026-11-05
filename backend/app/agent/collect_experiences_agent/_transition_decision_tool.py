@@ -3,10 +3,10 @@ import logging
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.agent.agent_types import AgentInput, LLMStats
-from app.agent.config import AgentsConfig
+from app.agent.config import ModelTier
 from app.agent.llm_caller import LLMCaller
 from app.agent.penalty import get_penalty
 from app.agent.prompt_template import get_language_style
@@ -59,9 +59,14 @@ class TransitionReasoning(BaseModel):
 
 
 class _TransitionDecisionOutput(BaseModel):
-    continue_current_type: bool
-    done_with_collection: bool
-    reasoning: str
+    # The reasoning comes first, so that the model reasons before it answers the two questions.
+    reasoning: str = Field(
+        description="A brief 1-2 sentence explanation of the decision.")
+    continue_current_type: bool = Field(
+        description="Whether to continue asking about the current work type, see the '#Decision Logic'.")
+    done_with_collection: bool = Field(
+        description="Whether we are completely done collecting all work experiences (only true if continue_current_type is false), "
+                    "see the '#Decision Logic'.")
 
     class Config:
         extra = "forbid"
@@ -84,7 +89,7 @@ class TransitionDecisionTool:
                 language_style=get_language_style()
             ),
             config=LLMConfig(
-                language_model_name=AgentsConfig.deep_reasoning_model,
+                model_tier=ModelTier.REASONING,
                 generation_config=ZERO_TEMPERATURE_GENERATION_CONFIG
                 | JSON_GENERATION_CONFIG
                 | temperature_config
@@ -276,7 +281,8 @@ Answer two boolean questions:
 
 1. continue_current_type: Should we continue asking about the current work type?
    - true: User providing info, agent asking questions, or haven't asked about this type yet
-   - false: User indicated no more experiences for this type
+   - true: All work types are explored, the recap was shown and the user wants to add, change or correct something
+   - false: User indicated no more experiences for this type, or explicitly asks to move on (e.g. to the skills exploration)
 
 2. done_with_collection: Are we completely done collecting all work experiences?
    - Only evaluate if continue_current_type is false
@@ -286,8 +292,16 @@ Answer two boolean questions:
 #Constraints
 - Use semantic understanding, not keyword matching
 - When the user clearly indicates no more experiences of this type (e.g. "no", "nope"), return continue_current_type=false
+- A "no" followed by a closing phrase (e.g. "No, that's cool", "No, it's fine", "No, that's ok") means the user has nothing
+  more to add or change, even when the agent's last question was a confirmation like "Does that sound right?".
+  If the experiences of this type are complete, return continue_current_type=false.
+  A plain confirmation of the details (e.g. "Yes, that's correct") is different: it does not say there are no more experiences,
+  so return continue_current_type=true to let the agent ask about other experiences of this type.
 - If unexplored_types is not empty, done_with_collection must be false
-- This is for collecting experience data excluding tasks, skills and responsibilties. If noticed return continue_current_type=false
+- This is for collecting experience data excluding tasks, skills and responsibilties.
+  If the agent itself keeps asking the user about tasks, skills or responsibilities, return continue_current_type=false.
+  If the user volunteers tasks, skills or responsibilities on their own (e.g. describing their duties), this is NOT a reason
+  to stop: the agent will collect them in a later phase. Decide based on whether the user indicated they have no more experiences of this type.
 
 #Collected Experience Data
 {collected_data}
@@ -323,15 +337,9 @@ Answer both questions:
 
 Reasoning: Brief 1-2 sentence explanation.
 
-Limit the output to 50 words (a single short JSON object).
-If depending on the conversation history you notice that the conversation is trying to collect tasks and responsibilities, 
-anywhere return with continue_current_type as false and done_with_colection as true
-
-#Output
-Return complete valid JSON with all three fields. Start with {{:
-{{"continue_current_type": true, "done_with_collection": false, "reasoning": "Brief explanation here"}}
-
-You must complete the entire JSON object including the closing brace }}.
+If depending on the conversation history you notice that the agent keeps asking the user about tasks and responsibilities,
+return with continue_current_type as false and done_with_colection as true.
+The user describing their tasks or duties on their own does not count, it is not a reason to stop.
 """
 
 

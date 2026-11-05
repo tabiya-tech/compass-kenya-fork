@@ -5,10 +5,10 @@ from math import ceil
 from textwrap import dedent
 from typing import Optional, TypeVar, Generic, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.agent.agent_types import LLMStats
-from app.agent.config import AgentsConfig
+from app.agent.config import ModelTier
 from app.agent.linking_and_ranking_pipeline.deduplicate_entities import deduplicate_entities
 from app.agent.llm_caller import LLMCaller
 from app.agent.penalty import get_penalty, get_penalty_for_multiple_errors
@@ -27,19 +27,20 @@ class EvaluationEntry(BaseModel):
     A single entry in the evaluation dictionary.
     """
 
-    reasoning: Optional[str] = None
+    reasoning: Optional[str] = Field(description="A detailed, step-by-step explanation of how the entity was scored.")
     """
     Let the model articulate how it evaluates the relevance to help it 'rationalize' the selection process.
     """
 
-    score: Optional[int] = None
+    score: Optional[int] = Field(description="The score of the entity from 0 to 10, where 0 is not relevant and 10 is very relevant.")
     """
     The score of the entity from 0 to 10, where 0 is not relevant and 10 is very relevant.
     """
 
 
 class _RelevantEntityClassifierLLMOutput(BaseModel):
-    evaluation: Optional[dict[str, EvaluationEntry]] = None
+    evaluation: Optional[dict[str, EvaluationEntry]] = Field(
+        description="The evaluation of each given entity, where the key is the evaluated entity's title and the value is its evaluation.")
     """
     The evaluation of each entity, as a key-value pair of JSON strings, 
     where the key is the entity's preferred label.
@@ -326,7 +327,7 @@ class RelevantEntitiesClassifierLLM(Generic[T]):
             system_instructions=RelevantEntitiesClassifierLLM._get_system_instructions(
                 entity_type_singular=entity_type),
             config=LLMConfig(
-                language_model_name=AgentsConfig.deep_reasoning_model,
+                model_tier=ModelTier.REASONING,
                 generation_config=temperature_config | JSON_GENERATION_CONFIG | {
                     # "max_output_tokens": 3000  # Limit the output to 3000 tokens to avoid the "reasoning recursion issues"
                 })
@@ -355,16 +356,9 @@ class RelevantEntitiesClassifierLLM(Generic[T]):
                 'Given Responsibilities': The list of responsibilities/activities/skills/behaviours
                 'Given {entity_types_plural_capitalized}': A JSON array of {entity_types_plural} to be scored based on their descriptions and titles.
              
-            # JSON Output Instructions
-                Your response must always be a JSON object with the following schema:
-                {
-                    "evaluation": { The evaluation result is a JSON object dictionary where the key is the evaluated {entity_types_plural}'s title and should follow the following schema:
-                        "{entity_type_singular} title": { 
-                            "reasoning": Detailed, step-by-step explanation of how the {entity_type_singular} was scored as a JSON string.,
-                            "score": The score of the {entity_type_singular} as an integer
-                        }
-                    }
-                }
+            # Output Instructions
+                In the 'evaluation', use the '{entity_type_singular} title' of each evaluated {entity_type_singular} as the key,
+                and explain step-by-step how the {entity_type_singular} was scored before giving its score.
             </System Instructions>
             """)
 

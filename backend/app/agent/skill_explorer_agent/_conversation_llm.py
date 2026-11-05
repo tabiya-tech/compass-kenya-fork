@@ -168,13 +168,12 @@ class _ConversationLLM:
                 agent_response_time_in_sec=round(llm_end_time - llm_start_time, 2),
                 llm_stats=[llm_stats]), 100, ValueError("LLM response is empty")
 
-        if llm_response.text == "<END_OF_CONVERSATION>":
-            llm_response.text = t("messages", _FINAL_MESSAGE_KEY)
-            finished = True
         if llm_response.text.find("<END_OF_CONVERSATION>") != -1:
+            if llm_response.text != "<END_OF_CONVERSATION>":
+                # The models often add a closing remark to the token, it is replaced by the final message anyway.
+                logger.info("The response contains '<END_OF_CONVERSATION>' and additional text: %s", llm_response.text)
             llm_response.text = t("messages", _FINAL_MESSAGE_KEY)
             finished = True
-            logger.warning("The response contains '<END_OF_CONVERSATION>' and additional text: %s", llm_response.text)
 
         return AgentOutput(
             message_for_user=llm_response.text,
@@ -291,10 +290,13 @@ class _ConversationLLM:
             - You have completed approximately {turn_target} turns of questioning, OR
             - You have covered the key categories (details, achievements, boundaries), OR
             - I have explicitly stated I don't want to share more, OR
-            - Continuing would be redundant based on the information already provided
-            
-            Do not add anything before or after the <END_OF_CONVERSATION> message.
-            
+            - Continuing would be redundant based on the information already provided, OR
+            - You would otherwise repeat a question already in <question_asked_until_now>
+
+            When you end, respond with exactly <END_OF_CONVERSATION> and nothing else:
+            no thanks, no closing remark, no text before or after it.
+
+
             IMPORTANT: Before ending:
             - If I am still engaged AND category 2 (achievements/challenges) has NOT
               been addressed at all in this conversation, ask ONE question now.

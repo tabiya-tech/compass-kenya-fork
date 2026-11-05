@@ -30,15 +30,16 @@ BAD_PHRASE = "working as cooking school"
 def _block_gcp_auth(request):
     """Prevent GeminiGenerativeLLM from attempting GCP auth in unit tests.
 
-    GeminiGenerativeLLM instantiates a vertexai GenerativeModel in __init__,
-    which triggers GCP project lookup before any method-level mocks apply.
-    This fixture short-circuits that at the GenerativeModel level for all tests
-    in this module except those marked llm_integration (which need real credentials).
+    GeminiGenerativeLLM lazily builds a google-genai client on first use via
+    get_genai_client(), which triggers GCP project lookup before any method-level
+    mocks apply. This fixture short-circuits that at the client-factory level for
+    all tests in this module except those marked llm_integration (which need real
+    credentials).
     """
     if request.node.get_closest_marker("llm_integration"):
         yield
         return
-    with patch("common_libs.llm.generative_models.GenerativeModel", return_value=MagicMock()):
+    with patch("common_libs.llm.generative_models.get_genai_client", return_value=MagicMock()):
         yield
 
 # Patch target for the two LLM-touching methods that fire on every turn-1 call.

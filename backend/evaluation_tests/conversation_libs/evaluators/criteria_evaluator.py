@@ -1,8 +1,8 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from app.agent.config import ModelTier
 from common_libs.llm.models_utils import LLMConfig
 from common_libs.llm.generative_models import GeminiGenerativeLLM
-from common_libs.text_formatters import extract_json
 from evaluation_tests.conversation_libs.evaluators.base_evaluator import BaseEvaluator
 from evaluation_tests.conversation_libs.evaluators.evaluation_result import ConversationEvaluationRecord, \
     EvaluationResult, EvaluationType
@@ -11,10 +11,10 @@ from evaluation_tests.conversation_libs.evaluators.prompt_generator import Promp
 
 class LlmEvaluatorOutput(BaseModel):
     """
-    Class used to parse the JSON returned from the llm evaluator.
+    The response of the llm evaluator (its structured output).
     """
-    score: int
-    reason: str
+    score: int = Field(description="The score of the evaluation, on the scale given in the instructions.")
+    reason: str = Field(description="The reason of the score, based on the evaluation criteria.")
 
 
 class CriteriaEvaluator(BaseEvaluator):
@@ -27,12 +27,12 @@ class CriteriaEvaluator(BaseEvaluator):
         self.criteria = criteria
         # Use GeminiGenerativeLLM as the LLM for evaluation
         # as we are not interested in conducting a conversation, with an in-memory state (history).
-        self.llm = GeminiGenerativeLLM(config=LLMConfig(language_model_name="gemini-2.5-pro"))
+        self.llm = GeminiGenerativeLLM(config=LLMConfig(model_tier=ModelTier.DEEP_REASONING))
 
     async def evaluate(self, actual: ConversationEvaluationRecord) -> EvaluationResult:
         prompt = PromptGenerator.generate_prompt(conversation=actual.generate_conversation(),
                                                  criteria=self.criteria)
-        result = await self.llm.generate_content(prompt)
-        parsed_result = extract_json.extract_json(result.text, LlmEvaluatorOutput)
+        result = await self.llm.generate_content(prompt, response_schema=LlmEvaluatorOutput)
+        parsed_result = LlmEvaluatorOutput.model_validate_json(result.text)
         return EvaluationResult(evaluator_name=self.criteria.value, score=parsed_result.score,
                                 reasoning=parsed_result.reason)

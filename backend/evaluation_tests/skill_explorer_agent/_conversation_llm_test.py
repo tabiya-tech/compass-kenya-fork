@@ -5,6 +5,7 @@ import pytest
 
 from app.agent.agent_types import AgentInput, AgentOutput
 from app.agent.experience import WorkType
+from app.agent.persona_detector import PersonaType
 from app.agent.skill_explorer_agent._conversation_llm import _ConversationLLM, _FINAL_MESSAGE_KEY
 from app.conversation_memory.conversation_memory_manager import ConversationMemoryManager
 from app.conversation_memory.conversation_memory_types import ConversationMemoryManagerState, ConversationContext, \
@@ -192,7 +193,7 @@ test_cases = [
 
 
 @pytest.mark.asyncio
-@pytest.mark.evaluation_test("gemini-2.5-flash-lite/")
+@pytest.mark.evaluation_test("gemini-3.5-flash-lite/")
 @pytest.mark.repeat(3)
 @pytest.mark.parametrize('test_case', get_test_cases_to_run(test_cases),
                          ids=[case.name for case in get_test_cases_to_run(test_cases)])
@@ -224,7 +225,10 @@ async def test_skills_explorer_agent_first_message(test_case, caplog: pytest.Log
             first_time_for_experience=True,
             question_asked_until_now=[],
             user_input=AgentInput(message="", is_artificial=True),
+            persona_type=PersonaType.INFORMAL,
             context=context,
+            experience_index=len(test_case.experiences_explored),
+            rich_response=False,
             experience_title=test_case.experience_title,
             work_type=test_case.work_type,
             logger=logger

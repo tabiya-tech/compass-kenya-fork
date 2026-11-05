@@ -14,7 +14,7 @@ from app.agent.recommender_advisor_agent.llm_response_models import (
 )
 from app.agent.recommender_advisor_agent.phase_handlers.base_handler import BasePhaseHandler
 from app.agent.recommender_advisor_agent.intent_classifier import IntentClassifier
-from app.agent.simple_llm_agent.prompt_response_template import get_json_response_instructions
+from app.agent.simple_llm_agent.prompt_response_template import get_response_instructions
 from app.conversation_memory.conversation_formatter import ConversationHistoryFormatter
 from app.conversation_memory.conversation_memory_manager import ConversationContext
 from common_libs.llm.generative_models import GeminiGenerativeLLM
@@ -167,7 +167,7 @@ We're in a career recommendation session. Ask a simple clarifying question to un
 
 Keep it conversational and short. Don't repeat all the options - just ask what they meant.
 
-{get_json_response_instructions()}
+{get_response_instructions()}
 """
         
         return await self._conversation_caller.call_llm(

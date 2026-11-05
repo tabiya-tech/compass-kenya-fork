@@ -14,7 +14,7 @@ from app.agent.recommender_advisor_agent.state import RecommenderAdvisorAgentSta
 from app.agent.recommender_advisor_agent.llm_response_models import ConversationResponse
 from app.conversation_memory.conversation_memory_manager import ConversationContext
 from app.conversation_memory.conversation_formatter import ConversationHistoryFormatter
-from app.agent.simple_llm_agent.prompt_response_template import get_json_response_instructions
+from app.agent.simple_llm_agent.prompt_response_template import get_response_instructions
 from common_libs.llm.generative_models import GeminiGenerativeLLM
 from app.vector_search.esco_entities import OccupationEntity
 from app.vector_search.similarity_search_service import SimilaritySearchService
@@ -206,11 +206,10 @@ Do NOT offer to "explore {found_occupation.preferredLabel} anyway", and do NOT p
 or build steps toward it.
 
 **CRITICAL**:
-- Your response must be a JSON object matching ConversationResponse schema
 - Set `finished` to `false` - the conversation continues
 - Keep the message conversational (2-4 sentences)
 
-""" + get_json_response_instructions()
+""" + get_response_instructions()
 
         # Call LLM to generate contextual response
         try:
@@ -369,19 +368,6 @@ You previously asked the user about exploring **"{pending_occupation}"** which w
 - Pending: "DJ" → User: "actually, I want to be a teacher" → FALSE (different occupation)
 - Pending: "DJ" → User: "tell me about option 1" → FALSE (referring to recommendations)
 - Pending: "pilot" → User: "what about the Electrician job?" → FALSE (different occupation)
-
-**REQUIRED OUTPUT FORMAT** (JSON):
-{{
-    "is_persisting": true,
-    "reasoning": "User is confirming interest in DJ/MD roles with variation in phrasing (DJing/MD)"
-}}
-
-OR
-
-{{
-    "is_persisting": false,
-    "reasoning": "User is asking about a different occupation (teacher) not related to pending DJ"
-}}
 """
 
         try:
@@ -489,7 +475,7 @@ promise to plan, train for, or build steps toward it.
 - Set `finished` to `false`
 - NEVER provide contact information, specific URLs, or addresses - focus only on career guidance
 
-""" + get_json_response_instructions()
+""" + get_response_instructions()
 
         # Call LLM
         try:

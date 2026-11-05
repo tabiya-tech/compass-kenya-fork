@@ -17,6 +17,11 @@ from evaluation_tests.compass_test_case import CompassTestCase
 from evaluation_tests.get_test_cases_to_run_func import get_test_cases_to_run
 from evaluation_tests.matcher import check_actual_data_matches_expected, ContainsString, AnyOf, Matcher, match_expected
 
+# Self-employment / freelancing / own-business work is paid work, so it is not UNSEEN_UNPAID
+# (unpaid domestic/caregiving/volunteering) nor unpaid trainee work. The defensible classifications
+# are SELF_EMPLOYMENT, the formal waged employment type (the LLM may read it as a regular paid job), or None.
+_PAID_SELF_EMPLOYMENT_WORK_TYPE = AnyOf(None, WorkType.SELF_EMPLOYMENT.name, WorkType.FORMAL_SECTOR_WAGED_EMPLOYMENT.name)
+
 
 class _TestCaseDataExtraction(CompassTestCase):
     # The GIVEN
@@ -999,7 +1004,7 @@ test_cases_data_extraction = [
 
 
 @pytest.mark.asyncio
-@pytest.mark.evaluation_test("gemini-2.5-flash-lite/")
+@pytest.mark.evaluation_test("gemini-3.5-flash-lite/")
 @pytest.mark.repeat(3)
 @pytest.mark.parametrize('test_case', get_test_cases_to_run(test_cases_data_extraction),
                          ids=[case.name for case in get_test_cases_to_run(test_cases_data_extraction)])

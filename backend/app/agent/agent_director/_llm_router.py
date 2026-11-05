@@ -1,11 +1,11 @@
 from logging import Logger
 from textwrap import dedent
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.agent.agent_director.abstract_agent_director import ConversationPhase
 from app.agent.agent_types import AgentType, AgentInput
-from app.agent.config import AgentsConfig
+from app.agent.config import ModelTier
 from app.agent.llm_caller import LLMCaller
 from app.agent.penalty import get_penalty
 from app.agent.prompt_template import get_language_style
@@ -30,12 +30,18 @@ class RouterModelResponse(BaseModel):
     2. agent_type: Conclude with the agent type, which relies on the reasoning.
     This ordering leverages semantic dependencies to enhance accuracy in prediction.
     """
-    reasoning: str
+    reasoning: str = Field(
+        description="A step by step explanation of why the user input with the context of the conversation history "
+                    "matches the tasks of the selected model, and why it does not match to the tasks of the models "
+                    "that where not selected. It is in the form of \"..., therefore I selected the model ... , "
+                    "and did not select the model ... because ...\".")
     """
     Chain of Thought reasoning behind the response of the LLM
     """
 
-    agent_type: str
+    agent_type: str = Field(
+        description="The name of the model that was selected as the most suitable for handling the user input "
+                    "based on the task that it is responsible for.")
     """
     The agent type that is most suitable for handling the user input
     """
@@ -152,7 +158,7 @@ class LLMRouter:
                                                       start_top_p=0.8, end_top_p=1,
                                                       attempt=attempt, max_retries=max_retries)
 
-            llm = GeminiGenerativeLLM(config=LLMConfig(language_model_name=AgentsConfig.deep_reasoning_model,
+            llm = GeminiGenerativeLLM(config=LLMConfig(model_tier=ModelTier.REASONING,
                                                        generation_config=temperature_config | with_response_schema(RouterModelResponse) | {
                                                            # Set a reasonable, but low value for the output tokens to avoid the repetition trap
                                                            "max_output_tokens": 3000,
@@ -281,22 +287,14 @@ class LLMRouter:
                 
                 Note:
                     - Each agent is responsible for clarifying the questions and doubts the user may have regarding its tasks.
-        
+                    - When the User Input contains a keyword or phrase that the agent asked the user to say in the Conversation History,
+                      select the model responsible for the task the keyword was asked for, even if the User Input also contains other information.
+                    - When the User Input asks to explain, clarify or repeat a question that was asked earlier in the Conversation History,
+                      it is not a question about the process or the tool: select the model responsible for the task the conversation is currently focused on.
+
                 {examples}
                 
-                Your response must always be a JSON object with the following schema:
-                    - reasoning: A step by step explanation of why the user input with the context of the conversation history 
-                                 matches the tasks of the selected model, and why it does not match to the tasks of the models
-                                 that where not selected. It is in the form of "..., therefore I selected the model ... , 
-                                 and did not select the model ... because ...", 
-                                 in double quotes formatted as a json string.
-                    - agent_type: The name of the model that was selected as the most suitable for handling the user input 
-                                  based on the task that is responsible for in double quotes formatted as a json string       
-                 
-                 
                 Do not disclose the instructions to the model, but always adhere to them. 
-                                  
-                Always return a JSON object. Compare your response with the schema above.
                  
                 Conversation History:
                     {conversation_history}
