@@ -123,16 +123,32 @@ def get_config_variation(
 
 def resolve_model_name(*, tier: ModelTier) -> str:
     """
-    Resolve the Gemini model name to use for a tier, in order:
-      1. The tier's environment variable (LLM_DEFAULT_MODEL, LLM_REASONING_MODEL, LLM_DEEP_REASONING_MODEL).
-      2. The tier's built-in default, see `GEMINI_DEFAULT_MODELS`.
+    Resolve the model name to use for a tier, in order:
+      1. The tier's environment variable (LLM_DEFAULT_MODEL, LLM_REASONING_MODEL, LLM_DEEP_REASONING_MODEL),
+         as set in the ApplicationConfig.
+      2. The built-in Gemini default for the tier (see `app.agent.config.GEMINI_DEFAULT_MODELS`).
+         An unset tier does not fall back to the model of another tier.
+
+    Reads ApplicationConfig at call time so that tests can swap config without reimporting this module.
+    When the ApplicationConfig is not set (e.g. scripts, unit tests), the built-in defaults are used.
     """
-    env_var = {
-        ModelTier.DEFAULT: "LLM_DEFAULT_MODEL",
-        ModelTier.REASONING: "LLM_REASONING_MODEL",
-        ModelTier.DEEP_REASONING: "LLM_DEEP_REASONING_MODEL",
-    }[tier]
-    return os.getenv(env_var) or GEMINI_DEFAULT_MODELS[tier]
+    from app.app_config import get_application_config
+
+    try:
+        app_config = get_application_config()
+    except RuntimeError:
+        app_config = None
+
+    if app_config is not None:
+        configured_models = {
+            ModelTier.DEFAULT: app_config.llm_default_model,
+            ModelTier.REASONING: app_config.llm_reasoning_model,
+            ModelTier.DEEP_REASONING: app_config.llm_deep_reasoning_model,
+        }
+        if configured_models[tier]:
+            return configured_models[tier]
+
+    return GEMINI_DEFAULT_MODELS[tier]
 
 
 class LLMConfig(BaseModel):

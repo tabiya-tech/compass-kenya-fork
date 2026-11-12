@@ -93,6 +93,9 @@ def _eval_application_config(language_config: LanguageConfig) -> ApplicationConf
         admin_firebase_tenant_id="temp-tenant-id",
         matching_service_url="https://test-matching-service",
         matching_service_api_key="test-matching-api-key",
+        llm_default_model=os.getenv("LLM_DEFAULT_MODEL") or None,
+        llm_reasoning_model=os.getenv("LLM_REASONING_MODEL") or None,
+        llm_deep_reasoning_model=os.getenv("LLM_DEEP_REASONING_MODEL") or None,
     )
 
 
