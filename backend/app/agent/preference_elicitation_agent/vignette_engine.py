@@ -240,7 +240,12 @@ class VignetteEngine:
             )
 
         except FileNotFoundError as e:
-            self._logger.error(f"Offline vignettes not found in {offline_dir}: {e}")
+            self._logger.error(
+                f"Offline vignettes not found in {offline_dir}: {e}. "
+                f"Generate them by running "
+                f"app/agent/preference_elicitation_agent/offline_optimization/run_offline_optimization.py "
+                f"(it writes to backend/offline_output by default)."
+            )
             raise
         except json.JSONDecodeError as e:
             self._logger.error(f"Invalid JSON in offline vignettes: {e}")

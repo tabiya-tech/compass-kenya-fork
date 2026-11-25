@@ -42,10 +42,12 @@ const BWSTaskMessage: React.FC<BWSTaskMessageProps> = ({ taskId, taskNumber, tot
     if (best === wa_id) setBest(null);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!best || !worst || submitted) return;
     setSubmitted(true);
-    onSubmit(taskId, best, worst);
+    const succeeded = await onSubmit(taskId, best, worst).catch(() => false);
+    // Re-enable the card when the submission failed so the user can retry with the same selection
+    if (!succeeded) setSubmitted(false);
   };
 
   const getLetter = (idx: number): Letter => LETTERS[idx];

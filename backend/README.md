@@ -470,19 +470,19 @@ cd app/agent/preference_elicitation_agent/offline_optimization
 python run_offline_optimization.py
 ```
 
-This generates three JSON files in `app/agent/offline_output/`:
+This generates the JSON files in `backend/offline_output/`:
 - `static_vignettes_beginning.json` - Initial vignettes (5-10)
 - `static_vignettes_end.json` - Final vignettes (5-10)
-- `adaptive_vignettes_library.json` - D-optimal library (40 vignettes)
+- `adaptive_library.json` - D-optimal library (40 vignettes)
 
 ### Configuration
 
 The agent automatically looks for vignette files in:
 ```
-app/agent/offline_output/
+backend/offline_output/
 ├── static_vignettes_beginning.json
 ├── static_vignettes_end.json
-└── adaptive_vignettes_library.json
+└── adaptive_library.json
 ```
 
 To use custom paths, initialize the agent with:

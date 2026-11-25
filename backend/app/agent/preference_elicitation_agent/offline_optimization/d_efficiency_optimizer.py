@@ -311,7 +311,7 @@ class DEfficiencyOptimizer:
 
         # Compute statistics
         det = np.linalg.det(fim)
-        eigenvalues = np.linalg.eigvals(fim)
+        eigenvalues = np.linalg.eigvalsh(fim)  # FIM is symmetric; eigvalsh guarantees real eigenvalues
         condition_number = np.max(eigenvalues) / np.min(eigenvalues)
 
         return {

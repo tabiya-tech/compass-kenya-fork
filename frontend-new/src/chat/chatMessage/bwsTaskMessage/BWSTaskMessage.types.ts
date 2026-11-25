@@ -8,7 +8,8 @@ export interface BWSTaskMessageProps {
   taskNumber: number;
   totalTasks: number;
   alternatives: BWSAlternative[];
-  onSubmit: (taskId: string, bestWaId: string, worstWaId: string) => void;
+  // Resolves to true when the submission succeeded; on false the card is re-enabled so the user can retry
+  onSubmit: (taskId: string, bestWaId: string, worstWaId: string) => Promise<boolean>;
 }
 
 // Shape of the metadata field sent from backend on BWS_TASK messages
