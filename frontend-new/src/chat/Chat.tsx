@@ -1,4 +1,6 @@
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BWS_TASK_MESSAGE_TYPE } from "src/chat/chatMessage/bwsTaskMessage/BWSTaskMessage";
+import { ERROR_CHAT_MESSAGE_TYPE } from "src/chat/chatMessage/errorChatMessage/ErrorChatMessage";
 import { useTranslation } from "react-i18next";
 import ChatService from "src/chat/ChatService/ChatService";
 import ChatList from "src/chat/chatList/ChatList";
@@ -150,7 +152,7 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
   const initializingRef = useRef(false);
   const [initialized, setInitialized] = useState<boolean>(false);
   // Stable ref for handleBWSSubmit — avoids a circular dep between sendMessage and handleBWSSubmit
-  const handleBWSSubmitRef = useRef<((taskId: string, bestWaId: string, worstWaId: string) => Promise<void>) | null>(
+  const handleBWSSubmitRef = useRef<((taskId: string, bestWaId: string, worstWaId: string) => Promise<boolean>) | null>(
     null
   );
 
@@ -648,8 +650,9 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
   );
 
   // Goes to the chat service to send a message
+  // Resolves to true when the message was sent successfully, false when sending failed
   const sendMessage = useCallback(
-    async (userMessage: string, sessionId: number, displayMessage?: string) => {
+    async (userMessage: string, sessionId: number, displayMessage?: string): Promise<boolean> => {
       setAiIsTyping(true);
       // displayMessage="" suppresses the bubble; undefined = use userMessage as display
       const chatText = displayMessage !== undefined ? displayMessage : userMessage;
@@ -700,7 +703,7 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
                 generateBWSTaskMessage(
                   messageItem.message_id,
                   messageItem.metadata,
-                  (t, b, w) => handleBWSSubmitRef.current?.(t, b, w) ?? Promise.resolve()
+                  (t, b, w) => handleBWSSubmitRef.current?.(t, b, w) ?? Promise.resolve(false)
                 )
               );
             } else {
@@ -748,9 +751,11 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
         setCurrentPhase((_previousCurrentPhase) => {
           return parseConversationPhase(response.current_phase, _previousCurrentPhase);
         });
+        return true;
       } catch (error) {
         console.error(new ChatError("Failed to send message:", error));
         addMessageToChat(generatePleaseRepeatMessage());
+        return false;
       } finally {
         setAiIsTyping(false);
       }
@@ -816,7 +821,7 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
                 const bwsMessage = generateBWSTaskMessage(
                   message.message_id,
                   message.metadata,
-                  (t, b, w) => handleBWSSubmitRef.current?.(t, b, w) ?? Promise.resolve()
+                  (t, b, w) => handleBWSSubmitRef.current?.(t, b, w) ?? Promise.resolve(false)
                 );
                 if (message.metadata.task_number === 1) {
                   return [
@@ -949,6 +954,16 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
     setExploredExperiencesNotification,
   ]);
 
+  // A BWS task is pending when the latest message is a BWS task card, ignoring typing indicators and error messages.
+  // Error messages are skipped so that a failed card submission leaves the task pending (the card can be resubmitted).
+  // The BWS parser can't interpret free text, so the input field is disabled until the user answers via the card.
+  const isBWSTaskPending = useMemo(() => {
+    const lastMessage = [...messages]
+      .reverse()
+      .find((message) => !message.type.startsWith("typing-message-") && message.type !== ERROR_CHAT_MESSAGE_TYPE);
+    return lastMessage?.type === BWS_TASK_MESSAGE_TYPE;
+  }, [messages]);
+
   // Resets the text field for the next message
   // Optimistically adds the user's message to the messages list
   // Calls the sendMessage function to send the message
@@ -964,7 +979,7 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
     async (taskId: string, bestWaId: string, worstWaId: string) => {
       const payload = JSON.stringify({ type: "bws_response", task_id: taskId, best: bestWaId, worst: worstWaId });
       // Pass "" as displayMessage to suppress the raw JSON from appearing in the chat
-      await sendMessage(payload, activeSessionId!, "");
+      return await sendMessage(payload, activeSessionId!, "");
     },
     [sendMessage, activeSessionId]
   );
@@ -1233,6 +1248,7 @@ export const Chat: React.FC<Readonly<ChatProps>> = ({
                 currentPhase={currentPhase.phase}
                 prefillMessage={prefillMessage}
                 cvUploadError={cvUploadError}
+                isAwaitingOptionSelection={isBWSTaskPending}
               />
             </Box>
           </Box>

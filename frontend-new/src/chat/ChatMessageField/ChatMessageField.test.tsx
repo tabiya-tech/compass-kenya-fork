@@ -413,6 +413,36 @@ describe("ChatMessageField", () => {
         expect(console.warn).not.toHaveBeenCalled();
       });
 
+      test("should disable the send button and input field when the user must choose from the options shown", () => {
+        // GIVEN handleSend function
+        const handleSend = jest.fn();
+
+        // WHEN ChatMessageField is rendered while awaiting an option selection (e.g. a BWS task is shown)
+        render(
+          <ChatMessageField
+            aiIsTyping={false}
+            isChatFinished={false}
+            isAwaitingOptionSelection={true}
+            handleSend={handleSend}
+          />
+        );
+
+        // THEN expect chat message field button to be disabled
+        const chatMessageFieldButton = screen.getByTestId(DATA_TEST_ID.CHAT_MESSAGE_FIELD_SEND_BUTTON);
+        expect(chatMessageFieldButton).toBeDisabled();
+        // AND the chat message field to be disabled
+        const chatMessageField = screen.getByTestId(DATA_TEST_ID.CHAT_MESSAGE_FIELD);
+        expect(chatMessageField).toBeDisabled();
+        // AND the placeholder should tell the user to choose among the options
+        expect(chatMessageField).toHaveAttribute(
+          "placeholder",
+          i18n.t("chat.chatMessageField.placeholders.chooseAnOption")
+        );
+        // AND no errors or warnings to have occurred
+        expect(console.error).not.toHaveBeenCalled();
+        expect(console.warn).not.toHaveBeenCalled();
+      });
+
       test("should disable the send button and input field when browser is offline", () => {
         // GIVEN the browser is offline
         mockBrowserIsOnLine(false);

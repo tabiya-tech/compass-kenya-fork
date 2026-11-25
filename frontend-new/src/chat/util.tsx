@@ -250,7 +250,7 @@ export const parseConversationPhase = (newPhase: CurrentPhase, previousPhase?: C
 export const generateBWSTaskMessage = (
   messageId: string,
   metadata: BWSTaskMetadata,
-  onSubmit: (taskId: string, bestWaId: string, worstWaId: string) => void
+  onSubmit: (taskId: string, bestWaId: string, worstWaId: string) => Promise<boolean>
 ): IChatMessage<BWSTaskMessageProps> => {
   const payload: BWSTaskMessageProps = {
     taskId: metadata.task_id,

@@ -27,6 +27,11 @@ from adaptive_library_builder import AdaptiveLibraryBuilder
 from vignette_converter import VignetteConverter
 
 
+# The backend loads offline vignettes from backend/offline_output (see VignetteEngine and LLMAgentDirector).
+# Resolve it from this file's location so the default does not depend on the current working directory.
+_DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parents[4] / "offline_output"
+
+
 def _load_prior_mean(profile_generator: ProfileGenerator, priors_path: Path) -> np.ndarray:
     """
     Build a prior_mean vector from dce_dynamic_priors JSON.
@@ -127,8 +132,8 @@ def main():
     parser.add_argument(
         "--output-dir",
         type=str,
-        default="./output",
-        help="Directory to save output files (default: ./output)"
+        default=str(_DEFAULT_OUTPUT_DIR),
+        help=f"Directory to save output files (default: {_DEFAULT_OUTPUT_DIR}, where the backend loads them from)"
     )
     parser.add_argument(
         "--config",

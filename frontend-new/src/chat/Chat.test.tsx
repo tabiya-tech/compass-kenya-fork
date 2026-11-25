@@ -464,12 +464,132 @@ describe("Chat", () => {
         expect(useSnackbar().enqueueSnackbar).not.toHaveBeenCalled();
         // AND expect input field to have been enabled
         expect(ChatMessageField as jest.Mock).toHaveBeenLastCalledWith(
-          expect.objectContaining({ isChatFinished: false, aiIsTyping: false }),
+          expect.objectContaining({ isChatFinished: false, aiIsTyping: false, isAwaitingOptionSelection: false }),
           {}
         );
         // AND expect no errors or warning to have occurred
         expect(console.error).not.toHaveBeenCalled();
         expect(console.warn).not.toHaveBeenCalled();
+      });
+
+      test("should disable the input field when the last message in the history is a pending BWS task", async () => {
+        // GIVEN a logged-in user
+        const givenUser: TabiyaUser = getMockUser();
+        AuthenticationStateService.getInstance().setUser(givenUser);
+        // AND the user has an active session
+        const givenActiveSessionId = 123;
+        UserPreferencesStateService.getInstance().setUserPreferences(
+          getMockUserPreferences(givenUser, givenActiveSessionId)
+        );
+        // AND the conversation history ends with a BWS task the user has not answered yet
+        const givenChatHistoryResponse: ConversationResponse = getMockConversationResponse(
+          [
+            {
+              message_id: nanoid(),
+              message: "",
+              sent_at: new Date().toISOString(),
+              sender: ConversationMessageSender.COMPASS,
+              reaction: null,
+              message_type: "BWS_TASK",
+              metadata: {
+                task_id: "task-1",
+                task_number: 2,
+                total_tasks: 5,
+                alternatives: [
+                  { wa_id: "wa-1", label: "Option one" },
+                  { wa_id: "wa-2", label: "Option two" },
+                  { wa_id: "wa-3", label: "Option three" },
+                ],
+              },
+            },
+          ],
+          ConversationPhase.PREFERENCE_ELICITATION,
+          50
+        );
+        jest.spyOn(ChatService.getInstance(), "getChatHistory").mockResolvedValueOnce(givenChatHistoryResponse);
+
+        // WHEN the component is rendered
+        render(<Chat />);
+
+        // THEN expect the Chat component to be initialized
+        await assertChatInitialized();
+
+        // AND expect the input field to be told to wait for an option selection
+        await waitFor(() => {
+          expect(ChatMessageField as jest.Mock).toHaveBeenLastCalledWith(
+            expect.objectContaining({ isChatFinished: false, aiIsTyping: false, isAwaitingOptionSelection: true }),
+            {}
+          );
+        });
+      });
+
+      test("should keep the input field disabled when a BWS task submission fails", async () => {
+        // GIVEN a logged-in user
+        const givenUser: TabiyaUser = getMockUser();
+        AuthenticationStateService.getInstance().setUser(givenUser);
+        // AND the user has an active session
+        const givenActiveSessionId = 123;
+        UserPreferencesStateService.getInstance().setUserPreferences(
+          getMockUserPreferences(givenUser, givenActiveSessionId)
+        );
+        // AND the conversation history ends with a BWS task the user has not answered yet
+        const givenBWSMessageId = nanoid();
+        const givenChatHistoryResponse: ConversationResponse = getMockConversationResponse(
+          [
+            {
+              message_id: givenBWSMessageId,
+              message: "",
+              sent_at: new Date().toISOString(),
+              sender: ConversationMessageSender.COMPASS,
+              reaction: null,
+              message_type: "BWS_TASK",
+              metadata: {
+                task_id: "task-1",
+                task_number: 2,
+                total_tasks: 5,
+                alternatives: [
+                  { wa_id: "wa-1", label: "Option one" },
+                  { wa_id: "wa-2", label: "Option two" },
+                  { wa_id: "wa-3", label: "Option three" },
+                ],
+              },
+            },
+          ],
+          ConversationPhase.PREFERENCE_ELICITATION,
+          50
+        );
+        jest.spyOn(ChatService.getInstance(), "getChatHistory").mockResolvedValueOnce(givenChatHistoryResponse);
+        // AND sending the BWS answer will fail
+        jest.spyOn(ChatService.getInstance(), "sendMessage").mockRejectedValueOnce(new Error("Failed to send message"));
+        // AND the component is rendered
+        render(<Chat />);
+        await assertChatInitialized();
+
+        // WHEN the user submits an answer through the BWS task card
+        const bwsMessage = (ChatList as jest.Mock).mock.lastCall[0].messages.find(
+          (message: IChatMessage<any>) => message.message_id === givenBWSMessageId
+        );
+        let actualSubmitResult: boolean | undefined;
+        await act(async () => {
+          actualSubmitResult = await bwsMessage.payload.onSubmit("task-1", "wa-1", "wa-2");
+        });
+
+        // THEN expect the submission to be reported as failed, so the card can be retried
+        expect(actualSubmitResult).toBe(false);
+        // AND expect an error message to be shown in the chat list
+        expect(ChatList as jest.Mock).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            messages: expect.arrayContaining([expect.objectContaining({ type: ERROR_CHAT_MESSAGE_TYPE })]),
+          }),
+          {}
+        );
+        // AND expect the input field to still wait for an option selection
+        expect(ChatMessageField as jest.Mock).toHaveBeenLastCalledWith(
+          expect.objectContaining({ aiIsTyping: false, isAwaitingOptionSelection: true }),
+          {}
+        );
+        // AND expect the failure to have been logged
+        expect(console.error).toHaveBeenCalledWith(new ChatError("Failed to send message:", expect.any(Error)));
       });
 
       test("should initialize chat and fetch history on mount when the user has a concluded existing conversation with experiences", async () => {
